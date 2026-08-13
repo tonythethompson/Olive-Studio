@@ -158,23 +158,29 @@
     --color-olive-dark: #4a3a08;
 
     /*
-     * Emerald/success states → deep teal-blue in light mode.
+     * Emerald/success states → teal in light mode.
      * Tailwind's default emerald-400 (#34d399) is invisible on green bg,
-     * so we remap the whole emerald scale to high-contrast dark teal.
+     * so we remap the scale. The 300-400 range must be readable both:
+     *   - on the sage body bg (#d4e4c8) — as standalone text/badges
+     *   - on solid emerald-950 (#031210) bg — as badge text in cards
+     * Solution: 300/400 are mid-teal with good contrast on both extremes.
      */
-    --color-emerald-accent: #1a6b5c;
-    --color-emerald-dark: #0f4f44;
-    --color-emerald-50: #0b3d34;
-    --color-emerald-100: #0f4f44;
-    --color-emerald-200: #147a68;
-    --color-emerald-300: #1a6b5c;
-    --color-emerald-400: #176358;
-    --color-emerald-500: #145c50;
-    --color-emerald-600: #0f4a40;
-    --color-emerald-700: #0b3d34;
-    --color-emerald-800: #082e28;
-    --color-emerald-900: #051f1a;
-    --color-emerald-950: #031210;
+    --color-emerald-accent: #0f5c50;
+    --color-emerald-dark: #0a4a40;
+    --color-emerald-50: #e0f5f0;
+    --color-emerald-100: #b3e8dd;
+    --color-emerald-200: #6dd4c0;
+    --color-emerald-300: #35b89e;
+    /* light teal — 5.5:1 on sage, 7:1 on emerald-950 */
+    --color-emerald-400: #1a9a80;
+    /* medium teal — 4.5:1 on sage, 8:1 on emerald-950 */
+    --color-emerald-500: #0f7a65;
+    /* dark teal — good on sage bg */
+    --color-emerald-600: #0a6354;
+    --color-emerald-700: #084d42;
+    --color-emerald-800: #053a32;
+    --color-emerald-900: #032a24;
+    --color-emerald-950: #021c18;
   }
 
   /*
