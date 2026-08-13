@@ -1,0 +1,919 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Define Finding, Action, ReviewResult, and WorkspaceFingerprintState types": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613102975
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613123120
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613360453
+      }
+    ],
+    "1.2 Implement workspace fingerprint computation utility": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613105049
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613366401
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613729959
+      }
+    ],
+    "1.3 Write property tests for fingerprint determinism (Properties 5–6)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613105663
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613738184
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614162906
+      }
+    ],
+    "1.4 Implement review reconciler logic": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613106747
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613367242
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613730672
+      }
+    ],
+    "1.5 Write property tests for review reconciler (Properties 7–8)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613107012
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613738947
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614163664
+      }
+    ],
+    "1.6 Write property tests for Finding/Action contract (Properties 1–2)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613107189
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613367899
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613731666
+      }
+    ],
+    "2.1 Implement `useWorkspaceFingerprint` hook": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613107314
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613739750
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614164604
+      }
+    ],
+    "2.2 Implement `usePipelineReview` hook": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613107466
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614172330
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614556732
+      }
+    ],
+    "2.3 Implement `useReviewReconciler` hook": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613107790
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614173090
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614557640
+      }
+    ],
+    "3.1 Implement `StalenessIndicator` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613108005
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614564814
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614994517
+      }
+    ],
+    "3.2 Implement `ActionButton` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613109063
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614566231
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614992903
+      }
+    ],
+    "3.3 Implement `FindingCard` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613109405
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615168931
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615428988
+      }
+    ],
+    "3.4 Implement `PipelineReview` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613110432
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615435032
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615931796
+      }
+    ],
+    "3.5 Modify `AssistantSidebar` to use unified Assistant tab": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613110700
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615938310
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616281515
+      }
+    ],
+    "3.6 Write property tests for non-patch action store preservation (Property 3)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613110849
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614566552
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614992100
+      }
+    ],
+    "3.7 Write property test for coercion difference detection (Property 4)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613110948
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614567234
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614995392
+      }
+    ],
+    "4. Checkpoint — Workstream 1 Complete": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111090
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618956969
+      }
+    ],
+    "5.1 Define Agent UI types": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111214
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613124036
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613361222
+      }
+    ],
+    "5.2 Implement activity log utility functions": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111318
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613368769
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613732371
+      }
+    ],
+    "5.3 Write property tests for activity log (Properties 9–11)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111427
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613740641
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614165879
+      }
+    ],
+    "5.4 Implement batch comparison validation": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111516
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613369433
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613733100
+      }
+    ],
+    "5.5 Write property test for batch comparison job count constraint (Property 12)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111611
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613741428
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614166365
+      }
+    ],
+    "6.1 Implement `useAgentMode` hook": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111705
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614174339
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614558324
+      }
+    ],
+    "6.2 Implement `useAgentStream` hook": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111801
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614174766
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614559022
+      }
+    ],
+    "7.1 Implement `ModeToggle` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111902
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614568047
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614993573
+      }
+    ],
+    "7.2 Implement `AgentConfirmDialog` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613111998
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614999654
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615162622
+      }
+    ],
+    "7.3 Implement `ActivityLogEntry` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112098
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615000500
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615163421
+      }
+    ],
+    "7.4 Implement `ActivityLog` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112220
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615169634
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615428872
+      }
+    ],
+    "7.5 Implement `AgentControls` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112317
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615177754
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615429111
+      }
+    ],
+    "7.6 Modify `ExecutionWorkspace` to integrate Agent UI": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112414
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615435772
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615930995
+      }
+    ],
+    "7.7 Enhance `BatchComparisonView` with scoring preference and winner highlight": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112515
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615437036
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615932849
+      }
+    ],
+    "8. Checkpoint — Workstream 2 Complete": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112611
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618961676
+      }
+    ],
+    "9.1 Implement `reportGenerator.ts`": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112739
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616287786
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616583241
+      }
+    ],
+    "9.2 Write property tests for report generator (Properties 13–14)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112826
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616590354
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617518497
+      }
+    ],
+    "9.3 Implement PDF export via print dialog": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613112911
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616590970
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617279020
+      }
+    ],
+    "9.4 Implement `ExportReportMenu` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113019
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617524126
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618147565
+      }
+    ],
+    "10.1 Implement `recipeCatalogPin.ts`": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113116
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616288479
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616584016
+      }
+    ],
+    "10.2 Write property test for catalog commit SHA format (Property 15)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113205
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616591708
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617518616
+      }
+    ],
+    "10.3 Implement `CatalogUpdateNotice` component": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113306
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617524911
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618147729
+      }
+    ],
+    "10.4 Integrate catalog pinning into recipe loading flow": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113406
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618153944
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618509101
+      }
+    ],
+    "11.1 Implement MultiLoRA adapter validation": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113494
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616289245
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616584807
+      }
+    ],
+    "11.2 Write property tests for MultiLoRA validation (Property 16)": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113577
+      },
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616592519
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617279766
+      }
+    ],
+    "11.3 Gate MultiLoRA UI behind feature flag": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113667
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786617525738
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618147633
+      }
+    ],
+    "12. Checkpoint — Workstream 3 Complete": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113757
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618966432
+      }
+    ],
+    "13.1 Create Docker deployment guide": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113854
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618515993
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618779225
+      }
+    ],
+    "14.1 Configure `olive-mcp-server/pyproject.toml` for PyPI publishing": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613113942
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618516913
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618778468
+      }
+    ],
+    "14.2 Create PyPI publish CI workflow": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613114037
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618785371
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618946253
+      }
+    ],
+    "15.1 Configure Tauri signing in `src-tauri/tauri.conf.json`": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613114126
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618517620
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618777698
+      }
+    ],
+    "15.2 Create desktop release CI workflow": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613114210
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618786109
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618947037
+      }
+    ],
+    "16. Final Checkpoint — All Workstreams Complete": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786613114301
+      },
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618973042
+      }
+    ],
+    "1. Workstream 1 — Unified Assistant: Types and Utilities": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614163848
+      }
+    ],
+    "5. Workstream 2 — Agent UI: Types and Utilities": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614166495
+      }
+    ],
+    "2. Workstream 1 — Unified Assistant: Hooks": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614557699
+      }
+    ],
+    "6. Workstream 2 — Agent UI: Hooks": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786614559187
+      }
+    ],
+    "7. Workstream 2 — Agent UI: Components": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786615932923
+      }
+    ],
+    "3. Workstream 1 — Unified Assistant: Components": [
+      {
+        "executionId": "fbc14aed-e766-4cb7-90ac-407c63b92b98",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786616281591
+      }
+    ],
+    "9. Workstream 3 — Product: Report Export": [
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618147818
+      }
+    ],
+    "11. Workstream 3 — Product: MultiLoRA Adapter Support (Feature-Flagged)": [
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618147895
+      }
+    ],
+    "10. Workstream 3 — Product: Recipe Catalog Version Pinning": [
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618509195
+      }
+    ],
+    "13. Workstream 4 — Distribution: Docker Documentation": [
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618779319
+      }
+    ],
+    "14. Workstream 4 — Distribution: PyPI Publish": [
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618946397
+      }
+    ],
+    "15. Workstream 4 — Distribution: Tauri Signed Installer": [
+      {
+        "executionId": "0fb255ef-5ed2-412f-8a46-868ea03b33b8",
+        "chatSessionId": "sess_43da600c-4594-43ca-b8dc-5759bc78a006",
+        "timestamp": 1786618947166
+      }
+    ]
+  }
+}

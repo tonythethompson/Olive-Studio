@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Check MCP Server Venv",
+      "trigger": "SessionStart",
+      "description": "Checks if the olive-mcp-server Python venv exists and has deps installed on session start. Warns if setup is needed.",
+      "action": {
+        "type": "command",
+        "command": "node scripts/check-mcp-venv.mjs"
+      }
+    }
+  ]
+}
