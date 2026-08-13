@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$McpDir = Join-Path $PSScriptRoot ".." "olive-mcp-server"
+$McpDir = Join-Path $PSScriptRoot "..\olive-mcp-server"
 $McpDir = (Resolve-Path $McpDir).Path
 $VenvDir = Join-Path $McpDir ".venv"
 
@@ -46,7 +46,9 @@ foreach ($cmd in @("python", "python3")) {
                 break
             }
         }
-    } catch {}
+    } catch {
+        Write-Debug "Python candidate '$cmd' check failed: $_"
+    }
 }
 if (-not $pythonCmd) {
     Write-Host "      ERROR: Python >= 3.10 not found on PATH." -ForegroundColor Red
@@ -57,9 +59,9 @@ if (-not $pythonCmd) {
 # ── Step 2: Create venv if it doesn't exist ────────────────────────────────────
 Write-Host "[2/5] Setting up virtual environment..." -ForegroundColor Yellow
 if (Test-Path $VenvDir) {
-    $existingPy = Join-Path $VenvDir "Scripts" "python.exe"
+    $existingPy = Join-Path $VenvDir "Scripts\python.exe"
     if (-not (Test-Path $existingPy)) {
-        $existingPy = Join-Path $VenvDir "bin" "python"
+        $existingPy = Join-Path $VenvDir "bin\python"
     }
     $recreate = $false
     if (-not (Test-Path $existingPy)) {
@@ -99,10 +101,10 @@ if (Test-Path $VenvDir) {
 
 # ── Step 3: Install dependencies ───────────────────────────────────────────────
 Write-Host "[3/5] Installing dependencies..." -ForegroundColor Yellow
-$pythonVenv = Join-Path $VenvDir "Scripts" "python.exe"
+$pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
 if (-not (Test-Path $pythonVenv)) {
     # Linux/macOS fallback
-    $pythonVenv = Join-Path $VenvDir "bin" "python"
+    $pythonVenv = Join-Path $VenvDir "bin\python"
 }
 
 # Core + dev + semantic deps, with mcp pinned <2
@@ -117,9 +119,9 @@ Write-Host "      All dependencies installed (including sentence-transformers fo
 # ── Step 4: Verify server starts ───────────────────────────────────────────────
 if (-not $SkipVerify) {
     Write-Host "[4/5] Verifying server starts..." -ForegroundColor Yellow
-    $pythonVenv = Join-Path $VenvDir "Scripts" "python.exe"
+    $pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
     if (-not (Test-Path $pythonVenv)) {
-        $pythonVenv = Join-Path $VenvDir "bin" "python"
+        $pythonVenv = Join-Path $VenvDir "bin\python"
     }
     $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>&1
     if ($testOutput -match "OK") {
@@ -136,11 +138,11 @@ if (-not $SkipVerify) {
 # ── Step 5: Optionally rebuild semantic indexes ────────────────────────────────
 if ($RebuildIndex) {
     Write-Host "[5/5] Rebuilding semantic search indexes..." -ForegroundColor Yellow
-    $pythonVenv = Join-Path $VenvDir "Scripts" "python.exe"
+    $pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
     if (-not (Test-Path $pythonVenv)) {
-        $pythonVenv = Join-Path $VenvDir "bin" "python"
+        $pythonVenv = Join-Path $VenvDir "bin\python"
     }
-    & $pythonVenv (Join-Path $McpDir "scripts" "build_kb_index.py")
+    & $pythonVenv (Join-Path $McpDir "scripts\build_kb_index.py")
     if ($LASTEXITCODE -ne 0) {
         Write-Host "      WARNING: Index rebuild failed. Shipped indexes will be used." -ForegroundColor Yellow
     } else {
