@@ -257,6 +257,49 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.errorDescription).toContain("cancel denied");
     });
 
+    it("reattaches a late job when stop-during-submit cancel fails", async () => {
+      let resolveSubmit: (value: Response) => void = () => {};
+      const submitPromise = new Promise<Response>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: "cancel denied" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+
+      let startDone: Promise<void> = Promise.resolve();
+      act(() => {
+        startDone = result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      act(() => {
+        result.current.stopAgent();
+      });
+      expect(result.current.outcome?.status).not.toBe("cancelled");
+      expect(result.current.agentRunning).toBe(true);
+
+      await act(async () => {
+        resolveSubmit({
+          ok: true,
+          json: async () => ({ jobId: "late-job" }),
+        } as Response);
+        await startDone;
+      });
+
+      expect(result.current.jobId).toBe("late-job");
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.outcome?.status).toBe("failure");
+    });
+
     it("does not apply a stale cancel after a newer session starts", async () => {
       let resolveCancel: (value: Response) => void = () => {};
       const cancelPromise = new Promise<Response>((resolve) => {

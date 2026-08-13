@@ -219,12 +219,13 @@ export function useAgentStream({
           const entry = parseStreamPayload(data);
           if (entry) {
             const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-            const key =
-              (record && typeof record.id === "string" && record.id) ||
-              (record && typeof record.line === "string" && `line:${record.line}`) ||
-              `${entry.kind}:${entry.text}`;
-            if (seenPayloadKeysRef.current.has(key)) return;
-            seenPayloadKeysRef.current.add(key);
+            const eventId =
+              (typeof event.lastEventId === "string" && event.lastEventId) ||
+              (record && typeof record.id === "string" ? record.id : "");
+            if (eventId) {
+              if (seenPayloadKeysRef.current.has(eventId)) return;
+              seenPayloadKeysRef.current.add(eventId);
+            }
             // A parsed payload means the stream is actually delivering data.
             retryCountRef.current = 0;
             onEntryRef.current(entry);

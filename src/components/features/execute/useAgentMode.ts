@@ -93,6 +93,7 @@ export function useAgentMode(): UseAgentModeReturn {
   const jobIdRef = useRef<string | undefined>(undefined);
   /** Bumped on start/stop/timeout/complete so a late POST cannot attach. */
   const runGenerationRef = useRef(0);
+  const submitInFlightRef = useRef(false);
 
   // ─── Internal helpers ───────────────────────────────────────────────────────
 
@@ -114,6 +115,21 @@ export function useAgentMode(): UseAgentModeReturn {
 
   const setMode = useCallback((newMode: AgentSessionState["mode"]) => {
     setModeState(newMode);
+  }, []);
+
+  const applyCancelledOutcome = useCallback(() => {
+    const cancelOutcome: AgentOutcome = {
+      status: "cancelled",
+      totalSteps: stepCountRef.current,
+      elapsedMs: startedAtRef.current
+        ? Date.now() - new Date(startedAtRef.current).getTime()
+        : 0,
+      cancelledAtStep: stepCountRef.current,
+    };
+    const terminalEntry = truncateEntry(createTerminalEntry(cancelOutcome));
+    setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
+    setAgentRunning(false);
+    setOutcome(cancelOutcome);
   }, []);
 
   /**
@@ -170,6 +186,7 @@ export function useAgentMode(): UseAgentModeReturn {
 
     if (!opts?.recipeJson) return;
 
+    submitInFlightRef.current = true;
     try {
       const resp = await fetch("/api/olive/jobs/submit", {
         method: "POST",
@@ -181,7 +198,31 @@ export function useAgentMode(): UseAgentModeReturn {
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
       if (thisGen !== runGenerationRef.current) {
-        if (data.jobId) void requestAgentCancel(data.jobId);
+        if (!data.jobId) return;
+        let cancelOk = false;
+        try {
+          const cancelResp = await requestAgentCancel(data.jobId);
+          cancelOk = cancelResp.ok;
+        } catch {
+          cancelOk = false;
+        }
+        // Only this start was invalidated (stop/timeout). A newer start must not inherit the job.
+        if (runGenerationRef.current !== thisGen + 1) return;
+        if (cancelOk) {
+          applyCancelledOutcome();
+          return;
+        }
+        setJobId(data.jobId);
+        jobIdRef.current = data.jobId;
+        setAgentRunning(true);
+        setOutcome({
+          status: "failure",
+          totalSteps: stepCountRef.current,
+          elapsedMs: startedAtRef.current
+            ? Date.now() - new Date(startedAtRef.current).getTime()
+            : 0,
+          errorDescription: "Failed to cancel agent job",
+        });
         return;
       }
       if (!resp.ok || !data.jobId) {
@@ -202,8 +243,10 @@ export function useAgentMode(): UseAgentModeReturn {
           : 0,
         errorDescription: message,
       });
+    } finally {
+      submitInFlightRef.current = false;
     }
-  }, [clearStartTimeout]);
+  }, [applyCancelledOutcome, clearStartTimeout]);
 
   /**
    * Confirm that the agent has successfully started (clears the 10s timeout).
@@ -216,21 +259,6 @@ export function useAgentMode(): UseAgentModeReturn {
    * Stop the agent loop manually (user-initiated cancellation).
    * Appends a terminal cancellation entry and disables running state.
    */
-  const applyCancelledOutcome = useCallback(() => {
-    const cancelOutcome: AgentOutcome = {
-      status: "cancelled",
-      totalSteps: stepCountRef.current,
-      elapsedMs: startedAtRef.current
-        ? Date.now() - new Date(startedAtRef.current).getTime()
-        : 0,
-      cancelledAtStep: stepCountRef.current,
-    };
-    const terminalEntry = truncateEntry(createTerminalEntry(cancelOutcome));
-    setEntries((prev) => appendEntryFIFO(prev, terminalEntry));
-    setAgentRunning(false);
-    setOutcome(cancelOutcome);
-  }, []);
-
   const stopAgent = useCallback(() => {
     clearStartTimeout();
     runGenerationRef.current += 1;
@@ -238,7 +266,7 @@ export function useAgentMode(): UseAgentModeReturn {
 
     const activeJobId = jobIdRef.current;
     if (!activeJobId) {
-      applyCancelledOutcome();
+      if (!submitInFlightRef.current) applyCancelledOutcome();
       return;
     }
 

@@ -193,13 +193,27 @@ describe("useAgentStream", () => {
       expect(onEntry.mock.calls[0][0].kind).toBe("tool_result");
     });
 
-    it("dedupes replayed log lines after reconnect", () => {
+    it("keeps repeated identical log lines when they have no event id", () => {
+      const onEntry = vi.fn();
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
+
+      const payload = JSON.stringify({ line: "[INFO] retrying pass" });
+      act(() => {
+        mockEventSources[0].onmessage?.(new MessageEvent("message", { data: payload }));
+        mockEventSources[0].onmessage?.(new MessageEvent("message", { data: payload }));
+      });
+      expect(onEntry).toHaveBeenCalledTimes(2);
+    });
+
+    it("dedupes reconnect replay when SSE lastEventId is present", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       const payload = JSON.stringify({ line: "[INFO] Olive pass started" });
       act(() => {
-        mockEventSources[0].onmessage?.(new MessageEvent("message", { data: payload }));
+        mockEventSources[0].onmessage?.(
+          new MessageEvent("message", { data: payload, lastEventId: "evt-1" }),
+        );
       });
       expect(onEntry).toHaveBeenCalledTimes(1);
 
@@ -214,7 +228,9 @@ describe("useAgentStream", () => {
       });
 
       act(() => {
-        mockEventSources[1].onmessage?.(new MessageEvent("message", { data: payload }));
+        mockEventSources[1].onmessage?.(
+          new MessageEvent("message", { data: payload, lastEventId: "evt-1" }),
+        );
       });
       expect(onEntry).toHaveBeenCalledTimes(1);
     });
