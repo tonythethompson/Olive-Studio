@@ -37,6 +37,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   process.env.OLIVE_JOB_SETUP_STUB = "1";
   delete process.env.OLIVE_JOB_SETUP_STUB_TIMEOUT_MS;
+  delete process.env.OLIVE_UI_SETUP_TIMEOUT_MS;
   vi.mocked(preflightOliveRecipe).mockImplementation(() => ({
     valid: true,
     provider: "CPUExecutionProvider",
@@ -70,6 +71,7 @@ afterEach(async () => {
     clearIdempotencyIndex();
     delete process.env.OLIVE_JOB_SETUP_STUB;
     delete process.env.OLIVE_JOB_SETUP_STUB_TIMEOUT_MS;
+    delete process.env.OLIVE_UI_SETUP_TIMEOUT_MS;
     vi.useRealTimers();
     vi.clearAllMocks();
   }
@@ -173,5 +175,41 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
     const job = result.jobId ? jobRegistry.get(result.jobId) : undefined;
     expect(job?.status).toBe("failed");
     expect(job?.finishedAt).not.toBeNull();
+  });
+
+  it("bounds the UI path itself when setup hangs past OLIVE_UI_SETUP_TIMEOUT_MS", async () => {
+    process.env.OLIVE_UI_SETUP_TIMEOUT_MS = "1000";
+    // No OLIVE_JOB_SETUP_STUB_TIMEOUT_MS override — the stub's own default
+    // (120s) would otherwise hang the request well past our UI-level cap.
+    const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
+
+    const pending = startOliveJob({ recipe, source: "ui" });
+    await vi.advanceTimersByTimeAsync(999);
+    let settled = false;
+    void pending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    if (result.jobId) trackedJobIds.add(result.jobId);
+    expect(result.httpStatus).toBe(504);
+    expect(result.error).toMatch(/Olive setup timed out after 1000ms/);
+    // The still-running (stubbed) setup must observe cancellation and never
+    // resurrect the job into "running"/"completed" after we've responded.
+    const job = result.jobId ? jobRegistry.get(result.jobId) : undefined;
+    expect(job?.status).toBe("cancelled");
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(job?.status).toBe("cancelled");
   });
 });

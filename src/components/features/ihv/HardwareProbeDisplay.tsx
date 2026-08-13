@@ -110,31 +110,33 @@ export function HardwareProbeDisplay({
                   </span>
                 </p>
               ) : null}
-              <p className="text-xs text-slate-500 pt-1">
-                Recommended target:{" "}
-                <span className="text-electric-blue font-semibold">
-                  {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ??
-                    hardwareProbe.recommendedProvider}
-                </span>
-                {state.ihvProvider !== hardwareProbe.recommendedProvider && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                    {
-                      const patch = prepareProviderChange(
-                        state,
-                        hardwareProbe.recommendedProvider,
-                        hardwareProbe,
-                      );
-                      if (patch) setState(patch);
-                    }
-                    }
-                    className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
-                  >
-                    Apply
-                  </button>
-                )}
-              </p>
+              {!hardwareProbe.detectedProviders?.includes(state.ihvProvider) && (
+                <p className="text-xs text-slate-500 pt-1">
+                  Recommended target:{" "}
+                  <span className="text-electric-blue font-semibold">
+                    {providers.find((p) => p.id === hardwareProbe.recommendedProvider)?.name ??
+                      hardwareProbe.recommendedProvider}
+                  </span>
+                  {state.ihvProvider !== hardwareProbe.recommendedProvider && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                      {
+                        const patch = prepareProviderChange(
+                          state,
+                          hardwareProbe.recommendedProvider,
+                          hardwareProbe,
+                        );
+                        if (patch) setState(patch);
+                      }
+                      }
+                      className="ml-2 text-sm text-electric-blue hover:text-white cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  )}
+                </p>
+              )}
             </div>
           ) : !probeLoading ? (
             <p className="text-sm text-slate-500">No hardware data yet.</p>

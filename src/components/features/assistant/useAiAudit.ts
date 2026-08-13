@@ -79,7 +79,11 @@ export function useAiAudit({ state, setState }: UseAiAuditOptions) {
     if (!autofix?.pass) return;
     const current = stateRef.current;
     const patch = resolveAuditAutofix(autofix, current);
-    if (!patch) return;
+    if (!patch) {
+      setAnalysisError("Couldn't apply this suggestion automatically — please make the change manually.");
+      return;
+    }
+    setAnalysisError("");
     const prior = analysis?.score ?? null;
     const next: UIState = {
       ...current,
