@@ -79,6 +79,18 @@ describe("loadStoredMetadata", () => {
     expect(loadStoredMetadata()).toBeNull();
   });
 
+  it("returns null when commitSha is 40 non-hex characters", () => {
+    localStorageMock.setItem(
+      CATALOG_PIN_STORAGE_KEY,
+      JSON.stringify({
+        branch: "main",
+        commitSha: "z".repeat(40),
+        fetchedAt: "2025-01-01T00:00:00.000Z",
+      }),
+    );
+    expect(loadStoredMetadata()).toBeNull();
+  });
+
   it("returns valid metadata when all fields are present and SHA is 40 chars", () => {
     const validMetadata: CatalogMetadata = {
       branch: "main",
