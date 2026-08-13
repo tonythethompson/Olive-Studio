@@ -17,8 +17,9 @@ import {
   isCatalogStale,
   catalogEntryToRecipeItem,
   inferDeviceTarget,
+  type CatalogEntry,
+  type CatalogMetadata,
 } from "@/lib/recipeCatalogPin";
-import type { CatalogEntry, CatalogMetadata } from "@/lib/recipeCatalogPin";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
