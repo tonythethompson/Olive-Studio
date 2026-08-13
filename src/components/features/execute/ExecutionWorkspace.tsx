@@ -577,6 +577,15 @@ export function ExecutionWorkspace({
     }
   }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
 
+  // Capture the recipe when Execute completes so Playground can link to it
+  const setCapturedRunRecipe = usePlaygroundStore((s) => s.setCapturedRunRecipe);
+  useEffect(() => {
+    if (executionStatus === "completed") {
+      const recipe = buildRecipeJsonFromState(state);
+      setCapturedRunRecipe(recipe);
+    }
+  }, [executionStatus, state, setCapturedRunRecipe]);
+
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
   useEffect(() => {
