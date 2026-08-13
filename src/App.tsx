@@ -109,6 +109,7 @@ function Dashboard() {
 
   const { state: pipelineState } = usePipelineState();
   const [activeView, setActiveView] = useState<ActiveView>("input");
+  const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
   const [isOliveRunning, setIsOliveRunning] = useState(false);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
@@ -157,6 +158,7 @@ function Dashboard() {
     (id: ActiveView) => {
       if (isOliveRunning && id !== "execute" && id !== "playground") return;
       setActiveView(id);
+      setVisitedSections((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
       scrollingToRef.current = id;
       const main = mainRef.current;
       const target = document.getElementById(id);
@@ -199,6 +201,7 @@ function Dashboard() {
         if (el.getBoundingClientRect().top - mainTop <= 96) current = id;
       }
       setActiveView((prev) => (prev === current ? prev : current));
+      setVisitedSections((prev) => (prev.has(current) ? prev : new Set(prev).add(current)));
     };
 
     main.addEventListener("scroll", syncActiveFromScroll, { passive: true });
@@ -242,7 +245,7 @@ function Dashboard() {
                 {SECTIONS.map(({ id, step, label, icon: Icon }) => {
                   const isActive = activeView === id;
                   const modelSelected = hasSelectedModel(pipelineState);
-                  const isIncomplete = !modelSelected && id !== "input";
+                  const isIncomplete = !modelSelected && id !== "input" && !visitedSections.has(id);
                   return (
                     <button
                       key={id}
