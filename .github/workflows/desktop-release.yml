@@ -34,6 +34,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify tag matches package versions
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          TAURI_VER="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          PKG_VER="$(node -p "require('./package.json').version")"
+          CARGO_VER="$(node -e "const fs=require('fs'); const m=fs.readFileSync('src-tauri/Cargo.toml','utf8').match(/^version\\s*=\\s*\\\"([^\\\"]+)\\\"/m); if (!m) process.exit(1); console.log(m[1]);")"
+          echo "tag=$TAG tauri=$TAURI_VER cargo=$CARGO_VER package=$PKG_VER"
+          if [ "$TAG" != "$TAURI_VER" ] || [ "$TAG" != "$CARGO_VER" ] || [ "$TAG" != "$PKG_VER" ]; then
+            echo "Release tag must match src-tauri/tauri.conf.json, src-tauri/Cargo.toml, and package.json versions"
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v4
         with:
           version: 11
