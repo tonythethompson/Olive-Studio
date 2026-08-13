@@ -173,6 +173,9 @@ export function useAgentStream({
       return;
     }
 
+    // Nested connect() does not inherit the jobId narrowing above.
+    const streamJobId = jobId;
+
     /**
      * Create and configure the EventSource connection.
      */
@@ -185,7 +188,7 @@ export function useAgentStream({
         eventSourceRef.current = null;
       }
 
-      const evtSource = new EventSource(`${AGENT_STREAM_ENDPOINT}/${encodeURIComponent(jobId)}`);
+      const evtSource = new EventSource(`${AGENT_STREAM_ENDPOINT}/${encodeURIComponent(streamJobId)}`);
       eventSourceRef.current = evtSource;
 
       const handleEntry = (event: MessageEvent) => {
