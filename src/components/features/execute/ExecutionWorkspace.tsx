@@ -479,6 +479,7 @@ export function ExecutionWorkspace({
     gpuMetrics,
     handleExecuteLive,
     handleCancelJob,
+    runRecipeJsonRef,
   } = useOliveStream({
     state,
     hardwareProbe,
@@ -577,14 +578,14 @@ export function ExecutionWorkspace({
     }
   }, [executionStatus, executionLogs, fetchKeyedDiagnostic]);
 
-  // Capture the recipe when Execute completes so Playground can link to it
+  // Capture the submitted recipe when Execute completes so Playground uses the exact recipe that ran,
+  // not a rebuilt version that might include post-run state edits.
   const setCapturedRunRecipe = usePlaygroundStore((s) => s.setCapturedRunRecipe);
   useEffect(() => {
-    if (executionStatus === "completed") {
-      const recipe = buildRecipeJsonFromState(state);
-      setCapturedRunRecipe(recipe);
+    if (executionStatus === "completed" && runRecipeJsonRef.current) {
+      setCapturedRunRecipe(runRecipeJsonRef.current);
     }
-  }, [executionStatus, state, setCapturedRunRecipe]);
+  }, [executionStatus, setCapturedRunRecipe, runRecipeJsonRef]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);

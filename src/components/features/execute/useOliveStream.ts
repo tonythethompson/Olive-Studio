@@ -26,6 +26,7 @@ export interface UseOliveStreamReturn {
   gpuMetrics: GpuMetrics | null;
   handleExecuteLive: () => Promise<void>;
   handleCancelJob: () => Promise<void>;
+  runRecipeJsonRef: React.MutableRefObject<string | null>;
 }
 
 type TerminalStatus = "completed" | "failed" | "cancelled";
@@ -540,5 +541,6 @@ export function useOliveStream({
     gpuMetrics,
     handleExecuteLive,
     handleCancelJob,
+    runRecipeJsonRef,
   };
 }

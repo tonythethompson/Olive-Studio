@@ -18,6 +18,8 @@ interface UseMcpDiagnosticReturn {
    * they need (single state, keyed Record, etc.).
    */
   fetchDiagnostic: (logs: string[]) => Promise<McpDiagnostic | null>;
+  /** Clear the stored diagnostic and abort any in-flight fetch. */
+  clearDiagnostic: () => void;
 }
 
 /**
@@ -67,7 +69,14 @@ export function useMcpDiagnostic(): UseMcpDiagnosticReturn {
     }
   }, []);
 
-  return { diagnostic, isDiagnosing, error, fetchDiagnostic };
+  const clearDiagnostic = useCallback(() => {
+    abortRef.current?.abort();
+    setDiagnostic(null);
+    setError(null);
+    setIsDiagnosing(false);
+  }, []);
+
+  return { diagnostic, isDiagnosing, error, fetchDiagnostic, clearDiagnostic };
 }
 
 /**
