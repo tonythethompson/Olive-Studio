@@ -2,7 +2,7 @@
  * Component tests for ActivityLog.
  * Validates Requirements 7.1, 7.3, 7.5, 7.6 at the component level.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 import { ActivityLog } from "./ActivityLog";
