@@ -4,10 +4,10 @@ import type { UIState } from "@/types";
 // ── Report categories ────────────────────────────────────────────────────────
 
 export const REPORT_CATEGORIES = [
-  { id: "bug", label: "Bug report" },
-  { id: "feature", label: "Feature request" },
-  { id: "docs", label: "Documentation" },
-  { id: "other", label: "Other" },
+  { id: "bug", label: "Bug report", hasSeverity: true },
+  { id: "feature", label: "Feature request", hasSeverity: false },
+  { id: "docs", label: "Documentation", hasSeverity: false },
+  { id: "other", label: "Other", hasSeverity: false },
 ] as const;
 
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number]["id"];
@@ -22,7 +22,7 @@ export const REPORT_SEVERITIES = [
 
 /** Severity only describes bug impact; other categories have nothing to rate. */
 export function categoryHasSeverity(category: ReportCategory): boolean {
-  return category === "bug";
+  return REPORT_CATEGORIES.find((candidate) => candidate.id === category)?.hasSeverity ?? false;
 }
 
 export type ReportSeverity = (typeof REPORT_SEVERITIES)[number]["id"];
@@ -236,6 +236,8 @@ export function collectTelemetry(
  */
 export function buildIssueBody(report: IssueReport): string {
   const lines: string[] = [];
+  const hasSeverity = categoryHasSeverity(report.category);
+  const severity = hasSeverity ? (report.severity === "n-a" ? "annoying" : report.severity) : "n-a";
 
   // Header
   lines.push("## Issue Report");
@@ -243,7 +245,7 @@ export function buildIssueBody(report: IssueReport): string {
 
   // Metadata
   lines.push(`**Category:** ${REPORT_CATEGORIES.find((c) => c.id === report.category)?.label ?? report.category}`);
-  lines.push(`**Severity:** ${REPORT_SEVERITIES.find((s) => s.id === report.severity)?.label ?? report.severity}`);
+  lines.push(`**Severity:** ${REPORT_SEVERITIES.find((s) => s.id === severity)?.label ?? severity}`);
   lines.push(`**Area:** ${REPORT_AREAS.find((a) => a.id === report.area)?.label ?? report.area}`);
   
   // Frequency info for repeated errors

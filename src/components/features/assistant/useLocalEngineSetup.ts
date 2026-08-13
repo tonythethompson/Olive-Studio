@@ -11,7 +11,7 @@ import {
 interface UseLocalEngineSetupOptions {
   isOpen: boolean;
   /** Called after a 1-click pull finishes so the provider status / audit can refresh. */
-  onModelActivated: (modelTag: string, source: LocalEngine) => void | Promise<void>;
+  onModelActivated: (modelTag: string, source: LocalEngine, signal?: AbortSignal) => void | Promise<void>;
 }
 
 type InstallStreamEvent = {
@@ -299,7 +299,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     evt: PullStreamEvent,
     state: { gotDone: boolean; finalMessage: string; modelId?: string; verified?: boolean },
     onDownloadPhase?: () => void,
+    controller?: AbortController,
   ) => {
+    if (controller && (controller.signal.aborted || pullAbortRef.current !== controller)) return;
     // Server only starts its 20m lms get / ollama timer after ensure*; arm ours then too.
     if (
       evt.type === "progress" ||
@@ -331,6 +333,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
   const consumePullStream = async (
     r: Response,
+    controller: AbortController,
     onDownloadPhase?: () => void,
   ): Promise<{ modelId?: string; verified?: boolean }> => {
     if (!r.ok && !r.body) {
@@ -345,7 +348,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     };
     const buf = await readNdjsonLines(r.body, (line) => {
       try {
-        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state, onDownloadPhase);
+        handlePullStreamEvent(JSON.parse(line) as PullStreamEvent, state, onDownloadPhase, controller);
       } catch (e) {
         if (e instanceof SyntaxError) return;
         throw e;
@@ -374,6 +377,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       throw new Error(`Pull failed (HTTP ${r.status})`);
     }
 
+    if (controller.signal.aborted || pullAbortRef.current !== controller) return {};
     setLocalInstallInfo(state.finalMessage || "Model ready.");
     return { modelId: state.modelId, verified: state.verified };
   };
@@ -421,10 +425,11 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         installed,
       );
       if (existing) {
+        if (controller.signal.aborted || pullAbortRef.current !== controller) return;
         setLocalPullPercent(100);
         setLocalInstallInfo(`Already installed — enabling ${existing}…`);
-        await onModelActivated(existing, source);
-        if (controller.signal.aborted) return;
+        await onModelActivated(existing, source, controller.signal);
+        if (controller.signal.aborted || pullAbortRef.current !== controller) return;
         setLocalInstallInfo(`Ready: ${existing}`);
         return;
       }
@@ -463,7 +468,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
-        pullMeta = await consumePullStream(r, armDownloadTimeout);
+        pullMeta = await consumePullStream(r, controller, armDownloadTimeout);
       } finally {
         clearTimeout(ensureTimer);
         if (downloadTimer) clearTimeout(downloadTimer);
@@ -498,8 +503,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         );
       }
       setLocalInstallInfo(`Enabling ${enableId}…`);
-      await onModelActivated(enableId, source);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || pullAbortRef.current !== controller) return;
+      await onModelActivated(enableId, source, controller.signal);
+      if (controller.signal.aborted || pullAbortRef.current !== controller) return;
       setLocalInstallInfo(`Ready: ${enableId}`);
     } catch (err: unknown) {
       // A cancelled pull already reset all this state synchronously and may have
@@ -514,7 +520,7 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
         pullAbortRef.current = null;
         setPullingModel(null);
       }
-      pullUserCancelledRef.current = false;
+      if (pullAbortRef.current === controller) pullUserCancelledRef.current = false;
     }
   };
 

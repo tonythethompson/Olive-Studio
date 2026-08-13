@@ -301,7 +301,9 @@ export function ReportIssueModal({
                 onChange={(e) => setSeverity(e.target.value as ReportSeverity)}
                 className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {REPORT_SEVERITIES.map((s) => (
+                {REPORT_SEVERITIES.filter((s) =>
+                  categoryHasSeverity(category) ? s.id !== "n-a" : s.id === "n-a",
+                ).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
                   </option>

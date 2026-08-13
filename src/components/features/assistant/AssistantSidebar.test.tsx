@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import { createMockUIState, useFetchRoutesMock } from "../__tests__/testUtils";
+import { screen, fireEvent, act } from "@testing-library/react";
+import { createMockUIState, renderWithProviders as render, useFetchRoutesMock } from "../__tests__/testUtils";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();

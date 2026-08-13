@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { createMockUIState } from "../__tests__/testUtils";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { createMockUIState, renderWithProviders as render } from "../__tests__/testUtils";
 
 const mockSetState = vi.fn();
 vi.mock("@/lib/stores/pipelineStore", () => ({

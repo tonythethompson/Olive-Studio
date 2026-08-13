@@ -255,9 +255,10 @@ export function useAiProviderSettings({
     }
   };
 
-  const fetchProviderStatus = async (): Promise<ProviderStatus> => {
+  const fetchProviderStatus = async (signal?: AbortSignal): Promise<ProviderStatus> => {
     try {
-      const r = await fetch("/api/ai/provider");
+      const r = signal ? await fetch("/api/ai/provider", { signal }) : await fetch("/api/ai/provider");
+      if (signal?.aborted) return { source: "none" };
       const contentType = r.headers.get("content-type") ?? "";
       if (!r.ok || !contentType.includes("application/json")) {
         const fallback: ProviderStatus = { source: "none" };
@@ -265,6 +266,7 @@ export function useAiProviderSettings({
         return fallback;
       }
       const d = (await r.json()) as ProviderStatus;
+      if (signal?.aborted) return { source: "none" };
       setProviderStatus(d);
       if (d.provider) {
         const uiProvider = normalizeUiProviderId(d.provider);
@@ -279,6 +281,7 @@ export function useAiProviderSettings({
       setSettingsBaseUrl(hydratedSettingsBaseUrl(d.baseUrl));
       return d;
     } catch {
+      if (signal?.aborted) return { source: "none" };
       const fallback: ProviderStatus = { source: "none" };
       setProviderStatus(fallback);
       return fallback;
@@ -582,7 +585,11 @@ export function useAiProviderSettings({
   };
 
   /** Activate LM Studio / Ollama as openai-compat local provider. Returns true on success. */
-  const enableLocalAiProvider = async (source: "lms" | "ollama", modelTag: string): Promise<boolean> => {
+  const enableLocalAiProvider = async (
+    source: "lms" | "ollama",
+    modelTag: string,
+    signal?: AbortSignal,
+  ): Promise<boolean> => {
     const baseUrl = source === "ollama" ? "http://127.0.0.1:11434/v1" : "http://127.0.0.1:1234/v1";
     setIsSavingProvider(true);
     setProviderSaveError("");
@@ -596,18 +603,22 @@ export function useAiProviderSettings({
           model: modelTag,
           baseUrl,
         }),
+        signal,
       });
       const data = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      if (signal?.aborted) return false;
       setSettingsProvider("openai-compat");
       userModelOverrideRef.current = true;
       setSettingsModel(modelTag);
       setCustomModel(modelTag);
       setSettingsBaseUrl(baseUrl);
-      await fetchProviderStatus();
+      await fetchProviderStatus(signal);
+      if (signal?.aborted) return false;
       // Stay on Settings after local enable (do not jump to Audit).
       return true;
     } catch (err: unknown) {
+      if (signal?.aborted) return false;
       setProviderSaveError(err instanceof Error ? err.message : "Failed to enable local provider.");
       return false;
     } finally {

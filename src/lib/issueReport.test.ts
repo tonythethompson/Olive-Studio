@@ -6,6 +6,7 @@ import {
   buildIssueTitle,
   buildGitHubIssueUrl,
   buildReport,
+  categoryHasSeverity,
   type IssueReport,
   type BuildReportOptions,
 } from "./issueReport";
@@ -154,6 +155,18 @@ describe("buildIssueBody", () => {
     const report = { ...baseReport, telemetry: {} };
     const body = buildIssueBody(report);
     expect(body).not.toContain("### Telemetry");
+  });
+
+  it("normalizes N/A away from bug reports", () => {
+    const body = buildIssueBody({ ...baseReport, severity: "n-a" });
+    expect(body).toContain("**Severity:** Annoying");
+    expect(body).not.toContain("**Severity:** N/A");
+  });
+
+  it("uses N/A for non-bug categories", () => {
+    expect(categoryHasSeverity("feature")).toBe(false);
+    const body = buildIssueBody({ ...baseReport, category: "feature", severity: "blocking" });
+    expect(body).toContain("**Severity:** N/A");
   });
 });
 

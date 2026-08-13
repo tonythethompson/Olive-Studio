@@ -66,7 +66,7 @@ export function AssistantSidebar({
   const setState = propSetState ?? storeState.setState;
   const [activeTab, setActiveTab] = useState<SidebarTab>("audit");
   const [, startTabTransition] = useTransition();
-  const { data: hardwareProbe = null } = useHardwareProbe();
+  const { data: hardwareProbe = null } = useHardwareProbe({ enabled: isOpen });
 
   const handleTabChange = (tab: SidebarTab) => {
     startTabTransition(() => {
@@ -123,9 +123,9 @@ export function AssistantSidebar({
 
   const local = useLocalEngineSetup({
     isOpen,
-    onModelActivated: async (modelTag, source) => {
-      const ok = await providers.enableLocalAiProvider(source, modelTag);
-      if (!ok) return;
+    onModelActivated: async (modelTag, source, signal) => {
+      const ok = await providers.enableLocalAiProvider(source, modelTag, signal);
+      if (!ok || signal?.aborted) return;
       audit.resetAnalysis();
     },
   });
