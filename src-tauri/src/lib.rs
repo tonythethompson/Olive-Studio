@@ -16,6 +16,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, Url};
+use tauri_plugin_updater::UpdaterExt;
 
 const DEFAULT_PORT: u16 = 3000;
 const HEALTH_TIMEOUT_SECS: u64 = 120;
@@ -311,8 +312,23 @@ pub fn run() {
       // Shell plugin for opening external URLs (GitHub, mailto, etc.)
       app.handle().plugin(tauri_plugin_shell::init())?;
 
-      // Updater plugin for auto-update support (signing key via $TAURI_SIGNING_PRIVATE_KEY)
+      // Updater plugin: private key is CI-only ($TAURI_SIGNING_PRIVATE_KEY).
+      // Runtime verification uses plugins.updater.pubkey in tauri.conf.json.
       app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
+      if !cfg!(debug_assertions) {
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+          match handle.updater() {
+            Ok(updater) => {
+              if let Err(e) = updater.check().await {
+                log::warn!("updater check failed: {e}");
+              }
+            }
+            Err(e) => log::warn!("updater unavailable: {e}"),
+          }
+        });
+      }
 
       Ok(())
     })
