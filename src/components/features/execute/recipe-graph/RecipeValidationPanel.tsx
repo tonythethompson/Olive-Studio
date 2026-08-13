@@ -223,7 +223,11 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     }
     const criticalIssues = validation.issues.filter((i) => i.severity === "critical");
     const count = criticalIssues.length;
-    if (count === 0 || count === prevIssueCountRef.current) return;
+    if (count === 0) {
+      prevIssueCountRef.current = 0;
+      return;
+    }
+    if (count === prevIssueCountRef.current) return;
     prevIssueCountRef.current = count;
 
     const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
