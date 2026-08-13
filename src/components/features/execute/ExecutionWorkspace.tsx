@@ -475,9 +475,9 @@ export function ExecutionWorkspace({
     executionStatus,
     executionExitCode,
     gpuMetrics,
-    runRecipeJson,
     handleExecuteLive,
     handleCancelJob,
+    runRecipeJsonRef,
   } = useOliveStream({
     state,
     hardwareProbe,
@@ -580,10 +580,10 @@ export function ExecutionWorkspace({
   // not a rebuilt version that might include post-run state edits.
   const setCapturedRunRecipe = usePlaygroundStore((s) => s.setCapturedRunRecipe);
   useEffect(() => {
-    if (executionStatus === "completed" && runRecipeJson) {
-      setCapturedRunRecipe(runRecipeJson);
+    if (executionStatus === "completed" && runRecipeJsonRef.current) {
+      setCapturedRunRecipe(runRecipeJsonRef.current);
     }
-  }, [executionStatus, runRecipeJson, setCapturedRunRecipe]);
+  }, [executionStatus, setCapturedRunRecipe, runRecipeJsonRef]);
 
   // Auto-save completed diagnoses to history
   const prevDiagnosticRef = useRef(mcpDiagnostic);
@@ -767,7 +767,7 @@ export function ExecutionWorkspace({
       <Card
         className={cn(
           "flex flex-col overflow-hidden",
-          recipeView === "graph" ? "min-h-[420px] wide:min-h-[480px]" : "min-h-[420px]",
+          recipeView === "graph" ? "min-h-[340px] wide:min-h-[380px]" : "min-h-[340px]",
         )}
       >
         <CardHeader
@@ -885,12 +885,12 @@ export function ExecutionWorkspace({
               key={view}
               className={cn(
                 "flex-1 overflow-hidden p-0",
-                view === "graph" ? "min-h-[400px]" : "min-h-[420px]",
+                view === "graph" ? "min-h-[340px]" : "min-h-[340px]",
                 isActive ? "block" : "hidden",
               )}
             >
               {view === "graph" && (
-                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="400px" />}>
+                <Suspense fallback={<LoadingFallback label="Loading graph editor..." minH="340px" />}>
                   <RecipeGraphView state={state} setState={setState} />
                 </Suspense>
               )}

@@ -7,9 +7,9 @@ export function Card({ className, children }: { className?: string; children: Re
 }
 
 export function CardHeader({ title, description, badge, tooltip, titleId, className }: { title: string; description?: string; badge?: React.ReactNode; tooltip?: string; titleId?: string; className?: string }) {
-  return <div className={cn("flex flex-col gap-1 p-5 pb-3", className)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div id={titleId} className="text-base font-semibold text-slate-100 flex items-center gap-2">{title}{tooltip && <span title={tooltip} className="cursor-help"><Info className="h-3.5 w-3.5 text-slate-500 shrink-0" /></span>}</div>{description && <p className="text-sm text-slate-400 mt-1">{description}</p>}</div>{badge}</div></div>;
+  return <div className={cn("flex flex-col gap-0.5 p-3.5 pb-2", className)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div id={titleId} className="text-base font-semibold text-slate-100 flex items-center gap-2">{title}{tooltip && <span title={tooltip} className="cursor-help"><Info className="h-3.5 w-3.5 text-slate-500 shrink-0" /></span>}</div>{description && <p className="text-sm text-slate-400 mt-0.5">{description}</p>}</div>{badge}</div></div>;
 }
 
 export function CardContent({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("p-5 pt-0", className)}>{children}</div>;
+  return <div className={cn("p-3.5 pt-0", className)}>{children}</div>;
 }

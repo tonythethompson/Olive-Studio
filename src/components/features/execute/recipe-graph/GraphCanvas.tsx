@@ -279,7 +279,7 @@ export function GraphCanvas({
       ref={containerRef}
       role="group"
       aria-label="Olive recipe pipeline graph. Tab to the selected node, then use arrow keys to move between nodes."
-      className="relative flex-1 min-h-[340px] wide:min-h-[400px] bg-slate-950 p-3 wide:p-4 flex flex-col justify-center select-none overflow-visible"
+      className="relative flex-1 min-h-[260px] wide:min-h-[300px] bg-slate-950 p-2.5 wide:p-3 flex flex-col justify-center select-none overflow-visible"
       style={{
         backgroundImage: `
             radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, transparent 80%),
@@ -288,7 +288,7 @@ export function GraphCanvas({
         backgroundSize: "24px 24px",
       }}
     >
-      <div className="grid grid-cols-1 wide:grid-cols-12 gap-y-3 wide:gap-3 relative z-10 items-center justify-between h-full w-full min-w-0 wide:min-w-[720px]">
+      <div className="grid grid-cols-1 wide:grid-cols-12 gap-y-2 wide:gap-2 relative z-10 items-center justify-between h-full w-full min-w-0 wide:min-w-[720px]">
         <div className="wide:col-span-2 flex flex-col justify-center items-center h-full w-full">
           <div className="text-sm text-slate-400 mb-2">Input</div>
           {(() => {
@@ -325,7 +325,7 @@ export function GraphCanvas({
 
         <div className="wide:col-span-7 flex flex-col items-center justify-center gap-2 wide:border-l wide:border-r border-slate-900/30 px-1 wide:px-4 w-full">
           <div className="text-sm text-slate-400 mb-1">Optimization passes</div>
-          <div className="grid grid-cols-2 wide:grid-cols-3 gap-2 wide:gap-3 w-full max-w-xl wide:max-w-none">
+          <div className="grid grid-cols-2 wide:grid-cols-3 gap-1.5 wide:gap-2 w-full max-w-xl wide:max-w-none">
             {["splitting", "peft", "conversion", "pruning", "transformer_opt", "quantization"].map((id) =>
               renderPassNode(id),
             )}

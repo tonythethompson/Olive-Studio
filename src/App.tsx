@@ -410,7 +410,7 @@ function Dashboard() {
               <main
                 ref={mainRef}
                 id="main"
-                className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-5 wide:px-6 wide:py-8 min-[1000px]:px-10 h-full min-w-0"
+                className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 wide:px-6 wide:py-5 min-[1000px]:px-8 h-full min-w-0"
               >
                 <h1 className="sr-only">Olive Studio recipe builder</h1>
                 <div className="mx-auto w-full max-w-5xl min-w-0">
@@ -424,7 +424,7 @@ function Dashboard() {
                         data-pipeline-section={id}
                         className={cn(
                           "scroll-mt-4",
-                          index > 0 && "mt-12 pt-10 border-t border-slate-800",
+                          index > 0 && "mt-6 pt-5 border-t border-slate-800",
                           // The final pipeline section must be tall enough that
                           // `scrollIntoView({block:"start"})` can land its top at
                           // the scroll-container's top without being clamped to
@@ -438,8 +438,8 @@ function Dashboard() {
                           isLast && "min-h-[calc(100dvh-3rem)] pb-16",
                         )}
                       >
-                        <header className="mb-5 pb-4 border-b border-slate-800/80">
-                          <p className="text-xs text-electric-blue mb-1">{step}</p>
+                        <header className="mb-3 pb-2.5 border-b border-slate-800/80">
+                          <p className="text-xs text-electric-blue mb-0.5">{step}</p>
                           <h2 id={`${id}-heading`} className="text-lg font-semibold text-slate-100">
                             {label}
                           </h2>

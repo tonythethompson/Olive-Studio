@@ -85,7 +85,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
     : [];
 
   return (
-    <div className="rounded-lg border border-slate-800/80 bg-slate-950/50 p-4 space-y-4">
+    <div className="rounded-lg border border-slate-800/80 bg-slate-950/50 p-3 space-y-2.5">
       <div>
         <button
           type="button"
@@ -112,7 +112,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
             {guidance.whatItDoes}
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-500/90 flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -148,7 +148,7 @@ export function PassGuidanceCard({ guidance }: PassGuidanceCardProps) {
 
       {/* MCP Parameter Documentation */}
       {guidance.passName && (
-        <div className="border-t border-slate-800/60 pt-3">
+        <div className="border-t border-slate-800/60 pt-2.5">
           <button
             type="button"
             onClick={() => setParamsExpanded((v) => !v)}
