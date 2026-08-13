@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import fc from "fast-check";
-import { sanitizeChatActionPatch, chatPatchToUiState } from "@/lib/chatActions";
+import { sanitizeChatActionPatch, chatPatchToUiState, type ChatActionPatch } from "@/lib/chatActions";
 import { commitUiStateUpdate, mergeUiState } from "@/lib/pipelineStateCommit";
 import { usePipelineStore, createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import {
@@ -28,7 +28,6 @@ import type {
   ActionPayloadDocumentation,
   ActionKind,
 } from "@/lib/types/findingTypes";
-import type { ChatActionPatch } from "@/lib/chatActions";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
