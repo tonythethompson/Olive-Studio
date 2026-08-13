@@ -2,13 +2,12 @@
   "mcpServers": {
     "olive-mcp": {
       "type": "stdio",
-      "command": "python",
+      "command": "node",
       "args": [
-        "olive-mcp-server/run.py"
+        "scripts/run-olive-mcp.mjs"
       ],
       "env": {
-        "OLIVE_MCP_RETRIEVAL_MODE": "auto",
-        "PYTHONPATH": "olive-mcp-server"
+        "OLIVE_MCP_RETRIEVAL_MODE": "auto"
       }
     }
   }

@@ -21,7 +21,7 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - Return lowercase hex string (64 chars)
     - _Requirements: 3.1, 3.5_
 
-  - [ ]* 1.3 Write property tests for fingerprint determinism (Properties 5–6)
+  - [ ] 1.3 Write property tests for fingerprint determinism (Properties 5–6)
     - Create `src/lib/__tests__/workspaceFingerprint.test.ts`
     - **Property 5: Fingerprint Determinism and Transient Exclusion** — deeply-equal states after transient exclusion produce identical fingerprints; states differing only in transient fields produce identical fingerprints
     - **Property 6: Fingerprint Staleness Consistency** — mismatched fingerprint marks findings stale; same fingerprint retains findings; changed fingerprint invalidates all findings
@@ -36,13 +36,13 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - Ensure reconciler never mutates chatHistory or chatMessages
     - _Requirements: 5.1, 5.2, 5.3, 5.5_
 
-  - [ ]* 1.5 Write property tests for review reconciler (Properties 7–8)
+  - [ ] 1.5 Write property tests for review reconciler (Properties 7–8)
     - Create `src/lib/__tests__/reviewReconciler.test.ts`
     - **Property 7: Deterministic Validation Authority** — AI suggestions contradicting deterministic critical issues are suppressed; displayed severity matches deterministic source
     - **Property 8: Review Isolation from Chat History** — reconciliation cycle never modifies chatHistory or chatMessages arrays
     - **Validates: Requirements 5.1, 5.2, 5.3, 5.5**
 
-  - [ ]* 1.6 Write property tests for Finding/Action contract (Properties 1–2)
+  - [ ] 1.6 Write property tests for Finding/Action contract (Properties 1–2)
     - Create `src/lib/__tests__/findingContract.test.ts`
     - **Property 1: Finding Structural Invariant** — id non-empty and unique within run, title <= 120 chars, description <= 2000 chars, severity valid enum, actions array 1–10 elements with labels <= 80 chars
     - **Property 2: Action Payload Validity** — applyPatch payloads pass `sanitizeChatActionPatch`; when all patches are null, fallback explain/documentation action exists
@@ -113,12 +113,12 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - Remove references to deprecated `AuditPanel`
     - _Requirements: 1.1, 1.2, 1.5_
 
-  - [ ]* 3.6 Write property tests for non-patch action store preservation (Property 3)
+  - [ ] 3.6 Write property tests for non-patch action store preservation (Property 3)
     - Add to `src/lib/__tests__/findingContract.test.ts` or create separate file
     - **Property 3: Non-Patch Actions Preserve Store** — executing navigate/explain/documentation actions does not modify PipelineStore state
     - **Validates: Requirements 2.8**
 
-  - [ ]* 3.7 Write property test for coercion difference detection (Property 4)
+  - [ ] 3.7 Write property test for coercion difference detection (Property 4)
     - Add to `src/lib/__tests__/findingContract.test.ts`
     - **Property 4: Coercion Difference Detection** — when commitUiStateUpdate produces different values than the patch, a coercion notice is generated
     - **Validates: Requirements 2.7**
@@ -139,7 +139,7 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - `createTerminalEntry(outcome: AgentSessionState['outcome']): ActivityLogEntry` — formats terminal entry per outcome type
     - _Requirements: 7.2, 7.4, 7.5, 7.6_
 
-  - [ ]* 5.3 Write property tests for activity log (Properties 9–11)
+  - [ ] 5.3 Write property tests for activity log (Properties 9–11)
     - Create `src/lib/__tests__/activityLog.test.ts`
     - **Property 9: Activity Log Entry Truncation** — each kind's text is truncated to its limit; expandedText holds full value when truncated
     - **Property 10: Activity Log Terminal Entry Correctness** — terminal entry contains correct fields per outcome type (success/failure/cancellation)
@@ -152,7 +152,7 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - `parseMcpCompareOutput(raw: Record<string, unknown>): CompareResultsOutput | null` — validates and parses MCP tool response
     - _Requirements: 8.6_
 
-  - [ ]* 5.5 Write property test for batch comparison job count constraint (Property 12)
+  - [ ] 5.5 Write property test for batch comparison job count constraint (Property 12)
     - Create `src/lib/__tests__/batchComparison.test.ts`
     - **Property 12: Batch Comparison Job Count Constraint** — inputs outside [2, 10] are rejected; inputs within range are accepted
     - **Validates: Requirements 8.6**
@@ -237,7 +237,7 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - `getReportFilename(): string` — returns `olive-report-YYYY-MM-DD.md` using current UTC date
     - _Requirements: 9.2, 9.3, 9.6, 9.7, 9.9_
 
-  - [ ]* 9.2 Write property tests for report generator (Properties 13–14)
+  - [ ] 9.2 Write property tests for report generator (Properties 13–14)
     - Create `src/lib/__tests__/reportGenerator.test.ts`
     - **Property 13: Report Content Completeness** — output contains model ID, provider, pass names, duration, status for each job; optional sections present when configured; comparison section when 2+ completed
     - **Property 14: Report Filename Pattern** — filename matches `^olive-report-\d{4}-\d{2}-\d{2}\.md$` with current UTC date
@@ -269,7 +269,7 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - Use branch from `getRecipesBranch()` (default `OLIVE_RECIPES_BRANCH_DEFAULT`)
     - _Requirements: 10.1, 10.2, 10.4, 10.5, 10.6_
 
-  - [ ]* 10.2 Write property test for catalog commit SHA format (Property 15)
+  - [ ] 10.2 Write property test for catalog commit SHA format (Property 15)
     - Create `src/lib/__tests__/recipeCatalogPin.test.ts`
     - **Property 15: Catalog Commit SHA Format** — stored commitSha is exactly 40 chars of `[0-9a-f]`
     - **Validates: Requirements 10.1, 10.2**
@@ -298,7 +298,7 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
     - Detect and report duplicate names with conflicting indices
     - _Requirements: 11.2, 11.4, 11.5_
 
-  - [ ]* 11.2 Write property tests for MultiLoRA validation (Property 16)
+  - [ ] 11.2 Write property tests for MultiLoRA validation (Property 16)
     - Create `src/lib/__tests__/multiLoraValidation.test.ts`
     - **Property 16: MultiLoRA Adapter Validation** — name non-empty + unique, path non-empty, rank positive int, alpha positive finite; max count respects VRAM threshold (2 for <=12GB, 8 for >12GB); duplicate names detected
     - **Validates: Requirements 11.2, 11.4, 11.5**
@@ -312,8 +312,8 @@ This plan implements the four v0.5.0 workstreams in dependency order: shared typ
 - [ ] 12. Checkpoint — Workstream 3 Complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Workstream 4 — Distribution: Docker Documentation
-  - [ ] 13.1 Create Docker deployment guide
+- [x] 13. Workstream 4 — Distribution: Docker Documentation
+  - [x] 13.1 Create Docker deployment guide
     - Create `docs/deployment/docker.md`
     - Include `docker run` example with `MCP_TRANSPORT`, `MCP_HOST`, `MCP_PORT`, `OLIVE_MCP_RETRIEVAL_MODE` env vars, read-only volume mount for KB, port 8000 mapping
     - Document all configurable env vars with accepted values, defaults, descriptions

@@ -1,0 +1,20 @@
+{
+  "name": "olive-studio-dev",
+  "version": "1.0.0",
+  "description": "Architecture reference, testing workflows, and development patterns for contributing to Olive Studio. Quick commands, pass/provider addition guides, and troubleshooting.",
+  "author": {
+    "name": "Olive Studio"
+  },
+  "keywords": [
+    "olive-studio",
+    "development",
+    "testing",
+    "architecture",
+    "venv",
+    "express",
+    "react",
+    "onnx",
+    "quantization"
+  ],
+  "license": "MIT"
+}
