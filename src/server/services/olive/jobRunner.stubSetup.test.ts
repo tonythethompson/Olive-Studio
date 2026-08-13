@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { preflightOliveRecipe } from "./jobPreflight.ts";
 import { clearIdempotencyIndex } from "./jobIdempotency.ts";
 import { finalizeJob, jobRegistry } from "./state.ts";
+import { detachVenvListener, ensureProviderCapability } from "../venv/index.ts";
 
 vi.mock("./jobPreflight.ts", () => ({
   preflightOliveRecipe: vi.fn(() => ({
@@ -25,6 +26,7 @@ vi.mock("../venv/index.ts", () => ({
     family: "default",
   })),
   buildOliveRunEnvironment: vi.fn(async () => ({})),
+  detachVenvListener: vi.fn(),
   resolveOliveCommand: vi.fn(() => ({ executable: "echo", args: ["ok"] })),
 }));
 
@@ -211,5 +213,60 @@ describe("OLIVE_JOB_SETUP_STUB timeout", () => {
 
     await vi.advanceTimersByTimeAsync(200);
     expect(job?.status).toBe("cancelled");
+  });
+
+  it("accepts Node's maximum timer delay and falls back above it", async () => {
+    process.env.OLIVE_JOB_SETUP_STUB_TIMEOUT_MS = "700000";
+    process.env.OLIVE_UI_SETUP_TIMEOUT_MS = "2147483647";
+    const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
+
+    const pending = startOliveJob({ recipe, source: "ui" });
+    await vi.advanceTimersByTimeAsync(600_001);
+    let settled = false;
+    void pending.finally(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    const job = [...jobRegistry.values()].at(-1);
+    expect(job).toBeDefined();
+    if (!job) return;
+    job.status = "cancelled";
+    await vi.advanceTimersByTimeAsync(200);
+    await pending;
+
+    process.env.OLIVE_UI_SETUP_TIMEOUT_MS = "2147483648";
+    const fallbackPending = startOliveJob({ recipe, source: "ui" });
+    await vi.advanceTimersByTimeAsync(600_000);
+    const fallbackResult = await fallbackPending;
+    expect(fallbackResult.ok).toBe(false);
+    if (fallbackResult.ok) return;
+    if (fallbackResult.jobId) trackedJobIds.add(fallbackResult.jobId);
+    expect(fallbackResult.error).toMatch(/timed out after 600000ms/);
+  });
+
+  it("detaches the venv listener when UI setup times out", async () => {
+    delete process.env.OLIVE_JOB_SETUP_STUB;
+    process.env.OLIVE_UI_SETUP_TIMEOUT_MS = "1000";
+    let resolveSetup: ((value: { ok: true; python: string; family: "default" }) => void) | undefined;
+    vi.mocked(ensureProviderCapability).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveSetup = resolve;
+      }),
+    );
+    const recipe = { input_model: {}, passes: {}, engine: {}, systems: {} } as never;
+
+    const pending = startOliveJob({ recipe, source: "ui" });
+    await vi.advanceTimersByTimeAsync(1000);
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (result.ok || !result.jobId) return;
+    trackedJobIds.add(result.jobId);
+    expect(detachVenvListener).toHaveBeenCalledTimes(1);
+    expect(jobRegistry.get(result.jobId)?.venvListener).toBeUndefined();
+
+    resolveSetup?.({ ok: true, python: "python", family: "default" });
+    await Promise.resolve();
   });
 });

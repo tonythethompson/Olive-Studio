@@ -25,6 +25,7 @@ import { getVenvPython } from "../venv/paths.ts";
 import {
   ensureProviderCapability,
   buildOliveRunEnvironment,
+  detachVenvListener,
   resolveOliveCommand,
 } from "../venv/index.ts";
 import { preflightOliveRecipe } from "./jobPreflight.ts";
@@ -39,7 +40,9 @@ import type { IHVProvider } from "../../../types.ts";
  */
 function getUiSetupTimeoutMs(): number {
   const raw = Number(process.env.OLIVE_UI_SETUP_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : 10 * 60_000;
+  return Number.isFinite(raw) && raw > 0 && raw <= 2_147_483_647
+    ? raw
+    : 10 * 60_000;
 }
 
 export type StartOliveJobOpts = {
@@ -326,6 +329,10 @@ async function registerAndStartOliveJob(opts: {
     const msg = err instanceof Error ? err.message : String(err);
     job.status = "cancelled";
     pushLog(job, `[error] ${msg}`);
+    if (job.venvListener) {
+      detachVenvListener(job.venvListener);
+      job.venvListener = undefined;
+    }
     cleanupJobArtifacts(job);
     finalizeJob(job);
     return { ok: false, error: msg, httpStatus: 504, jobId, fingerprint };
