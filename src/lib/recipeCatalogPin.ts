@@ -295,7 +295,13 @@ export async function fetchCatalogAtSha(
     );
   }
 
-  const tree = Array.isArray(treeData.tree) ? treeData.tree : [];
+  if (!Array.isArray(treeData.tree)) {
+    throw new CatalogPinError(
+      "Invalid catalog tree response: tree must be an array.",
+      "invalid-response",
+    );
+  }
+  const tree = treeData.tree;
   const metadata = formatCatalogMetadata(sha, branch);
 
   // Handle the Git Trees API truncated flag: when true, the tree is partial
