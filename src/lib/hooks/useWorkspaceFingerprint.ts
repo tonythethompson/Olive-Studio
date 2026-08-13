@@ -59,6 +59,9 @@ export function useWorkspaceFingerprint(): UseWorkspaceFingerprintReturn {
     // Increment the generation counter immediately so that any in-flight
     // computation from a prior state is invalidated.
     const generation = ++computeIdRef.current;
+    setFpState((prev) =>
+      prev.fingerprint === "" ? prev : { fingerprint: "", computedAt: 0 },
+    );
 
     // Schedule debounced recomputation
     timerRef.current = setTimeout(() => {
@@ -89,7 +92,7 @@ export function useWorkspaceFingerprint(): UseWorkspaceFingerprintReturn {
   const isStale = useCallback(
     (resultFingerprint: string): boolean => {
       // If we haven't computed a fingerprint yet, we can't determine staleness
-      if (fpState.fingerprint === "") return false;
+      if (fpState.fingerprint === "") return resultFingerprint.length > 0;
       return resultFingerprint !== fpState.fingerprint;
     },
     [fpState.fingerprint],
