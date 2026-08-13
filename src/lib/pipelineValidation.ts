@@ -754,7 +754,7 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   }
 
   // 0.13.0: trust_remote_code default flipped. Inform user when it's disabled for HF models.
-  if (passes.trustRemoteCode === false && state.modelSource === "huggingface") {
+  if (passes.trustRemoteCode === false && state.modelSource === "huggingface" && hasSelectedModel(state)) {
     issues.push({
       id: "trust-remote-code-advisory",
       severity: "info",
@@ -776,12 +776,33 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
  * @param recipe - The Olive recipe to inspect
  * @returns Critical issues for invalid task names or Whisper task mismatches
  */
+/** True once the user has actually picked a model in Model source (step 01). */
+export function hasSelectedModel(state: UIState): boolean {
+  return (
+    (state.modelSource === "huggingface" && state.hfModelId.trim() !== "") ||
+    (state.modelSource === "local" && state.localFiles.length > 0) ||
+    (state.modelSource === "azure" && state.azureModelPath.trim() !== "")
+  );
+}
+
 function getRecipeRuntimeIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
   const issues: PipelineIssue[] = [];
   const input = recipe.input_model as { type?: string; config?: Record<string, unknown> } | undefined;
   const task = typeof input?.config?.task === "string" ? input.config.task : "";
   const modelPath =
     typeof input?.config?.model_path === "string" ? input.config.model_path : state.hfModelId || "";
+
+  if (!hasSelectedModel(state)) {
+    issues.push({
+      id: "model-source-not-set",
+      severity: "critical",
+      title: "No model selected",
+      description:
+        "Choose a Hugging Face model, local files, or an Azure ML path in Model source (step 01) before running or exporting this recipe.",
+      affectedTabs: ["input"],
+      affectedPasses: ["input_model"],
+    });
+  }
 
   if (task === "speech-recognition") {
     issues.push({

@@ -1,8 +1,11 @@
-import { useState, useTransition, lazy, Suspense, useRef, type KeyboardEvent } from "react";
+import { useMemo, useState, useTransition, lazy, Suspense, useRef, type KeyboardEvent } from "react";
 import { RefreshCw, Globe, Gauge, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlaygroundStore, type PlaygroundSubView } from "@/lib/stores/playgroundStore";
+import { usePipelineState } from "@/lib/stores/pipelineStore";
+import { buildRecipeJsonFromState } from "@/lib/recipePipeline";
+import { hasSelectedModel } from "@/lib/pipelineValidation";
 
 /* ------------------------------------------------------------------ */
 /*  Lazy sub-view imports                                               */
@@ -58,6 +61,14 @@ function LoadingFallback({ label }: { label: string }) {
 export function PlaygroundPanel() {
   const activeSubView = usePlaygroundStore((s) => s.activeSubView);
   const setActiveSubView = usePlaygroundStore((s) => s.setActiveSubView);
+  const { state } = usePipelineState();
+  // Ties the Browser Test hint back to the recipe actually configured in steps 01-03,
+  // instead of always being hidden (it was previously hardcoded to undefined).
+  // Only pass recipe if provider is WebGPU; other providers should not show this hint.
+  const recipeJson = useMemo(
+    () => (hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider" ? buildRecipeJsonFromState(state) : undefined),
+    [state],
+  );
 
   // Keep-alive: seed from store so remounts don't blank a restored sub-view
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(
@@ -164,7 +175,7 @@ export function PlaygroundPanel() {
           >
             <ErrorBoundary label="Browser Test">
               <Suspense fallback={<LoadingFallback label="Loading Browser Test..." />}>
-                <InBrowserValidation recipeJson={undefined} />
+                <InBrowserValidation recipeJson={recipeJson} />
               </Suspense>
             </ErrorBoundary>
           </div>

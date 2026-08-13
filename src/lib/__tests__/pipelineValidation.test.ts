@@ -22,6 +22,7 @@ import {
   getQuantMethodActivationBlock,
   prepareProviderChange,
   parseUIStatePayload,
+  hasSelectedModel,
 } from "@/lib/pipelineValidation";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState, IHVProvider } from "@/types";
@@ -930,6 +931,94 @@ describe("0.13.0 validation rules", () => {
       });
       const result = getPipelineValidation(state);
       expect(result.issues.some((i) => i.id === "trust-remote-code-advisory")).toBe(false);
+    });
+  });
+
+  describe("hasSelectedModel", () => {
+    it("returns true for non-empty huggingface model", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        hfModelId: "meta-llama/Meta-Llama-3-8B",
+      });
+      expect(hasSelectedModel(state)).toBe(true);
+    });
+
+    it("returns false for empty huggingface model", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        hfModelId: "",
+      });
+      expect(hasSelectedModel(state)).toBe(false);
+    });
+
+    it("returns false for whitespace-only huggingface model", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        hfModelId: "   ",
+      });
+      expect(hasSelectedModel(state)).toBe(false);
+    });
+
+    it("returns true for non-empty local files", () => {
+      const state = baseState({
+        modelSource: "local",
+        localFiles: [{ name: "model.onnx", size: 1024 }],
+      });
+      expect(hasSelectedModel(state)).toBe(true);
+    });
+
+    it("returns false for empty local files", () => {
+      const state = baseState({
+        modelSource: "local",
+        localFiles: [],
+      });
+      expect(hasSelectedModel(state)).toBe(false);
+    });
+
+    it("returns true for non-empty azure path", () => {
+      const state = baseState({
+        modelSource: "azure",
+        azureModelPath: "path/to/model",
+      });
+      expect(hasSelectedModel(state)).toBe(true);
+    });
+
+    it("returns false for empty azure path", () => {
+      const state = baseState({
+        modelSource: "azure",
+        azureModelPath: "",
+      });
+      expect(hasSelectedModel(state)).toBe(false);
+    });
+
+    it("returns false for whitespace-only azure path", () => {
+      const state = baseState({
+        modelSource: "azure",
+        azureModelPath: "  \t  ",
+      });
+      expect(hasSelectedModel(state)).toBe(false);
+    });
+  });
+
+  describe("model-source-not-set issue", () => {
+    it("emits critical issue when no model selected", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        hfModelId: "",
+      });
+      const result = getPipelineValidation(state);
+      const issue = result.issues.find((i) => i.id === "model-source-not-set");
+      expect(issue).toBeDefined();
+      expect(issue!.severity).toBe("critical");
+    });
+
+    it("does not emit issue when model is selected", () => {
+      const state = baseState({
+        modelSource: "huggingface",
+        hfModelId: "meta-llama/Meta-Llama-3-8B",
+      });
+      const result = getPipelineValidation(state);
+      expect(result.issues.some((i) => i.id === "model-source-not-set")).toBe(false);
     });
   });
 });

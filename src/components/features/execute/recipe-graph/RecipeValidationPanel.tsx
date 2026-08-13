@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { getPipelineValidation, applyIssueAutofix, type PipelineIssue } from "@/lib/pipelineValidation";
+import { getPipelineValidation, applyIssueAutofix, hasSelectedModel, type PipelineIssue } from "@/lib/pipelineValidation";
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { useMcpDiagnostic } from "@/lib/hooks/useMcpDiagnostic";
@@ -97,6 +97,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic } = useMcpDiagnostic();
 
   const validation = getPipelineValidation(state);
+  // Pass-parameter advisories (quant method preferences, precision tips, etc.) are all
+  // about tuning a model that doesn't exist yet — showing them next to "No model
+  // selected" reads as a wall of unrelated noise around the one thing to actually fix.
+  const modelSelected = hasSelectedModel(state);
   const pipelineSteps = buildPipelineSteps(state.passes);
   const activePassNames = pipelineSteps
     .filter((s) => s.active && s.id !== "input" && s.id !== "output" && s.id !== "provider")
@@ -211,6 +215,12 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   // MCP error diagnostics — auto-fetch when critical pipeline issues are detected
   const prevIssueCountRef = useRef(0);
   useEffect(() => {
+    // Nothing to diagnose yet — "No model selected" isn't a runtime error pattern.
+    // Reset ref and clear stale diagnostics when model is deselected.
+    if (!modelSelected) {
+      prevIssueCountRef.current = 0;
+      return;
+    }
     const criticalIssues = validation.issues.filter((i) => i.severity === "critical");
     const count = criticalIssues.length;
     if (count === 0 || count === prevIssueCountRef.current) return;
@@ -218,7 +228,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
     const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
     fetchDiagnostic(logLines);
-  }, [validation.issues, fetchDiagnostic]);
+  }, [validation.issues, modelSelected, fetchDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
   const paramWarnings = validatePassParameters(state, activePassNames, recipe);
@@ -233,7 +243,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     ),
   );
 
-  const allIssues = [
+  const allIssues = !modelSelected ? validation.issues : [
     ...validation.issues,
     ...activePassWarnings.map((w, i) => ({
       id: `compat-${i}-${w.pass_name}`,
