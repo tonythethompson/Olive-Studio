@@ -64,8 +64,9 @@ export function PlaygroundPanel() {
   const { state } = usePipelineState();
   // Ties the Browser Test hint back to the recipe actually configured in steps 01-03,
   // instead of always being hidden (it was previously hardcoded to undefined).
+  // Only pass recipe if provider is WebGPU; other providers should not show this hint.
   const recipeJson = useMemo(
-    () => (hasSelectedModel(state) ? buildRecipeJsonFromState(state) : undefined),
+    () => (hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider" ? buildRecipeJsonFromState(state) : undefined),
     [state],
   );
 

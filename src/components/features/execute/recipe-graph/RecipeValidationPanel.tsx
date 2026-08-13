@@ -216,7 +216,11 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const prevIssueCountRef = useRef(0);
   useEffect(() => {
     // Nothing to diagnose yet — "No model selected" isn't a runtime error pattern.
-    if (!modelSelected) return;
+    // Reset ref and clear stale diagnostics when model is deselected.
+    if (!modelSelected) {
+      prevIssueCountRef.current = 0;
+      return;
+    }
     const criticalIssues = validation.issues.filter((i) => i.severity === "critical");
     const count = criticalIssues.length;
     if (count === 0 || count === prevIssueCountRef.current) return;
