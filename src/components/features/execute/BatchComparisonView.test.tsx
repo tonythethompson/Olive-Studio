@@ -167,8 +167,12 @@ describe("BatchComparisonView", () => {
   it("shows tooltip when Compare Results is disabled", () => {
     const records = [makeRecord({ id: "a", status: "completed" })];
     render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={1} />);
-    expect(screen.getByRole("tooltip")).toBeDefined();
+    const btn = screen.getByText("Compare Results");
+    const hint = screen.getByRole("tooltip");
+    expect(hint).toBeDefined();
     expect(screen.getByText("At least 2 completed jobs required")).toBeDefined();
+    expect(btn.getAttribute("aria-describedby")).toBe(hint.getAttribute("id"));
+    expect(btn.getAttribute("title")).toBe("At least 2 completed jobs required");
   });
 
   // ────────────────────────────────────────────────────────────

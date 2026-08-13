@@ -21,6 +21,8 @@ import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
 import { BatchComparisonView } from "./BatchComparisonView";
 import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
+import { parseMcpCompareOutput } from "@/lib/batchComparison";
+import type { CompareResultsOutput, ScoringPreference } from "@/lib/types/agentTypes";
 import {
   Play,
   Pause,
@@ -654,6 +656,32 @@ export function BatchProcessingPanel({
     errors: batchDiagnoseErrors,
   } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
+  const [compareResults, setCompareResults] = useState<CompareResultsOutput | null>(null);
+
+  const handleCompare = useCallback(async (preference: ScoringPreference) => {
+    const completed = (jobsRef.current ?? []).filter((j) => j.status === "completed");
+    const jobIds = completed.map((j) => j.oliveJobId ?? j.id).slice(0, 10);
+    try {
+      const resp = await fetch("/api/mcp/tool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolName: "compare_results",
+          args: { job_ids: jobIds, preference },
+        }),
+      });
+      const data: unknown = await resp.json().catch(() => null);
+      const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+      const payload =
+        record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
+          ? (record.result as Record<string, unknown>)
+          : record;
+      const parsed = payload ? parseMcpCompareOutput(payload) : null;
+      if (parsed) setCompareResults(parsed);
+    } catch {
+      /* comparison remains on the last successful result */
+    }
+  }, []);
 
   /** Card self-submits feedback; parent hook is optional analytics — keep diagnosis UI unchanged. */
   const handleFeedbackSubmitted = useCallback(
@@ -1216,6 +1244,10 @@ export function BatchProcessingPanel({
         <BatchComparisonView
           records={(jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord)}
           completedJobCount={(jobs ?? []).filter((j) => j.status === "completed").length}
+          compareResults={compareResults}
+          onCompare={(preference) => {
+            void handleCompare(preference);
+          }}
         />
       </div>
     </div>

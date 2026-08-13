@@ -179,6 +179,14 @@ export function BatchComparisonView({
               type="button"
               onClick={() => onCompare(scoringPreference)}
               disabled={!canCompare}
+              aria-describedby={!canCompare ? `${scoringSelectId}-compare-hint` : undefined}
+              title={
+                !canCompare
+                  ? effectiveCompletedCount < 2
+                    ? "At least 2 completed jobs required"
+                    : "Maximum 10 completed jobs supported"
+                  : undefined
+              }
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
                 canCompare
@@ -190,8 +198,9 @@ export function BatchComparisonView({
             </button>
             {!canCompare && (
               <div
+                id={`${scoringSelectId}-compare-hint`}
                 role="tooltip"
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-[11px] text-slate-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-[11px] text-slate-300 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none z-10"
               >
                 {effectiveCompletedCount < 2
                   ? "At least 2 completed jobs required"
