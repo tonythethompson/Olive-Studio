@@ -1,6 +1,6 @@
 [package]
 name = "olive-studio"
-version = "0.4.0"
+version = "0.5.0"
 description = "Desktop shell for Olive Studio — local Microsoft Olive recipe builder"
 authors = ["Anthony Thompson"]
 license = "MIT"
@@ -27,6 +27,7 @@ log = "0.4"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
+tauri-plugin-updater = "2"
 
 # ── Transitive dependency safety notes ─────────────────────────────────────
 #

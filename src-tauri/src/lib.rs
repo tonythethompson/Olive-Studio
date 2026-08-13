@@ -311,6 +311,9 @@ pub fn run() {
       // Shell plugin for opening external URLs (GitHub, mailto, etc.)
       app.handle().plugin(tauri_plugin_shell::init())?;
 
+      // Updater plugin for auto-update support (signing key via $TAURI_SIGNING_PRIVATE_KEY)
+      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
       Ok(())
     })
     .build(tauri::generate_context!())

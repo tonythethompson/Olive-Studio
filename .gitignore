@@ -1,4 +1,5 @@
 node_modules/
+*.diff
 .venv/
 .venvs/
 .venv.building/
