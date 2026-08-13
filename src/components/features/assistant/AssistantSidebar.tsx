@@ -140,8 +140,11 @@ export function AssistantSidebar({
   const providerSource = providers.providerStatus.source;
 
   useEffect(() => {
-    if (isOpen && providerSource !== "none") {
+    if (!isOpen) return;
+    if (providerSource !== "none") {
       reviewRefreshRef.current?.();
+    } else {
+      reviewResetRef.current?.();
     }
   }, [isOpen, providerSource]);
 

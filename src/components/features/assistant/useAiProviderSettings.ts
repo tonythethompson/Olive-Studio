@@ -451,7 +451,10 @@ export function useAiProviderSettings({
       await fetch("/api/codex/logout", { method: "POST" });
       await refreshCodexAccount();
       setCodexMessage("Signed out of Codex.");
-      await fetchProviderStatus();
+      const status = await fetchProviderStatus();
+      if (status.source === "none") {
+        onProviderCleared();
+      }
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -510,7 +513,10 @@ export function useAiProviderSettings({
       await fetch("/api/devin/logout", { method: "POST" });
       setDevinStatus({ signedIn: false });
       setDevinMessage("Signed out of Devin.");
-      await fetchProviderStatus();
+      const status = await fetchProviderStatus();
+      if (status.source === "none") {
+        onProviderCleared();
+      }
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
