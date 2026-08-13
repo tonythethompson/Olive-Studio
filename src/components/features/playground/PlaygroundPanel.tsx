@@ -73,15 +73,20 @@ export function PlaygroundPanel() {
   const setActiveSubView = usePlaygroundStore((s) => s.setActiveSubView);
   const capturedRunRecipe = usePlaygroundStore((s) => s.capturedRunRecipe);
   const { state } = usePipelineState();
+  // Memoize captured WebGPU recipe check so JSON parsing doesn't re-run on frequent pipeline state edits.
+  const isCapturedWebGpu = useMemo(() => {
+    return Boolean(capturedRunRecipe && isWebGpuRecipe(capturedRunRecipe));
+  }, [capturedRunRecipe]);
+
   // Use the recipe from the last successful Execute run if available (preserves context even if
   // user modifies state afterward). Fallback to building from current state for manual Browser Test.
   // Only pass recipe if provider is WebGPU; other providers should not show this hint.
   const recipeJson = useMemo(() => {
-    if (capturedRunRecipe && isWebGpuRecipe(capturedRunRecipe)) return capturedRunRecipe;
+    if (isCapturedWebGpu && capturedRunRecipe) return capturedRunRecipe;
     return hasSelectedModel(state) && state.ihvProvider === "WebGpuExecutionProvider"
       ? buildRecipeJsonFromState(state)
       : undefined;
-  }, [capturedRunRecipe, state]);
+  }, [isCapturedWebGpu, capturedRunRecipe, state]);
 
   // Keep-alive: seed from store so remounts don't blank a restored sub-view
   const [visitedSubViews, setVisitedSubViews] = useState<Set<string>>(

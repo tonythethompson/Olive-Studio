@@ -39,13 +39,13 @@ export function ProviderCardGrid({
   // (e.g. CoreML on a Windows box) are rarely the pick — collapse them the same way
   // export/platform targets collapse, unless the active selection is one of them.
   // However, if probe is still loading or failed (null), show all locals together since we
-  // can't reliably distinguish detected from undetected (e.g., null probe would hide CPU fallback).
+  // can't reliably distinguish detected from undetected without probe results.
   const { detectedLocal, undetectedLocal } = useMemo(() => {
     const hardwareProbe = providerCardProps.hardwareProbe;
     const detected: ProviderCatalogEntry[] = [];
     const undetected: ProviderCatalogEntry[] = [];
 
-    // Only split if probe data is available; otherwise treat all as detected to avoid hiding CPU.
+    // Only split if probe data is available; otherwise treat all as detected since detection is unavailable.
     if (!hardwareProbe && !probeLoading) {
       // Probe finished but returned null (error case) — show all, don't split
       return { detectedLocal: localAccelerators, undetectedLocal: [] };
