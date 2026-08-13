@@ -101,32 +101,44 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
 
 const MAX_BRIDGE_ADAPTERS = 8;
 
+function parseBridgeTargetModules(rawModules: unknown): string[] | undefined {
+  if (!Array.isArray(rawModules)) return undefined;
+  const filtered = rawModules
+    .filter((m): m is string => typeof m === "string")
+    .map((m) => m.trim().slice(0, 128))
+    .filter(Boolean)
+    .slice(0, 32);
+  return filtered.length > 0 ? filtered : undefined;
+}
+
+function parseSingleBridgeAdapter(item: Record<string, unknown>) {
+  const adapterPath = clipString(item.path, 1024);
+  if (!adapterPath) return undefined;
+  const name = clipString(item.name, 128);
+  const rank = typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
+  const alpha = typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
+  const rawModules = Array.isArray(item.targetModules) ? item.targetModules : item.target_modules;
+  const targetModules = parseBridgeTargetModules(rawModules);
+
+  return {
+    path: adapterPath,
+    ...(name ? { name } : {}),
+    ...(rank !== undefined ? { rank } : {}),
+    ...(alpha !== undefined ? { alpha } : {}),
+    ...(targetModules ? { targetModules } : {}),
+  };
+}
+
 function parseBridgeAdapters(raw: unknown): UIState["multiLoraAdapters"] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const out: NonNullable<UIState["multiLoraAdapters"]> = [];
   for (const item of raw) {
     if (!isObjectRecord(item)) continue;
-    const adapterPath = clipString(item.path, 1024);
-    if (!adapterPath) continue;
-    const name = clipString(item.name, 128);
-    const rank = typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
-    const alpha = typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
-    const rawModules = Array.isArray(item.targetModules) ? item.targetModules : item.target_modules;
-    const targetModules = Array.isArray(rawModules)
-      ? rawModules
-          .filter((m): m is string => typeof m === "string")
-          .map((m) => m.trim().slice(0, 128))
-          .filter(Boolean)
-          .slice(0, 32)
-      : undefined;
-    out.push({
-      path: adapterPath,
-      ...(name ? { name } : {}),
-      ...(rank !== undefined ? { rank } : {}),
-      ...(alpha !== undefined ? { alpha } : {}),
-      ...(targetModules && targetModules.length > 0 ? { targetModules } : {}),
-    });
-    if (out.length >= MAX_BRIDGE_ADAPTERS) break;
+    const adapter = parseSingleBridgeAdapter(item);
+    if (adapter) {
+      out.push(adapter);
+      if (out.length >= MAX_BRIDGE_ADAPTERS) break;
+    }
   }
   return out.length > 0 ? out : undefined;
 }
