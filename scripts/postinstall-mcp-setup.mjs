@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { venvPython, venvIsWorking, findSystemPython } from "./mcpVenvProbe.mjs";
+import { venvPython, venvIsWorking, findSystemPythonSpec } from "./mcpVenvProbe.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const mcpDir = path.join(root, "olive-mcp-server");
@@ -45,25 +45,36 @@ if (existingPython && venvIsWorking(existingPython, mcpDir)) {
   process.exit(0);
 }
 
-if (!findSystemPython()) {
+const pythonSpec = findSystemPythonSpec();
+if (!pythonSpec) {
   log(
-    "WARNING: Python >= 3.10 not found on PATH — skipping MCP server setup. " +
-      "Install Python, then run: .\\scripts\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh) to enable it.",
+    "WARNING: No compatible Python found (need 3.10-3.13; 3.14+ is unsupported) — skipping MCP server setup. " +
+      "Install Python 3.13 or 3.12, then run: .\\scripts\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh) to enable it.",
   );
   process.exit(0);
 }
 
 log("Setting up Olive MCP server (one-time; subsequent installs will skip this)...");
 
+const setupEnv = {
+  ...process.env,
+  OLIVE_STUDIO_PYTHON: pythonSpec.cmd,
+};
+if (pythonSpec.args.length > 0) {
+  setupEnv.OLIVE_STUDIO_PYTHON_ARGS = pythonSpec.args.join("\n");
+}
+
 const result =
   process.platform === "win32"
     ? spawnSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", path.join(root, "scripts", "setup-mcp.ps1")], {
         stdio: "inherit",
         cwd: root,
+        env: setupEnv,
       })
     : spawnSync("bash", [path.join(root, "scripts", "setup-mcp.sh")], {
         stdio: "inherit",
         cwd: root,
+        env: setupEnv,
       });
 
 if (result.status !== 0) {
