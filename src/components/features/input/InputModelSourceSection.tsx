@@ -67,17 +67,16 @@ export function InputModelSourceSection({
   onConfigTextChange,
 }: InputModelSourceSectionProps) {
   const isSourceCollapsed = !sourceConfigExpanded && !recipeRailCollapsed;
-  // Monotonic latch: once expanded/collapsed once, keep the panel mounted for
-  // the rest of the component's life. Set directly in the render body (React's
-  // documented "adjusting state when a prop changes" pattern) rather than an
-  // effect, since the guard makes it fire at most once and it only needs to
-  // affect this render's output, not resync with an external system.
+  // Promote during render: the initializer only runs on mount. If we start
+  // collapsed, the first expand must latch so LocalFileUpload (and its File
+  // object map) stays mounted after Hide.
   const [keepSourceMounted, setKeepSourceMounted] = useState(
     () => sourceConfigExpanded || recipeRailCollapsed,
   );
-  if (!keepSourceMounted && (sourceConfigExpanded || recipeRailCollapsed)) {
+  if ((sourceConfigExpanded || recipeRailCollapsed) && !keepSourceMounted) {
     setKeepSourceMounted(true);
   }
+  const shouldKeepSourceMounted = keepSourceMounted || sourceConfigExpanded || recipeRailCollapsed;
 
   return (
     <div className="min-w-0 w-full">
@@ -100,7 +99,7 @@ export function InputModelSourceSection({
         </button>
       )}
 
-      {keepSourceMounted && (
+      {shouldKeepSourceMounted && (
       <div className={cn(isSourceCollapsed && "hidden")}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-slate-400 flex items-center gap-1.5">
