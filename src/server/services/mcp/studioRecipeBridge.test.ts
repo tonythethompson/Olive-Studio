@@ -45,6 +45,26 @@ describe("mergeBridgeUiState MultiLoRA", () => {
     ]);
   });
 
+  it("rejects adapters whose targetModules contain empty or non-string values", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", targetModules: ["q_proj", ""] }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/targetModules must be an array of non-empty strings/i);
+  });
+
+  it("rejects adapters whose target_modules mix strings with non-strings", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multi_lora_adapters: [{ path: "/a", target_modules: ["q_proj", 1] }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/targetModules must be an array of non-empty strings/i);
+  });
+
   it("normalizes path-only adapters at evaluate when PEFT + multiLora are enabled", () => {
     mockIsMultiLoraEnabled.mockReturnValue(true);
     const result = evaluateStudioRecipeBridge({

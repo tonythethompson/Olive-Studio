@@ -101,46 +101,86 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
 
 const MAX_BRIDGE_ADAPTERS = 8;
 
-function parseBridgeTargetModules(rawModules: unknown): string[] | undefined {
-  if (!Array.isArray(rawModules)) return undefined;
-  const filtered = rawModules
-    .filter((m): m is string => typeof m === "string")
-    .map((m) => m.trim().slice(0, 128))
-    .filter(Boolean)
-    .slice(0, 32);
-  return filtered.length > 0 ? filtered : undefined;
+type BridgeTargetModulesResult =
+  | { ok: true; modules?: string[] }
+  | { ok: false; reason: string };
+
+function parseBridgeTargetModules(rawModules: unknown): BridgeTargetModulesResult {
+  if (rawModules === undefined) return { ok: true, modules: undefined };
+  if (!Array.isArray(rawModules)) {
+    return {
+      ok: false,
+      reason: "targetModules must be an array of non-empty strings",
+    };
+  }
+  if (rawModules.length === 0) return { ok: true, modules: undefined };
+
+  const modules: string[] = [];
+  for (const entry of rawModules) {
+    if (typeof entry !== "string" || entry.trim().length === 0) {
+      return {
+        ok: false,
+        reason: "targetModules must be an array of non-empty strings",
+      };
+    }
+    modules.push(entry.trim().slice(0, 128));
+    if (modules.length >= 32) break;
+  }
+  return { ok: true, modules };
 }
 
-function parseSingleBridgeAdapter(item: Record<string, unknown>) {
+type BridgeAdapterParseResult =
+  | { ok: true; adapter: NonNullable<UIState["multiLoraAdapters"]>[number] | null }
+  | { ok: false; reason: string };
+
+function parseSingleBridgeAdapter(item: Record<string, unknown>): BridgeAdapterParseResult {
   const adapterPath = clipString(item.path, 1024);
-  if (!adapterPath) return undefined;
+  if (!adapterPath) return { ok: true, adapter: null };
   const name = clipString(item.name, 128);
   const rank = typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
   const alpha = typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
-  const rawModules = Array.isArray(item.targetModules) ? item.targetModules : item.target_modules;
-  const targetModules = parseBridgeTargetModules(rawModules);
+  const hasTargetModulesKey = "targetModules" in item || "target_modules" in item;
+  const rawModules = Array.isArray(item.targetModules)
+    ? item.targetModules
+    : Array.isArray(item.target_modules)
+      ? item.target_modules
+      : hasTargetModulesKey
+        ? item.targetModules ?? item.target_modules
+        : undefined;
+  const targetModulesResult = parseBridgeTargetModules(rawModules);
+  if (!targetModulesResult.ok) {
+    return { ok: false, reason: targetModulesResult.reason };
+  }
 
   return {
-    path: adapterPath,
-    ...(name ? { name } : {}),
-    ...(rank !== undefined ? { rank } : {}),
-    ...(alpha !== undefined ? { alpha } : {}),
-    ...(targetModules ? { targetModules } : {}),
+    ok: true,
+    adapter: {
+      path: adapterPath,
+      ...(name ? { name } : {}),
+      ...(rank !== undefined ? { rank } : {}),
+      ...(alpha !== undefined ? { alpha } : {}),
+      ...(targetModulesResult.modules ? { targetModules: targetModulesResult.modules } : {}),
+    },
   };
 }
 
-function parseBridgeAdapters(raw: unknown): UIState["multiLoraAdapters"] | undefined {
-  if (!Array.isArray(raw)) return undefined;
+type BridgeAdaptersParseResult =
+  | { ok: true; adapters?: UIState["multiLoraAdapters"] }
+  | { ok: false; reason: string };
+
+function parseBridgeAdapters(raw: unknown): BridgeAdaptersParseResult {
+  if (!Array.isArray(raw)) return { ok: true, adapters: undefined };
   const out: NonNullable<UIState["multiLoraAdapters"]> = [];
   for (const item of raw) {
     if (!isObjectRecord(item)) continue;
-    const adapter = parseSingleBridgeAdapter(item);
-    if (adapter) {
-      out.push(adapter);
+    const parsed = parseSingleBridgeAdapter(item);
+    if (!parsed.ok) return parsed;
+    if (parsed.adapter) {
+      out.push(parsed.adapter);
       if (out.length >= MAX_BRIDGE_ADAPTERS) break;
     }
   }
-  return out.length > 0 ? out : undefined;
+  return { ok: true, adapters: out.length > 0 ? out : undefined };
 }
 
 function assignClippedBridgeStrings(
@@ -216,8 +256,11 @@ export function mergeBridgeUiState(
   const localFiles = parseLocalFiles(raw.localFiles);
   if (localFiles) partial.localFiles = localFiles;
 
-  const adapters = parseBridgeAdapters(raw.multiLoraAdapters ?? raw.multi_lora_adapters);
-  if (adapters) partial.multiLoraAdapters = adapters;
+  const adaptersResult = parseBridgeAdapters(raw.multiLoraAdapters ?? raw.multi_lora_adapters);
+  if (!adaptersResult.ok) {
+    return { ok: false, code: "invalid_ui_state", error: adaptersResult.reason };
+  }
+  if (adaptersResult.adapters) partial.multiLoraAdapters = adaptersResult.adapters;
 
   const vramRaw = raw.vramEstimateGb ?? raw.vram_estimate_gb;
   if (typeof vramRaw === "number" && Number.isFinite(vramRaw)) {
