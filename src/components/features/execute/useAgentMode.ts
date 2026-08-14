@@ -162,6 +162,29 @@ export function useAgentMode(): UseAgentModeReturn {
     }
   }, []);
 
+  /** Bound a deferred stop that is waiting on a still-pending submit. */
+  const armStopSubmitGrace = useCallback((generation: number) => {
+    if (stopSubmitGraceRef.current !== null) return;
+    stopSubmitGraceRef.current = setTimeout(() => {
+      if (generation !== runGenerationRef.current) return;
+      if (!stopRequestedRef.current) return;
+      stopSubmitGraceRef.current = null;
+      submitControllerRef.current?.abort();
+      stopRequestedRef.current = false;
+      runGenerationRef.current += 1;
+      setAgentRunning(false);
+      setOutcome({
+        status: "failure",
+        totalSteps: stepCountRef.current,
+        elapsedMs: startedAtRef.current
+          ? Date.now() - new Date(startedAtRef.current).getTime()
+          : START_TIMEOUT_MS + STOP_SUBMIT_GRACE_MS,
+        errorDescription: "Timed out waiting to cancel pending agent submission",
+      });
+      resolvePendingStop(false);
+    }, STOP_SUBMIT_GRACE_MS);
+  }, [resolvePendingStop]);
+
   // Clear the start timeout on unmount to prevent stale state updates
   useEffect(() => {
     return () => {
@@ -230,24 +253,7 @@ export function useAgentMode(): UseAgentModeReturn {
       if (stopRequestedRef.current) {
         // Keep submit alive so we can cancel by jobId, but bound mode-switch wait.
         clearStopSubmitGrace();
-        stopSubmitGraceRef.current = setTimeout(() => {
-          if (thisGen !== runGenerationRef.current) return;
-          if (!stopRequestedRef.current) return;
-          stopSubmitGraceRef.current = null;
-          submitControllerRef.current?.abort();
-          stopRequestedRef.current = false;
-          runGenerationRef.current += 1;
-          setAgentRunning(false);
-          setOutcome({
-            status: "failure",
-            totalSteps: stepCountRef.current,
-            elapsedMs: startedAtRef.current
-              ? Date.now() - new Date(startedAtRef.current).getTime()
-              : START_TIMEOUT_MS + STOP_SUBMIT_GRACE_MS,
-            errorDescription: "Timed out waiting to cancel pending agent submission",
-          });
-          resolvePendingStop(false);
-        }, STOP_SUBMIT_GRACE_MS);
+        armStopSubmitGrace(thisGen);
         return;
       }
 
@@ -385,7 +391,13 @@ export function useAgentMode(): UseAgentModeReturn {
         submitControllerRef.current = null;
       }
     }
-  }, [applyCancelledOutcome, clearStartTimeout, clearStopSubmitGrace, resolvePendingStop]);
+  }, [
+    applyCancelledOutcome,
+    armStopSubmitGrace,
+    clearStartTimeout,
+    clearStopSubmitGrace,
+    resolvePendingStop,
+  ]);
 
   /**
    * Confirm that the agent has successfully started (clears the 10s timeout).
@@ -409,6 +421,11 @@ export function useAgentMode(): UseAgentModeReturn {
             resolve = r;
           });
           pendingStopWaiterRef.current = { promise, resolve };
+        }
+        // Start timeout already elapsed or was confirmed: the grace branch in
+        // that timer cannot run, so bound the waiter here.
+        if (startTimeoutRef.current === null) {
+          armStopSubmitGrace(runGenerationRef.current);
         }
         return pendingStopWaiterRef.current.promise;
       }
@@ -456,7 +473,7 @@ export function useAgentMode(): UseAgentModeReturn {
       });
       return false;
     }
-  }, [applyCancelledOutcome, clearStartTimeout]);
+  }, [applyCancelledOutcome, armStopSubmitGrace, clearStartTimeout]);
 
   /**
    * Complete the agent loop with a specified outcome.

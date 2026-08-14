@@ -446,6 +446,94 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.errorDescription).toMatch(/Timed out waiting to cancel/i);
     });
 
+    it("bounds late stop after start timeout while submit is still pending", async () => {
+      const submitPromise = new Promise<Response>(() => {
+        /* never resolves */
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ status: "cancelled" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(result.current.agentRunning).toBe(false);
+
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(29_000);
+      });
+      expect(result.current.outcome?.errorDescription).toMatch(/failed to start within 10 seconds/i);
+
+      let cancelled: boolean | undefined;
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+        cancelled = await stopResult;
+      });
+
+      expect(cancelled).toBe(false);
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.outcome?.status).toBe("failure");
+      expect(result.current.outcome?.errorDescription).toMatch(/Timed out waiting to cancel/i);
+    });
+
+    it("bounds stop after confirmStart while submit is still pending", async () => {
+      const submitPromise = new Promise<Response>(() => {
+        /* never resolves */
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ status: "cancelled" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+      act(() => {
+        result.current.confirmStart();
+      });
+
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent();
+      });
+      expect(result.current.agentRunning).toBe(true);
+
+      let cancelled: boolean | undefined;
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+        cancelled = await stopResult;
+      });
+
+      expect(cancelled).toBe(false);
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.outcome?.status).toBe("failure");
+      expect(result.current.outcome?.errorDescription).toMatch(/Timed out waiting to cancel/i);
+    });
+
     it("resolves deferred stop after pending submit is cancelled", async () => {
       let resolveSubmit: (value: Response) => void = () => {};
       const submitPromise = new Promise<Response>((resolve) => {
