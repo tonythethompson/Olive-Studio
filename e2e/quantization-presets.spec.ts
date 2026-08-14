@@ -191,7 +191,6 @@ test.describe('Quantization Presets', () => {
 
   test('preset dropdown has all 8 built-in presets', async ({ page }) => {
     const select = page.locator('#quant-presets');
-    const optionCount = await select.locator('option').count();
     // 8 presets + "Apply a profile" + "Ask AI" + 3 separator options = 13 total
     // But some separators are disabled, so count the non-disabled options
     const enabledOptions = await select.locator('option:not([disabled])').count();

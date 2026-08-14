@@ -28,6 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
 
       - name: Audit dependencies
         run: pnpm audit --audit-level high

@@ -3,13 +3,7 @@
  * CodeFactor method-complexity limits.
  */
 import { Copy, Download, ExternalLink, RefreshCw } from "lucide-react";
-
-type PythonPrerequisite = {
-  downloadUrl: string;
-  canAutoInstall: boolean;
-  autoInstallLabel: string | null;
-  command: string;
-};
+import type { PythonInstallGuidance } from "@/lib/apiClient";
 
 export function PythonMissingInstall({
   prereq,
@@ -17,7 +11,7 @@ export function PythonMissingInstall({
   onInstall,
   onCopyCommand,
 }: {
-  prereq: PythonPrerequisite | null | undefined;
+  prereq: PythonInstallGuidance | null | undefined;
   busy: boolean;
   onInstall: () => void;
   onCopyCommand: (command: string) => void;

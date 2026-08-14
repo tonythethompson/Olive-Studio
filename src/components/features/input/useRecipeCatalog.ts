@@ -98,15 +98,16 @@ export function useRecipeCatalog(opts: UseRecipeCatalogOpts) {
     });
   })();
 
-  const localMatchSummary = useMemo(
-    () => (localModelHints ? summarizeLocalRecipeMatches(localModelHints, SUGGESTED_RECIPES) : null),
-    [localModelHints, catalogReady],
-  );
+  // Computed on each render (like filteredRecipes above): the catalog array is
+  // mutated in place by the async import, so memoizing over catalogReady would
+  // leave these stale after load. Recomputing is cheap and always lint-clean.
+  const localMatchSummary = localModelHints
+    ? summarizeLocalRecipeMatches(localModelHints, SUGGESTED_RECIPES)
+    : null;
 
-  const hardwareMatchSummary = useMemo(
-    () => (hardwareProbe ? summarizeRecipeHardwareCompatibility(SUGGESTED_RECIPES, hardwareProbe) : null),
-    [hardwareProbe, catalogReady],
-  );
+  const hardwareMatchSummary = hardwareProbe
+    ? summarizeRecipeHardwareCompatibility(SUGGESTED_RECIPES, hardwareProbe)
+    : null;
 
   const curatedRecipesWithMatch: RecipeRow[] = useMemo(() => {
     let rows = filteredRecipes;

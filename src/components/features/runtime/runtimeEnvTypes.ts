@@ -1,19 +1,9 @@
-export interface RuntimeEnvStatus {
-  venvExists: boolean;
-  venvPython: string | null;
-  venvScripts: string;
-  oliveInstalled: boolean;
-  oliveVersion: string | null;
-  systemPython: string | null;
-  configuredPython: string | null;
-  venvOnUserPath: boolean;
-  platform: string;
-  hint: string;
+/**
+ * Re-export shared RuntimeEnvStatus from apiClient.
+ * Extended here with `error?` for RuntimeEnvControls failed responses.
+ */
+import type { RuntimeEnvStatus as BaseRuntimeEnvStatus } from "@/lib/apiClient";
+
+export interface RuntimeEnvStatus extends BaseRuntimeEnvStatus {
   error?: string;
-  pythonPrerequisite?: {
-    downloadUrl: string;
-    canAutoInstall: boolean;
-    autoInstallLabel: string | null;
-    command: string;
-  } | null;
 }

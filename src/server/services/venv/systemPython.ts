@@ -42,13 +42,6 @@ async function execPythonVersionFromPathCmd(
   }
 }
 
-function stdioFromExecError(err: unknown): string {
-  if (!err || typeof err !== "object") return "";
-  const stdout = "stdout" in err ? String((err as { stdout?: unknown }).stdout ?? "") : "";
-  const stderr = "stderr" in err ? String((err as { stderr?: unknown }).stderr ?? "") : "";
-  return `${stdout}\n${stderr}`;
-}
-
 async function execPythonVersionFromFile(
   absolutePython: string,
 ): Promise<{ major: number; minor: number; text: string } | null> {
@@ -58,7 +51,15 @@ async function execPythonVersionFromFile(
     });
     return parsePythonVersionText(`${stdout} ${stderr}`);
   } catch (err: unknown) {
-    return parsePythonVersionText(stdioFromExecError(err));
+    const stdout =
+      err && typeof err === "object" && "stdout" in err
+        ? String((err as { stdout?: unknown }).stdout ?? "")
+        : "";
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr?: unknown }).stderr ?? "")
+        : "";
+    return parsePythonVersionText(`${stdout} ${stderr}`);
   }
 }
 
@@ -92,23 +93,6 @@ async function isRunnablePython(candidate: string): Promise<boolean> {
   return v != null && isSupportedOlivePython(v);
 }
 
-function looksLikePythonPath(trimmed: string): boolean {
-  if (!trimmed.includes("/") && !trimmed.includes("\\")) return false;
-  return /^[A-Za-z]:[\\/].+\.exe$/i.test(trimmed) || /(^|[/\\])python(\d+(\.\d+)*)?(\.exe)?$/i.test(trimmed);
-}
-
-function hitsFromPythonListLine(trimmed: string): string[] {
-  const hits: string[] = [];
-  if (looksLikePythonPath(trimmed)) hits.push(trimmed);
-  for (const m of trimmed.matchAll(/([A-Za-z]:\\[^:*?"<>|\r\n]*?python(?:\d+(?:\.\d+)*)?\.exe)/gi)) {
-    hits.push(m[1]!);
-  }
-  for (const m of trimmed.matchAll(/((?:\/[\w.+-]+)+\/python(?:\d+(?:\.\d+)*)?)/g)) {
-    hits.push(m[1]!);
-  }
-  return hits;
-}
-
 /** Pull absolute python.exe paths out of `pymanager` / `py` list output. */
 export function parsePythonExeLines(text: string): string[] {
   const out: string[] = [];
@@ -116,7 +100,15 @@ export function parsePythonExeLines(text: string): string[] {
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim().replace(/^"|"$/g, "");
     if (!trimmed) continue;
-    for (const hit of hitsFromPythonListLine(trimmed)) {
+    const hits: string[] = [];
+    if (/^[A-Za-z]:[\\/].+\.exe$/i.test(trimmed) || /(^|[/\\])python(\d+(\.\d+)*)?(\.exe)?$/i.test(trimmed)) {
+      if (trimmed.includes("/") || trimmed.includes("\\")) hits.push(trimmed);
+    }
+    const win = trimmed.matchAll(/([A-Za-z]:\\[^:*?"<>|\r\n]*?python(?:\d+(?:\.\d+)*)?\.exe)/gi);
+    for (const m of win) hits.push(m[1]!);
+    const posix = trimmed.matchAll(/((?:\/[\w.+-]+)+\/python(?:\d+(?:\.\d+)*)?)/g);
+    for (const m of posix) hits.push(m[1]!);
+    for (const hit of hits) {
       if (seen.has(hit)) continue;
       seen.add(hit);
       out.push(hit);
@@ -179,7 +171,7 @@ function collectWindowsPythonFileCandidates(env: NodeJS.ProcessEnv, home: string
   return fileCandidates;
 }
 
-function collectUnixPythonFileCandidates(platform: NodeJS.Platform, home: string): string[] {
+function collectPosixPythonFileCandidates(platform: NodeJS.Platform, home: string): string[] {
   const fileCandidates: string[] = [];
   const versionedNames = PREFERRED_PYTHON_MINORS.flatMap((minor) => [`python3.${minor}`, `python${minor}`]);
   const binDirs = ["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin", "/home/linuxbrew/.linuxbrew/bin"];
@@ -189,12 +181,14 @@ function collectUnixPythonFileCandidates(platform: NodeJS.Platform, home: string
       pushUnique(fileCandidates, path.join(dir, name));
     }
   }
+
   if (platform === "darwin") {
     for (const minor of PREFERRED_PYTHON_MINORS) {
       pushUnique(fileCandidates, `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3`);
       pushUnique(fileCandidates, `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3.${minor}`);
     }
   }
+
   if (home) {
     for (const p of listImmediateSubdirInterpreters(
       path.join(home, ".pyenv", "versions"),
@@ -217,7 +211,7 @@ export function collectPreferredPythonFileCandidates(
 ): string[] {
   const home = os.homedir();
   if (platform === "win32") return collectWindowsPythonFileCandidates(env, home);
-  return collectUnixPythonFileCandidates(platform, home);
+  return collectPosixPythonFileCandidates(platform, home);
 }
 
 async function execLiteralList(
@@ -231,7 +225,15 @@ async function execLiteralList(
         : await execFileAsync("py", args, { timeout: 8_000, windowsHide: true });
     return `${stdout}\n${stderr}`;
   } catch (err: unknown) {
-    return stdioFromExecError(err);
+    const stdout =
+      err && typeof err === "object" && "stdout" in err
+        ? String((err as { stdout?: unknown }).stdout ?? "")
+        : "";
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr?: unknown }).stderr ?? "")
+        : "";
+    return `${stdout}\n${stderr}`;
   }
 }
 

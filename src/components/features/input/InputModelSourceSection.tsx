@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Input, Label, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
 import { UIState } from "@/types";
 import { cn } from "@/lib/utils";
@@ -67,15 +67,16 @@ export function InputModelSourceSection({
   onConfigTextChange,
 }: InputModelSourceSectionProps) {
   const isSourceCollapsed = !sourceConfigExpanded && !recipeRailCollapsed;
+  // Promote during render: the initializer only runs on mount. If we start
+  // collapsed, the first expand must latch so LocalFileUpload (and its File
+  // object map) stays mounted after Hide.
   const [keepSourceMounted, setKeepSourceMounted] = useState(
     () => sourceConfigExpanded || recipeRailCollapsed,
   );
-
-  useEffect(() => {
-    if (sourceConfigExpanded || recipeRailCollapsed) {
-      setKeepSourceMounted(true);
-    }
-  }, [sourceConfigExpanded, recipeRailCollapsed]);
+  if ((sourceConfigExpanded || recipeRailCollapsed) && !keepSourceMounted) {
+    setKeepSourceMounted(true);
+  }
+  const shouldKeepSourceMounted = keepSourceMounted || sourceConfigExpanded || recipeRailCollapsed;
 
   return (
     <div className="min-w-0 w-full">
@@ -98,7 +99,7 @@ export function InputModelSourceSection({
         </button>
       )}
 
-      {keepSourceMounted && (
+      {shouldKeepSourceMounted && (
       <div className={cn(isSourceCollapsed && "hidden")}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-slate-400 flex items-center gap-1.5">

@@ -26,7 +26,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/env/runtime");
       const data = (await res.json()) as RuntimeEnvStatus;
@@ -34,8 +34,10 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       setStatus(data);
       if (data.configuredPython) setPythonPath(data.configuredPython);
       setError(null);
+      return true;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     }
   }, []);
 
@@ -79,13 +81,14 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
     };
   }, [open, updateMenuPos]);
 
-  const runJsonAction = async (fn: () => Promise<void>) => {
+  const runJsonAction = async (fn: () => Promise<void>, initialMessage: string | null = null) => {
     setBusy(true);
-    setMessage(null);
+    setMessage(initialMessage);
     setError(null);
     try {
       await fn();
     } catch (err: unknown) {
+      setMessage(null);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -124,27 +127,25 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       setMessage(data.message ?? "Updated user PATH.");
     });
 
-  const runNdjsonInstall = async (url: string, fallback: string, success: string) => {
-    setBusy(true);
-    setMessage(fallback);
-    setError(null);
-    try {
+  const runNdjsonInstall = async (
+    url: string,
+    initialMessage: string,
+    fallbackError: string,
+    success: string,
+  ) =>
+    runJsonAction(async () => {
       const res = await fetch(url, {
         method: "POST",
         headers: { Accept: "application/x-ndjson, application/json" },
       });
-      const result = await consumeInstallNdjson(res, fallback, setMessage);
-      if (!result.ok) throw new Error(result.error ?? fallback);
-      await refresh();
+      const result = await consumeInstallNdjson(res, fallbackError, setMessage);
+      if (!result.ok) throw new Error(result.error ?? fallbackError);
+      if (!(await refresh())) {
+        setMessage(null);
+        return;
+      }
       setMessage(success);
-      setError(null);
-    } catch (err: unknown) {
-      setMessage(null);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+    }, initialMessage);
 
   const copyInstallCommand = async (command: string) => {
     try {
@@ -212,11 +213,21 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
           onSavePython={() => void savePython()}
           onClearPython={() => void clearPython()}
           onInstallPython={() =>
-            void runNdjsonInstall("/api/env/install-python", "Installing Python…", "Python is ready.")
+            void runNdjsonInstall(
+              "/api/env/install-python",
+              "Installing Python…",
+              "Could not install Python.",
+              "Python is ready.",
+            )
           }
           onCopyCommand={(cmd) => void copyInstallCommand(cmd)}
           onEnsureVenv={() =>
-            void runNdjsonInstall("/api/env/venv-install", "Installing Olive venv…", "Olive venv ready.")
+            void runNdjsonInstall(
+              "/api/env/venv-install",
+              "Installing Olive venv…",
+              "Could not install Olive venv.",
+              "Olive venv ready.",
+            )
           }
           onAddVenvToPath={() => void addVenvToPath()}
         />

@@ -1,0 +1,136 @@
+name: Linux Desktop Package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-linux.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/desktop-linux.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
+
+      - name: Bundle Node runtime
+        shell: bash
+        run: |
+          mkdir -p src-tauri/node-runtime
+          install -m 0755 "$(command -v node)" src-tauri/node-runtime/node
+          src-tauri/node-runtime/node --version
+
+      - name: Build DEB and AppImage
+        run: pnpm exec tauri build --bundles deb,appimage --config src-tauri/tauri.ci.conf.json
+
+      - name: Verify packaged Node runtime and server smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          DEB="$(find "$BUNDLE_DIR/deb" -name '*.deb' -print -quit)"
+          APPIMAGE="$(find "$BUNDLE_DIR/appimage" -name '*.AppImage' -print -quit)"
+          test -n "$DEB"
+          test -n "$APPIMAGE"
+          NODE_REL="$(dpkg-deb --fsys-tarfile "$DEB" | tar -tf - | awk '/node-runtime\/node$/ && !found { sub(/^\.\//, ""); print; found=1 }')"
+          echo "Packaged Node archive path: $NODE_REL"
+          test -n "$NODE_REL"
+          EXTRACT_DIR="$(mktemp -d)"
+          trap 'if [ -n "${SERVER_PID:-}" ]; then kill -- "-$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi; rm -rf "$EXTRACT_DIR"' EXIT
+          dpkg-deb -x "$DEB" "$EXTRACT_DIR"
+          NODE="$EXTRACT_DIR/$NODE_REL"
+          echo "Packaged Node path: $NODE"
+          ls -l "$NODE"
+          test -x "$NODE"
+          if NODE_VERSION="$("$NODE" --version 2>&1)"; then
+            echo "Packaged Node version: $NODE_VERSION"
+          else
+            STATUS=$?
+            echo "Packaged Node failed to execute (status $STATUS): $NODE_VERSION"
+            file "$NODE" || true
+            ldd "$NODE" || true
+            exit 1
+          fi
+          SERVER_MJS="$(find "$EXTRACT_DIR" -type f -path '*/dist/server.mjs' -print -quit)"
+          test -n "$SERVER_MJS"
+          SERVER_ROOT="$(dirname "$(dirname "$SERVER_MJS")")"
+          echo "Packaged server entry: $SERVER_MJS"
+          if [ -d "$SERVER_ROOT/node_modules" ] || [ -d "$SERVER_ROOT/dist/node_modules" ]; then
+            echo "Found packaged node_modules next to the server"
+          else
+            echo "No packaged node_modules; desktop build must emit a fully bundled dist/server.mjs"
+          fi
+          smoke_server() {
+            local root="$1" node="$2" label="$3" port="$4"
+            # Isolate the server and its first-launch MCP child process so the
+            # following smoke test cannot reuse its listener or leave files in
+            # the extracted bundle while the cleanup trap removes it.
+            setsid bash -c 'cd "$1" && PORT="$2" exec "$3" dist/server.mjs' bash "$root" "$port" "$node" &
+            SERVER_PID=$!
+            for _ in $(seq 1 20); do
+              if curl -fsS "http://127.0.0.1:$port/api/health" >/dev/null; then
+                kill -- -"$SERVER_PID" 2>/dev/null || true
+                wait "$SERVER_PID" 2>/dev/null || true
+                unset SERVER_PID
+                return 0
+              fi
+              sleep 1
+            done
+            echo "$label bundled Node runtime did not start the packaged production server"
+            return 1
+          }
+          smoke_server "$SERVER_ROOT" "$NODE" "DEB" 31415
+
+          APPIMAGE_DIR="$EXTRACT_DIR/appimage"
+          mkdir -p "$APPIMAGE_DIR"
+          APPIMAGE="$(realpath "$APPIMAGE")"
+          (cd "$APPIMAGE_DIR" && APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract >/dev/null)
+          APPIMAGE_ROOT="$APPIMAGE_DIR/squashfs-root"
+          APPIMAGE_NODE="$(find "$APPIMAGE_ROOT" -type f -path '*/node-runtime/node' -print -quit)"
+          APPIMAGE_SERVER_MJS="$(find "$APPIMAGE_ROOT" -type f -path '*/dist/server.mjs' -print -quit)"
+          test -n "$APPIMAGE_NODE"
+          test -n "$APPIMAGE_SERVER_MJS"
+          test -x "$APPIMAGE_NODE"
+          APPIMAGE_SERVER_ROOT="$(dirname "$(dirname "$APPIMAGE_SERVER_MJS")")"
+          smoke_server "$APPIMAGE_SERVER_ROOT" "$APPIMAGE_NODE" "AppImage" 31416

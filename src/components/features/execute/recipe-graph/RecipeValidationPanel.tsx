@@ -70,8 +70,6 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
       return "XNNPACK (Mobile)";
     case "WasmExecutionProvider":
       return "WASM (Browser)";
-    case "QnnAbiExecutionProvider":
-      return "QNN ABI";
     default: {
       const _exhaustive: never = provider;
       return _exhaustive;
@@ -104,6 +102,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     window.addEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
     // Catch expand requests that fired before this listener registered
     // (common when Resolve Issues races a lazy Execute mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- flush module-level pending flag from before mount
     if (takePendingExpandValidation()) setExpanded(true);
     return () => window.removeEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
   }, []);
@@ -118,6 +117,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     };
     window.addEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
     if (takePendingEmphasizeValidation()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- flush module-level pending flag from before mount
       setEmphasized(true);
       emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
     }
@@ -267,7 +267,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     prevIssueCountRef.current = count;
 
     const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
-    fetchDiagnostic(logLines);
+    void fetchDiagnostic(logLines).catch(() => {});
   }, [validation.issues, modelSelected, fetchDiagnostic, clearDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
@@ -354,9 +354,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const warningCount = allIssues.filter((i) => i.severity === "warning").length;
 
   const isLoading = compatLoading;
-  const hasError = compatError;
 
-  if (allIssues.length === 0 && !isLoading && !hasError && compatValidated) {
+  if (allIssues.length === 0 && !isLoading && !compatError && compatValidated) {
     return (
       <div
         data-testid="recipe-validation-panel"

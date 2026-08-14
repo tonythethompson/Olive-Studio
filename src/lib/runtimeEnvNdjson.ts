@@ -46,20 +46,22 @@ export function applyInstallStreamEvent(
   }
   if (evt.type !== "done") return;
   acc.finalOk = evt.ok !== false;
-  acc.finalError = evt.error;
+  acc.finalError = evt.error || (evt.ok === false ? evt.message : undefined);
   acc.command = evt.command;
   acc.downloadUrl = evt.downloadUrl;
   if (evt.message) acc.lastLog = evt.message;
 }
 
 function finishInstallStream(acc: InstallStreamAcc, res: Response, fallbackError: string): InstallStreamResult {
+  // Never surface a progress `log` as the failure. Interrupted streams have no
+  // `done`, so lastLog is the last progress line and must not become the error.
   if (acc.finalOk === null) {
-    throw new Error(acc.finalError || acc.lastLog || "Install stream ended without a done event");
+    throw new Error(fallbackError);
   }
   if (!res.ok || !acc.finalOk) {
     return {
       ok: false,
-      error: acc.finalError || acc.lastLog || fallbackError,
+      error: acc.finalError || fallbackError,
       command: acc.command,
       downloadUrl: acc.downloadUrl,
     };
@@ -75,6 +77,35 @@ export async function consumeInstallNdjson(
   if (!res.body) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? (res.status === 404 ? "API route not found." : `HTTP ${res.status}`));
+  }
+
+  // For non-2xx responses, attempt to parse as a single JSON error object before streaming
+  if (!res.ok) {
+    const bodyText = await res.text();
+    try {
+      const data = JSON.parse(bodyText) as { ok?: boolean; error?: string };
+      if (data.ok === false && data.error) {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      // If it's already an Error from the JSON parse above, rethrow
+      if (err instanceof Error && err.message !== "Unexpected token" && err.message !== "Unexpected end of JSON input") {
+        throw err;
+      }
+      // Otherwise fall through to NDJSON parsing below
+    }
+    // If we didn't throw above, create a new response with the body text for NDJSON parsing
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(bodyText));
+        controller.close();
+      },
+    });
+    res = new Response(stream, { status: res.status, headers: res.headers });
+  }
+
+  if (!res.body) {
+    throw new Error("Response body is missing after stream creation");
   }
 
   const reader = res.body.getReader();
@@ -95,6 +126,6 @@ export async function consumeInstallNdjson(
   }
 
   const trailing = parseInstallStreamEvent(buf);
-  if (trailing) applyInstallStreamEvent(acc, trailing);
+  if (trailing) applyInstallStreamEvent(acc, trailing, onLog);
   return finishInstallStream(acc, res, fallbackError);
 }
