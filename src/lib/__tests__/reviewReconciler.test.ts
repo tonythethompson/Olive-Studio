@@ -355,6 +355,65 @@ describe("Property 7: Deterministic Validation Authority", () => {
     );
   });
 
+  it("discards AI findings that patch the same top-level autofix key as a deterministic issue", () => {
+    const detIssue: PipelineIssue = {
+      id: "provider-hardware-cpu",
+      severity: "critical",
+      title: "CPU not available on this machine",
+      description: "Use detected CUDA hardware",
+      affectedPasses: ["provider"],
+      actionLabel: "Use detected hardware",
+      autofix: { ihvProvider: "CUDAExecutionProvider" },
+    };
+    const aiFinding: Finding = {
+      id: "ai-switch-cpu",
+      title: "Switch to CPU",
+      description: "Prefer CPUExecutionProvider",
+      severity: "info",
+      evidence: "model suggested CPU",
+      actions: [
+        {
+          kind: "applyPatch",
+          label: "Use CPU",
+          payload: { ihvProvider: "CPUExecutionProvider" },
+        },
+      ],
+    };
+
+    const result = reconcileFindings([aiFinding], [detIssue], []);
+    expect(result.find((f) => f.id === aiFinding.id)).toBeUndefined();
+    expect(result.find((f) => f.id === `det-${detIssue.id}`)).toBeDefined();
+  });
+
+  it("preserves AI findings that patch a different top-level key than the deterministic autofix", () => {
+    const detIssue: PipelineIssue = {
+      id: "provider-hardware-cpu",
+      severity: "critical",
+      title: "CPU not available on this machine",
+      description: "Use detected CUDA hardware",
+      affectedPasses: ["provider"],
+      actionLabel: "Use detected hardware",
+      autofix: { ihvProvider: "CUDAExecutionProvider" },
+    };
+    const aiFinding: Finding = {
+      id: "ai-cache-dir",
+      title: "Set cache directory",
+      description: "Point cacheDir at a local folder",
+      severity: "info",
+      evidence: "model suggested cacheDir",
+      actions: [
+        {
+          kind: "applyPatch",
+          label: "Set cache",
+          payload: { cacheDir: "/tmp/olive-cache" },
+        },
+      ],
+    };
+
+    const result = reconcileFindings([aiFinding], [detIssue], []);
+    expect(result.find((f) => f.id === aiFinding.id)).toBeDefined();
+  });
+
   it("deterministic findings appear before AI findings in output ordering", () => {
     fc.assert(
       fc.property(
