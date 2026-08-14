@@ -5,7 +5,6 @@ import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
 import { LicenseNotice } from "@/components/LicenseNotice";
-import { WelcomeModal } from "@/components/WelcomeModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { getPipelineValidation, hasSelectedModel, type PipelineValidationResult } from "@/lib/pipelineValidation";
@@ -18,7 +17,7 @@ import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport, WIDE_SHELL_MIN_WIDTH_PX } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
+import { OLIVE_PIPELINE_NAVIGATE, isPipelineOliveRunning, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
 import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PipelineStatusSummary } from "@/components/features/pipeline/PipelineStatusSummary";
@@ -143,10 +142,6 @@ function Dashboard() {
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
-  // First run only: once dismissed via "Don't show again", this never re-opens.
-  const [welcomeOpen, setWelcomeOpen] = useState(
-    () => !usePreferencesStore.getState().welcomeDismissed,
-  );
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportData, setReportData] = useState<{
     error: Error;
@@ -214,23 +209,28 @@ function Dashboard() {
   };
 
   // Lazy-load driver.js so the tour (and its CSS) stays out of the main bundle.
-  const startTour = useCallback(() => {
-    void import("@/lib/tour").then(({ startGuidedTour }) =>
-      startGuidedTour(() => usePreferencesStore.getState().markTourSeen()),
-    );
+  const startTour = useCallback((opts?: { allowResize?: boolean }) => {
+    if (isPipelineOliveRunning()) return;
+    void (async () => {
+      if (opts?.allowResize) {
+        const { ensureDesktopTourViewport } = await import("@/lib/tourViewport");
+        const ready = await ensureDesktopTourViewport();
+        if (!ready) return;
+      } else if (window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX) {
+        return;
+      }
+      const { startGuidedTour } = await import("@/lib/tour");
+      startGuidedTour(() => usePreferencesStore.getState().markTourSeen());
+    })();
   }, []);
 
-  // Auto-offer the guided tour once: on a true first run it starts right after
-  // the welcome modal closes; on installs that already dismissed the welcome
-  // screen it starts on the first launch that includes the tour. Either way it
-  // only happens until the tour has been seen (finished or skipped) — after
-  // that it is replayable from Settings → Take the tour.
+  // Auto-offer once until the tour has been seen (finished or skipped).
+  // Replay from Settings → Take the tour. Auto-start never resizes.
   useEffect(() => {
-    if (welcomeOpen) return;
     if (usePreferencesStore.getState().tourSeen) return;
-    const timer = window.setTimeout(startTour, 600);
+    const timer = window.setTimeout(() => startTour(), 600);
     return () => window.clearTimeout(timer);
-  }, [welcomeOpen, startTour]);
+  }, [startTour]);
 
   const scrollToSection = useCallback(
     (id: ActiveView) => {
@@ -501,7 +501,7 @@ function Dashboard() {
 
                 </div>
                 <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
-                  <SettingsMenu onTakeTour={startTour} />
+                  <SettingsMenu onTakeTour={() => startTour({ allowResize: true })} />
                   <button
                     type="button"
                     data-tour="assistant"
@@ -630,8 +630,6 @@ function Dashboard() {
             </ErrorBoundary>
           </div>
         </div>
-
-        <WelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />
 
         <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />
 

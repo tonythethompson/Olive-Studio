@@ -83,7 +83,7 @@ export function ProviderCardGrid({
           <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
             Local accelerators
           </p>
-          <div className="grid gap-4 min-w-0 w-full">
+          <div className="grid gap-4 min-w-0 w-full" data-tour="hardware-providers">
             {detectedLocal.map((p) => (
               <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
             ))}
