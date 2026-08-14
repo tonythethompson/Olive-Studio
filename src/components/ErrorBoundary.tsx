@@ -88,7 +88,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200 transition-colors cursor-pointer"
                 >
                   <Bug className="h-3.5 w-3.5" />
-                  Report this error
+                  Send feedback
                 </button>
               )}
             </div>

@@ -109,7 +109,7 @@ export function InputRecipeRail(props: InputRecipeRailProps) {
   } = props;
 
   return (
-    <aside className="min-w-0 w-full" aria-label="Recipes">
+    <aside className="min-w-0 w-full" aria-label="Recipes" data-tour="model-source">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-100">Recipes</h3>
         {appliedRecipeLabel && (
@@ -124,6 +124,24 @@ export function InputRecipeRail(props: InputRecipeRailProps) {
       </div>
 
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/30 p-3 sm:p-4 animate-in fade-in duration-200">
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-200">Sample recipe</p>
+            <p className="text-xs text-slate-500">tiny-gpt2 on CPU. No download required to inspect the next steps.</p>
+          </div>
+          <button
+            type="button"
+            data-tour="tour-sample-apply"
+            className="shrink-0 inline-flex items-center justify-center rounded-md bg-electric-blue px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-electric-blue-dark cursor-pointer"
+            onClick={() => {
+              void import("@/lib/tour").then(({ ensureTourDemoModel }) => {
+                ensureTourDemoModel();
+              });
+            }}
+          >
+            Apply
+          </button>
+        </div>
         <Tabs
           value={activeRecipeTab}
           onValueChange={(v) => setActiveRecipeTab(v as "starter" | "github" | "editor")}

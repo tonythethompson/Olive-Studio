@@ -9,9 +9,24 @@ import {
   categoryHasSeverity,
   type IssueReport,
   type BuildReportOptions,
+  pipelineViewToReportArea,
 } from "./issueReport";
 
 // ── Redaction ────────────────────────────────────────────────────────────────
+
+describe("pipelineViewToReportArea", () => {
+  it("maps each left-rail pipeline stage to a report area", () => {
+    expect(pipelineViewToReportArea("input")).toBe("recipe-builder");
+    expect(pipelineViewToReportArea("ihv")).toBe("hardware-ep");
+    expect(pipelineViewToReportArea("execute")).toBe("execution-batch");
+    expect(pipelineViewToReportArea("playground")).toBe("playground-arena");
+  });
+
+  it("does not treat assistant as a pipeline stage", () => {
+    expect(pipelineViewToReportArea("assistant")).toBe("other");
+    expect(pipelineViewToReportArea(undefined)).toBe("other");
+  });
+});
 
 describe("redactSecrets", () => {
   it("redacts Hugging Face tokens", () => {
@@ -143,7 +158,7 @@ describe("buildIssueBody", () => {
     const body = buildIssueBody(baseReport);
     expect(body).toContain("**Category:** Bug report");
     expect(body).toContain("**Severity:** Blocking");
-    expect(body).toContain("**Area:** Execution & batch");
+    expect(body).toContain("**Area:** Recipe & run");
   });
 
   it("includes description", () => {
@@ -195,7 +210,7 @@ describe("buildIssueTitle", () => {
       telemetry: {},
     };
     const title = buildIssueTitle(report);
-    expect(title).toContain("[Bug report] Recipe builder:");
+    expect(title).toContain("[Bug report] Model source:");
     expect(title).toContain("graph view");
   });
 

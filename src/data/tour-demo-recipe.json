@@ -1,0 +1,33 @@
+{
+  "input_model": {
+    "type": "HfModel",
+    "config": {
+      "hf_config": {
+        "model_name": "sshleifer/tiny-gpt2",
+        "task": "text-generation"
+      },
+      "model_path": "sshleifer/tiny-gpt2"
+    }
+  },
+  "systems": {
+    "local_system": {
+      "type": "LocalSystem",
+      "config": {
+        "accelerators": [
+          {
+            "device": "cpu",
+            "execution_providers": ["CPUExecutionProvider"]
+          }
+        ]
+      }
+    }
+  },
+  "passes": {
+    "conversion": {
+      "type": "OnnxConversion",
+      "config": {
+        "target_opset": 17
+      }
+    }
+  }
+}

@@ -53,7 +53,7 @@ export function RecipeGraphView({
 
   return (
     <div className="flex flex-col h-full min-h-[340px]">
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto" data-tour="recipe-graph">
         <GraphCanvas
           state={state}
           selectedNodeId={selectedNodeId}

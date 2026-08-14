@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings, Bug } from "lucide-react";
 import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
@@ -8,7 +8,8 @@ import { LicenseNotice } from "@/components/LicenseNotice";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { getPipelineValidation, hasSelectedModel, type PipelineValidationResult } from "@/lib/pipelineValidation";
-import type { ReportArea } from "@/lib/issueReport";
+import { usePreferencesStore } from "@/lib/stores/preferencesStore";
+import { pipelineViewToReportArea, type ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
@@ -16,7 +17,7 @@ import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport, WIDE_SHELL_MIN_WIDTH_PX } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
+import { OLIVE_PIPELINE_NAVIGATE, isPipelineOliveRunning, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
 import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PipelineStatusSummary } from "@/components/features/pipeline/PipelineStatusSummary";
@@ -114,9 +115,13 @@ function Dashboard() {
   const { state: pipelineState } = usePipelineState();
   const { data: hardwareProbe } = useHardwareProbe();
   const modelSelected = useMemo(() => hasSelectedModel(pipelineState), [pipelineState]);
+  // Deferred so status-summary validation doesn't run synchronously on every keystroke,
+  // matching ExecutionWorkspace's deferredState pattern.
+  const deferredPipelineState = useDeferredValue(pipelineState);
   const validation: PipelineValidationResult = useMemo(
-    () => getPipelineValidation(pipelineState, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null }),
-    [pipelineState, hardwareProbe],
+    () =>
+      getPipelineValidation(deferredPipelineState, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null }),
+    [deferredPipelineState, hardwareProbe],
   );
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
@@ -207,6 +212,47 @@ function Dashboard() {
     setTriggerAiAudit(true);
   };
 
+  const tourSeen = usePreferencesStore((s) => s.tourSeen);
+  const tourStartingRef = useRef(false);
+
+  // Lazy-load driver.js so the tour (and its CSS) stays out of the main bundle.
+  const startTour = useCallback((opts?: { allowResize?: boolean }) => {
+    if (isPipelineOliveRunning() || tourStartingRef.current) return;
+    tourStartingRef.current = true;
+    void (async () => {
+      let started = false;
+      try {
+        if (opts?.allowResize) {
+          const { ensureDesktopTourViewport } = await import("@/lib/tourViewport");
+          const ready = await ensureDesktopTourViewport();
+          if (!ready) return;
+        } else if (window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX) {
+          return;
+        }
+        const { startGuidedTour } = await import("@/lib/tour");
+        const instance = startGuidedTour(() => {
+          tourStartingRef.current = false;
+          usePreferencesStore.getState().markTourSeen();
+        });
+        started = Boolean(instance);
+      } catch {
+        started = false;
+      } finally {
+        if (!started) tourStartingRef.current = false;
+      }
+    })();
+  }, []);
+
+  // Auto-offer once until the tour has been seen (finished or skipped).
+  // Replay from Settings → Take the tour. Auto-start never resizes.
+  // Subscribe to tourSeen so persist rehydration or an in-progress tour
+  // cancels the pending auto-offer timer.
+  useEffect(() => {
+    if (tourSeen) return;
+    const timer = window.setTimeout(() => startTour(), 600);
+    return () => window.clearTimeout(timer);
+  }, [startTour, tourSeen]);
+
   const scrollToSection = useCallback(
     (id: ActiveView) => {
       if (isOliveRunning && id !== "execute" && id !== "playground") return;
@@ -284,13 +330,20 @@ function Dashboard() {
     // No short safety cutoff: a slow chunk load would otherwise drop Resolve Issues silently.
     const observer = new MutationObserver(() => {
       if (tryExpandAndScroll()) {
+        window.clearTimeout(timeoutId);
         observer.disconnect();
         complete();
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
+    const timeoutId = window.setTimeout(() => {
+      observer.disconnect();
+      complete();
+    }, 15000);
+
     return () => {
+      window.clearTimeout(timeoutId);
       observer.disconnect();
     };
   }, [pendingResolveIssues, activeView]);
@@ -429,10 +482,14 @@ function Dashboard() {
             <footer className="shrink-0 border-t border-slate-800 px-2 wide:px-4 py-2.5 flex justify-center wide:justify-start">
               <button
                 type="button"
-                onClick={() => setLicenseOpen(true)}
-                className="text-[11px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                aria-label="Send feedback"
+                onClick={() => {
+                  setReportData(null);
+                  setIsReportOpen(true);
+                }}
+                className="p-1.5 rounded text-slate-400 hover:text-slate-200 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue"
               >
-                MIT
+                <Bug className="h-3.5 w-3.5" />
               </button>
             </footer>
           </aside>
@@ -469,9 +526,13 @@ function Dashboard() {
 
                 </div>
                 <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
-                  <SettingsMenu />
+                  <SettingsMenu
+                    onTakeTour={() => startTour({ allowResize: true })}
+                    onOpenLicense={() => setLicenseOpen(true)}
+                  />
                   <button
                     type="button"
+                    data-tour="assistant"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
                     aria-label={isAiSidebarOpen ? "Close Assistant" : "Open Assistant"}
                     aria-expanded={isAiSidebarOpen}
@@ -602,7 +663,7 @@ function Dashboard() {
 
         {/* Report Issue Modal */}
         {isReportOpen && (
-          <ErrorBoundary label="Report issue" onReportError={() => setIsReportOpen(false)}>
+          <ErrorBoundary label="Send feedback" onReportError={() => setIsReportOpen(false)}>
             <Suspense fallback={null}>
               <ReportIssueModal
                 open={isReportOpen}
@@ -611,7 +672,9 @@ function Dashboard() {
                   setReportData(null);
                 }}
                 state={pipelineState}
-                defaultArea={labelToArea(reportData?.label)}
+                defaultArea={
+                  reportData ? labelToArea(reportData.label) : pipelineViewToReportArea(activeView)
+                }
                 defaultDescription={
                   reportData
                     ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
