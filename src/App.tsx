@@ -249,7 +249,6 @@ function Dashboard() {
     if (!pendingResolveIssues || activeView !== "execute") return;
 
     let observer: MutationObserver | undefined;
-    let safetyTimer: number | undefined;
     let completed = false;
 
     const complete = () => {
@@ -281,14 +280,14 @@ function Dashboard() {
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    safetyTimer = window.setTimeout(() => {
+    const safetyTimer = window.setTimeout(() => {
       observer?.disconnect();
       complete();
     }, 5000);
 
     return () => {
       observer?.disconnect();
-      if (safetyTimer !== undefined) window.clearTimeout(safetyTimer);
+      window.clearTimeout(safetyTimer);
     };
   }, [pendingResolveIssues, activeView]);
 
