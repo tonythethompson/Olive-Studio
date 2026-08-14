@@ -65,7 +65,7 @@ async function postKbSync(): Promise<KbSyncResult> {
           : (data.error ?? `HTTP ${res.status}`);
       throw new Error(detail);
     }
-    if (!data.ok) {
+    if (data.ok !== true) {
       throw new Error(data.error ?? `HTTP ${res.status}`);
     }
     return data;

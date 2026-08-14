@@ -8,7 +8,7 @@
  */
 
 const OLIVE_TOPIC =
-  /\b(olive|onnx|ort|tensorrt|cuda|rocm|awq|gptq|ptq|qat|hqq|quant(?:ize|ization|s)?|prun(?:e|ing)?|lora|qlora|peft|huggingface|vram|gpu|execution\s*provider|\bep\b|opset|recipe|pipeline|ihv|nvtensor|openvino|qnn|conversion|calibration|bitsandbytes|transformers?|models?|weights?|checkpoint|safetensors?|gguf|shrink|compress|smaller|footprint|memory|optimiz(?:e|ation)|int[48]|fp(?:8|16)|bf16|pass(?:es)?)\b/i;
+  /\b(olive|onnx|ort|tensorrt|cuda|rocm|awq|gptq|ptq|qat|hqq|quant(?:ize|ization|s)?|prun(?:e|ing)?|lora|qlora|peft|huggingface|vram|gpu|execution\s*provider|\bep\b|opset|recipe|pipeline|ihv|nvtensor|openvino|qnn|conversion|calibration|bitsandbytes|transformers?|models?|weights?|checkpoint|safetensors?|gguf|shrink|compress|smaller|footprint|memory|optimiz(?:e|ation)|int[48]|fp(?:8|16)|bf16|(?:olive|pipeline|optimization)\s+pass(?:es)?|pass(?:es)?\s+(?:config|chain|sequence|order|settings?))\b/i;
 
 /** Clear non-Olive intents (trivia, personal, sexual, medical, etc.). */
 const OFF_TOPIC =

@@ -102,7 +102,22 @@ export function importPresetsJSON(
       const rawFields = (item as CustomQuantPreset).fields as Record<string, unknown>;
       const safeFields: Record<string, unknown> = {};
       for (const key of KNOWN_QUANT_KEYS) {
-        if (key in rawFields) safeFields[key] = rawFields[key];
+        if (key in rawFields) {
+          const value = rawFields[key];
+          // Validate specific fields
+          if (key === "quantPrecision") {
+            if (value !== "int4" && value !== "int8" && value !== "fp16") continue;
+          } else if (key === "qatQuantPrecision") {
+            if (value !== "int4" && value !== "int8") continue;
+          } else if (key === "qatCalibrateSteps") {
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+          } else if (key === "gptqBlockSize" || key === "gptqGroupSize" || key === "awqGroupSize") {
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+          } else if (key === "awqDampPercent") {
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+          }
+          safeFields[key] = value;
+        }
       }
       validated.push({
         label: (item as CustomQuantPreset).label,

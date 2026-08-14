@@ -32,8 +32,9 @@ import {
   parseConnectFrames,
 } from "./wire.ts";
 import { buildMetadata } from "./metadata.ts";
-import { getCachedUserJwt, anySignal } from "./auth.ts";
+import { getCachedUserJwt } from "./auth.ts";
 import { getCachedCatalog, ModelNotAvailableError } from "./catalog.ts";
+import { anySignal } from "@/lib/abortSignalHelpers.ts";
 
 /**
  * Connect-RPC streaming inactivity timeout. If the cloud sends zero bytes

@@ -696,7 +696,7 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   }
 
   // 0.13.0: trust_remote_code default flipped. Inform user when it's disabled for HF models.
-  if (!passes.trustRemoteCode && state.modelSource === "huggingface" && hasSelectedModel(state)) {
+  if (passes.trustRemoteCode !== true && state.modelSource === "huggingface" && hasSelectedModel(state)) {
     issues.push({
       id: "trust-remote-code-advisory",
       severity: "info",

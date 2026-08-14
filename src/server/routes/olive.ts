@@ -97,9 +97,13 @@ type RecipeParseResult = { ok: true; recipe: OliveRecipe } | { ok: false; error:
 function parseRecipePayload(parsed: { recipeJson?: string; recipe?: unknown }): RecipeParseResult {
   try {
     if (typeof parsed.recipeJson === "string") {
-      return { ok: true, recipe: JSON.parse(parsed.recipeJson) as OliveRecipe };
+      const decoded = JSON.parse(parsed.recipeJson) as unknown;
+      if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+        return { ok: false, error: "Invalid recipe JSON shape" };
+      }
+      return { ok: true, recipe: decoded as OliveRecipe };
     }
-    if (parsed.recipe && typeof parsed.recipe === "object") {
+    if (parsed.recipe && typeof parsed.recipe === "object" && !Array.isArray(parsed.recipe)) {
       return { ok: true, recipe: parsed.recipe as OliveRecipe };
     }
     return { ok: false, error: "Missing recipe or recipeJson" };

@@ -7,6 +7,7 @@
 
 import type { HardwareProbeResult } from "./hardwareProbe.ts";
 import type { EnvCredentialStatus } from "./envCredentialUi.ts";
+import { anySignal } from "./abortSignalHelpers.ts";
 
 // ─── API Base Types ─────────────────────────────────────────────────────────
 
@@ -267,17 +268,4 @@ export function streamSSE<T>(
     });
 
   return { close: () => controller.abort() };
-}
-
-/** Combine multiple AbortSignals into one. */
-function anySignal(signals: AbortSignal[]): AbortSignal {
-  const controller = new AbortController();
-  for (const signal of signals) {
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-      return controller.signal;
-    }
-    signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
-  }
-  return controller.signal;
 }
