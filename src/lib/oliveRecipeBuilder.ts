@@ -859,6 +859,27 @@ export interface AdapterGateResult {
  * @returns Gating result with validated adapters or rejection reason
  */
 /**
+ * Last path segment without regex (CodeQL: polynomial regex on uncontrolled paths).
+ * Accepts `/` and `\` separators; strips trailing separators.
+ */
+function basenameFromFsPath(path: string): string {
+  let end = path.length;
+  while (end > 0) {
+    const c = path.charCodeAt(end - 1);
+    if (c !== 47 /* / */ && c !== 92 /* \ */) break;
+    end -= 1;
+  }
+  if (end === 0) return "";
+  let start = end;
+  while (start > 0) {
+    const c = path.charCodeAt(start - 1);
+    if (c === 47 || c === 92) break;
+    start -= 1;
+  }
+  return path.slice(start, end);
+}
+
+/**
  * Normalize a path-bearing adapter entry so MCP path-only payloads and
  * flag-off single-adapter mode share the same name/rank/alpha defaults.
  * Returns null when `path` is missing or empty (still invalid).
@@ -882,7 +903,7 @@ function normalizePathBearingAdapter(
       ? (rawModules as string[])
       : undefined;
 
-  const pathBase = obj.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "";
+  const pathBase = basenameFromFsPath(obj.path);
   const fallbackName = pathBase || (index === 0 ? "default" : `adapter-${index}`);
 
   return {
