@@ -98,13 +98,14 @@ def _coalesce_text(data: Any) -> str:
     if isinstance(data, dict):
         if isinstance(data.get("content"), str):
             return data["content"]
+        parts: list[str] = []
         pages = data.get("pages", {})
         if isinstance(pages, dict):
-            parts = [v for v in pages.values() if isinstance(v, str)]
-            if parts:
-                return "\n\n".join(parts)
-        if isinstance(data.get("overview"), str):
-            return data["overview"]
+            parts.extend(v for v in pages.values() if isinstance(v, str))
+        overview = data.get("overview")
+        if isinstance(overview, str) and overview:
+            parts.append(overview)
+        return "\n\n".join(parts)
     return ""
 
 
@@ -258,9 +259,10 @@ def _merge_refresh_metadata(
     }
 
 
-def main() -> None:
+def main(kb_dir: Path | None = None) -> None:
     """Fetch external sources, parse them, and write freshness reports."""
-    kb_dir = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
+    if kb_dir is None:
+        kb_dir = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
     kb_dir.mkdir(parents=True, exist_ok=True)
 
     generator_version = _generator_version()
@@ -306,6 +308,8 @@ def main() -> None:
     }
 
     changed_files: list[str] = []
+    metadata_path = kb_dir / REFRESH_METADATA_NAME
+    existing_meta = _load_refresh_metadata(metadata_path)
 
     update_report_path = kb_dir / "update_report.json"
     if _write_json_if_changed(update_report_path, report):
@@ -327,8 +331,6 @@ def main() -> None:
         "success": success,
     }
 
-    metadata_path = kb_dir / REFRESH_METADATA_NAME
-    existing_meta = _load_refresh_metadata(metadata_path)
     metadata = _merge_refresh_metadata(
         existing_meta,
         run_meta=run_meta,

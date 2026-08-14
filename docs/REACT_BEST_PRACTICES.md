@@ -3765,7 +3765,7 @@ Linux/macOS:
 - `olive_mcp_server/` - installable Python package
 - `olive_mcp_server/tools/` - 12 MCP tool implementations
 - `olive_mcp_server/knowledge_base/` - JSON catalogs for passes, hardware profiles, troubleshooting, quirks, and compatibility
-- `olive_mcp_server/fetchers/` - stubs for live knowledge-base updates
+- `olive_mcp_server/fetchers/` - source-backed fetchers for live knowledge-base updates
 - `scripts/` - helper scripts for expanding or updating the knowledge base
 - `tests/` - unit and integration tests
 
