@@ -8,7 +8,7 @@
  * Requirements: 9.1, 9.4, 9.8
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { downloadMarkdownReport, printReportAsPdf, type ReportOptions } from "@/lib/reportGenerator";

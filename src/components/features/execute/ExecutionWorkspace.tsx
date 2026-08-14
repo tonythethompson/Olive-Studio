@@ -826,7 +826,9 @@ export function ExecutionWorkspace({
             <AgentControls
               agentRunning={agentRunning}
               onStart={handleStartAgent}
-              onStop={stopAgent}
+              onStop={async () => {
+                await stopAgent();
+              }}
               outcome={agentOutcome}
             />
             <ActivityLog entries={agentEntries} />

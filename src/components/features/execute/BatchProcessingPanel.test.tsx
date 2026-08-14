@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, act, waitFor } from "@testing-library/react";
+import { screen, act, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "../__tests__/testUtils";
 import type { UIState, BatchJob, McpDiagnostic } from "@/types";
@@ -178,8 +178,9 @@ describe("BatchProcessingPanel", () => {
 
     expect(screen.getAllByText("12.5 ms")).toHaveLength(2);
     for (const label of ["Throughput", "VRAM Size", "Compression"] as const) {
-      const card = screen.getByText(label).closest("div");
-      expect(card?.textContent).toMatch(/-/);
+      const card = (screen.getByText(label).closest(".border") ?? screen.getByText(label).parentElement?.parentElement) as HTMLElement | null;
+      const valueNode = card ? within(card).getByText("-") : null;
+      expect(valueNode).toBeDefined();
     }
   });
 

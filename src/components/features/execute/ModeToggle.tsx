@@ -9,6 +9,7 @@
  * Requirements: 6.1, 6.2
  */
 
+import { useRef } from "react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -37,6 +38,17 @@ const SEGMENTS: Segment[] = [
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 export function ModeToggle({ mode, onModeChange, disabled = false }: ModeToggleProps) {
+  const buttonRefs = useRef<Record<"manual" | "agent", HTMLButtonElement | null>>({
+    manual: null,
+    agent: null,
+  });
+
+  const focusSegment = (targetMode: "manual" | "agent") => {
+    requestAnimationFrame(() => {
+      buttonRefs.current[targetMode]?.focus();
+    });
+  };
+
   return (
     <div
       role="radiogroup"
@@ -48,10 +60,10 @@ export function ModeToggle({ mode, onModeChange, disabled = false }: ModeToggleP
         event.preventDefault();
         const next = mode === "manual" ? "agent" : "manual";
         onModeChange(next);
+        focusSegment(next);
       }}
       className={cn(
-        "inline-flex rounded-md border border-zinc-200 bg-zinc-100 p-0.5",
-        "dark:border-zinc-700 dark:bg-zinc-800",
+        "inline-flex rounded-md border border-slate-700 bg-slate-900 p-0.5",
         disabled && "pointer-events-none opacity-50",
       )}
     >
@@ -60,6 +72,9 @@ export function ModeToggle({ mode, onModeChange, disabled = false }: ModeToggleP
         return (
           <button
             key={segment.value}
+            ref={(el) => {
+              buttonRefs.current[segment.value] = el;
+            }}
             type="button"
             role="radio"
             aria-checked={isActive}
@@ -69,14 +84,15 @@ export function ModeToggle({ mode, onModeChange, disabled = false }: ModeToggleP
             onClick={() => {
               if (!isActive) {
                 onModeChange(segment.value);
+                focusSegment(segment.value);
               }
             }}
             className={cn(
               "relative px-3 py-1 text-sm font-medium transition-colors duration-150",
               "rounded-[5px] outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
               isActive
-                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
+                ? "bg-slate-800 text-slate-100 shadow-sm"
+                : "text-slate-400 hover:text-slate-200",
             )}
           >
             {segment.label}

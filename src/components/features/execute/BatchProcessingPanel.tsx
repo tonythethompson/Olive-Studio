@@ -657,10 +657,25 @@ export function BatchProcessingPanel({
   } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
   const [compareResults, setCompareResults] = useState<CompareResultsOutput | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const compareInFlightRef = useRef(false);
+  const compareSeqRef = useRef(0);
 
   const handleCompare = useCallback(async (preference: ScoringPreference) => {
+    if (compareInFlightRef.current) return;
+    compareInFlightRef.current = true;
+    compareSeqRef.current += 1;
+    const seq = compareSeqRef.current;
+    setComparing(true);
+    setCompareError(null);
+
     const completed = (jobsRef.current ?? []).filter((j) => j.status === "completed");
     const jobIds = completed.map((j) => j.oliveJobId ?? j.id).slice(0, 10);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const resp = await fetch("/api/mcp/tool", {
         method: "POST",
@@ -669,17 +684,43 @@ export function BatchProcessingPanel({
           toolName: "compare_results",
           args: { job_ids: jobIds, preference },
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      if (seq !== compareSeqRef.current) return;
+
+      if (!resp.ok) {
+        setCompareError(`Comparison request failed (HTTP ${resp.status})`);
+        return;
+      }
+
       const data: unknown = await resp.json().catch(() => null);
+      if (seq !== compareSeqRef.current) return;
+
       const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
       const payload =
         record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
           ? (record.result as Record<string, unknown>)
           : record;
       const parsed = payload ? parseMcpCompareOutput(payload) : null;
-      if (parsed) setCompareResults(parsed);
-    } catch {
-      /* comparison remains on the last successful result */
+      if (parsed) {
+        setCompareResults(parsed);
+      } else {
+        setCompareError("Failed to parse comparison response");
+      }
+    } catch (err: unknown) {
+      if (seq !== compareSeqRef.current) return;
+      if (err instanceof Error && err.name === "AbortError") {
+        setCompareError("Comparison request timed out");
+      } else {
+        setCompareError("Comparison request failed");
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (seq === compareSeqRef.current) {
+        setComparing(false);
+        compareInFlightRef.current = false;
+      }
     }
   }, []);
 
@@ -727,6 +768,10 @@ export function BatchProcessingPanel({
   );
 
   const jobs = state.batchJobs || [];
+  const comparisonRecords = useMemo(
+    () => (jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord),
+    [jobs],
+  );
 
   const forceSettleHaltedJob = (oliveJobId: string) => {
     activeSourcesRef.current.forEach((s) => s.close());
@@ -1244,9 +1289,10 @@ export function BatchProcessingPanel({
       </div>
       <div className="xl:col-span-3">
         <BatchComparisonView
-          records={(jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord)}
-          completedJobCount={(jobs ?? []).filter((j) => j.status === "completed").length}
+          records={comparisonRecords}
           compareResults={compareResults}
+          comparing={comparing}
+          compareError={compareError}
           onCompare={(preference) => {
             void handleCompare(preference);
           }}

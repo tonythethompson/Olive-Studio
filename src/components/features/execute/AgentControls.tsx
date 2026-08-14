@@ -42,23 +42,23 @@ interface StatusConfig {
 const STATUS_MAP: Record<AgentStatus, StatusConfig> = {
   idle: {
     label: "Idle",
-    dotClass: "bg-zinc-400 dark:bg-zinc-500",
+    dotClass: "text-slate-400 dark:text-slate-500",
   },
   running: {
     label: "Running",
-    dotClass: "bg-emerald-500 animate-pulse",
+    dotClass: "text-emerald-500 animate-pulse",
   },
   completed: {
     label: "Completed",
-    dotClass: "bg-emerald-500",
+    dotClass: "text-emerald-500",
   },
   failed: {
     label: "Failed",
-    dotClass: "bg-rose-500",
+    dotClass: "text-rose-500",
   },
   cancelled: {
     label: "Cancelled",
-    dotClass: "bg-amber-500",
+    dotClass: "text-amber-500",
   },
 };
 
@@ -103,7 +103,7 @@ export function AgentControls({
           className={cn("h-2.5 w-2.5 fill-current stroke-none", dotClass)}
           aria-hidden="true"
         />
-        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
           {label}
         </span>
       </div>

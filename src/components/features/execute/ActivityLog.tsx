@@ -73,8 +73,8 @@ export function ActivityLog({ entries, className }: ActivityLogProps) {
       <div
         className={cn(
           "flex items-center justify-center rounded-md border border-dashed",
-          "border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900",
-          "min-h-[200px] text-sm text-zinc-500 dark:text-zinc-400",
+          "border-slate-800 bg-slate-900/40",
+          "min-h-[200px] text-sm text-slate-400",
           className,
         )}
       >
@@ -91,7 +91,7 @@ export function ActivityLog({ entries, className }: ActivityLogProps) {
       onScroll={handleScroll}
       className={cn(
         "overflow-y-auto max-h-[600px] rounded-md border",
-        "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900",
+        "border-slate-800 bg-slate-950/60",
         className,
       )}
       role="log"

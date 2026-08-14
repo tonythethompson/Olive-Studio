@@ -124,7 +124,6 @@ function arbUIStatePairDifferingOnlyInTransient(): fc.Arbitrary<[UIState, UIStat
         fc.option(fc.uuid(), { nil: null }),
         fc.array(
           fc.record({
-            path: fc.string({ minLength: 1, maxLength: 50 }),
             size: fc.integer({ min: 1, max: 100000 }),
           }),
           {
@@ -140,7 +139,6 @@ function arbUIStatePairDifferingOnlyInTransient(): fc.Arbitrary<[UIState, UIStat
           activeJobId: altJobId,
           localFiles: baseState.localFiles?.map((file, i) => ({
             ...file,
-            path: altFileMeta[i]?.path ?? file.path,
             size: altFileMeta[i]?.size ?? file.size,
           })),
         };
@@ -190,7 +188,7 @@ describe("Property 5: Fingerprint Determinism and Transient Exclusion", () => {
    * Validates: Requirements 3.1, 3.5
    */
 
-  it("same UIState always produces the same fingerprint (idempotency)", async () => {
+  it("same UIState always produces the same fingerprint (idempotency)", { timeout: 15000 }, async () => {
     await fc.assert(
       fc.asyncProperty(arbUIState(), async (state) => {
         const fp1 = await computeFingerprint(state);

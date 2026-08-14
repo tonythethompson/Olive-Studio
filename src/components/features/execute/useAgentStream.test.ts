@@ -24,12 +24,19 @@ interface MockEventSource {
   close: ReturnType<typeof vi.fn>;
   readyState: number;
   addEventListener: ReturnType<typeof vi.fn>;
+  emit: (type: string, data: MessageEvent) => void;
 }
 
 let mockEventSources: MockEventSource[];
 
 function createMockEventSourceClass() {
   return vi.fn(function MockEventSourceConstructor(url: string) {
+    const listeners: Record<string, ((e: MessageEvent) => void)[]> = {};
+    const addEventListenerMock = vi.fn((type: string, listener: (e: MessageEvent) => void) => {
+      if (!listeners[type]) listeners[type] = [];
+      listeners[type].push(listener);
+    });
+
     const instance: MockEventSource = {
       url,
       onmessage: null,
@@ -37,7 +44,16 @@ function createMockEventSourceClass() {
       onerror: null,
       close: vi.fn(),
       readyState: 0, // CONNECTING
-      addEventListener: vi.fn(),
+      addEventListener: addEventListenerMock,
+      emit: (type: string, data: MessageEvent) => {
+        if (type === "message" && instance.onmessage) {
+          instance.onmessage(data);
+        }
+        const typeListeners = listeners[type] || [];
+        for (const cb of typeListeners) {
+          cb(data);
+        }
+      },
     };
     mockEventSources.push(instance);
     return instance;
@@ -419,9 +435,12 @@ describe("useAgentStream", () => {
 
       const es = mockEventSources[0];
 
-      // Simulate successful open
+      // Deliver a valid payload event to reset retry count
       act(() => {
-        es.onopen?.();
+        es.emit("log", {
+          data: JSON.stringify({ kind: "reasoning", text: "Working..." }),
+          type: "log",
+        } as MessageEvent);
       });
 
       // Now trigger an error and verify retry starts from 0

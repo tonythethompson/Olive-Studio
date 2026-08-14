@@ -32,20 +32,24 @@ export interface AgentConfirmDialogProps {
 export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
 
   // Focus the Cancel button when the dialog opens (basic focus trap)
   useEffect(() => {
-    if (open) {
-      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const frame = requestAnimationFrame(() => {
+    if (!open) return;
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      if (!cancelled) {
         cancelButtonRef.current?.focus();
-      });
-      return () => {
-        cancelAnimationFrame(frame);
-        openerRef.current?.focus();
-      };
-    }
+      }
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      openerRef.current?.focus();
+    };
   }, [open]);
 
   // Handle Escape key to dismiss and Tab trap
@@ -65,10 +69,22 @@ export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDi
       if (focusables.length === 0) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
+      const active = document.activeElement;
+
+      if (!dialogRef.current?.contains(active)) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          last.focus();
+        } else {
+          first.focus();
+        }
+        return;
+      }
+
+      if (e.shiftKey && active === first) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && active === last) {
         e.preventDefault();
         first.focus();
       }
@@ -93,13 +109,14 @@ export function AgentConfirmDialog({ open, onConfirm, onCancel }: AgentConfirmDi
         "fixed inset-0 z-50 flex items-center justify-center p-4",
         "bg-slate-950/70",
       )}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agent-confirm-title"
-      aria-describedby="agent-confirm-description"
       onClick={handleBackdropClick}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-confirm-title"
+        aria-describedby="agent-confirm-description"
         className={cn(
           "w-full max-w-md rounded-lg border border-slate-700",
           "bg-slate-900 p-6 shadow-2xl",

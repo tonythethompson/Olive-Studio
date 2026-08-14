@@ -75,8 +75,8 @@ describe("AgentConfirmDialog", () => {
     render(
       <AgentConfirmDialog open={true} onConfirm={() => {}} onCancel={onCancel} />,
     );
-    // The backdrop is the outermost div with role="dialog"
-    const backdrop = screen.getByRole("dialog");
+    // The backdrop is the outermost div with data-testid="agent-confirm-dialog"
+    const backdrop = screen.getByTestId("agent-confirm-dialog");
     fireEvent.click(backdrop);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
@@ -98,5 +98,32 @@ describe("AgentConfirmDialog", () => {
     );
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("deactivates Escape listener after open becomes false and after unmount", () => {
+    const onCancel = vi.fn();
+    const { rerender, unmount } = render(
+      <AgentConfirmDialog open={true} onConfirm={() => {}} onCancel={onCancel} />,
+    );
+
+    rerender(<AgentConfirmDialog open={false} onConfirm={() => {}} onCancel={onCancel} />);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onCancel).not.toHaveBeenCalled();
+
+    rerender(<AgentConfirmDialog open={true} onConfirm={() => {}} onCancel={onCancel} />);
+    unmount();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("places initial focus inside the dialog element when opened", async () => {
+    const onCancel = vi.fn();
+    render(
+      <AgentConfirmDialog open={true} onConfirm={() => {}} onCancel={onCancel} />,
+    );
+    const dialog = screen.getByRole("dialog");
+    await vi.waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
   });
 });

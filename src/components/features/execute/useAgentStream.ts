@@ -49,7 +49,60 @@ interface AgentStreamEvent {
   stepRef?: string;
 }
 
-// ─── Utilities ──────────────────────────────────────────────────────────────────
+const MAX_SEEN_KEYS = 500;
+const MAX_PREFIX_ENTRIES = 200;
+
+function addSeenPayloadKey(set: Set<string>, key: string) {
+  set.add(key);
+  if (set.size > MAX_SEEN_KEYS) {
+    const first = set.values().next().value;
+    if (first !== undefined) set.delete(first);
+  }
+}
+
+function pushDeliveredPrefix(
+  arr: { kind: ActivityEntryKind; text: string }[],
+  item: { kind: ActivityEntryKind; text: string },
+) {
+  arr.push(item);
+  if (arr.length > MAX_PREFIX_ENTRIES) {
+    arr.shift();
+  }
+}
+
+interface ShouldSkipReplayResult {
+  skip: boolean;
+  nextIndex: number;
+  stillReplaying: boolean;
+}
+
+function shouldSkipReplayEntry(
+  prefix: { kind: ActivityEntryKind; text: string }[],
+  currentIndex: number,
+  entry: ActivityLogEntry,
+): ShouldSkipReplayResult {
+  if (isTruncationNotice(entry.text)) {
+    return { skip: false, nextIndex: currentIndex, stillReplaying: true };
+  }
+  let idx = currentIndex;
+  let expected = prefix[idx];
+  if (!expected || expected.kind !== entry.kind || expected.text !== entry.text) {
+    const found = prefix.findIndex(
+      (item, i) => i >= idx && item.kind === entry.kind && item.text === entry.text,
+    );
+    if (found === -1) {
+      return { skip: false, nextIndex: idx, stillReplaying: false };
+    }
+    idx = found;
+    expected = prefix[found];
+  }
+  if (expected && expected.kind === entry.kind && expected.text === entry.text) {
+    const nextIndex = idx + 1;
+    const stillReplaying = nextIndex < prefix.length;
+    return { skip: true, nextIndex, stillReplaying };
+  }
+  return { skip: false, nextIndex: idx, stillReplaying: false };
+}
 
 /** Monotonically incrementing counter for unique entry IDs within a session. */
 let entryCounter = 0;
@@ -76,18 +129,20 @@ function currentTimestamp(): string {
 /**
  * Validate that a parsed event has the expected shape.
  */
+const VALID_KINDS_MAP: Record<ActivityEntryKind, true> = {
+  reasoning: true,
+  tool_call: true,
+  tool_result: true,
+  decision: true,
+  error: true,
+};
+const VALID_KINDS = Object.keys(VALID_KINDS_MAP) as ActivityEntryKind[];
+
 function isValidAgentStreamEvent(data: unknown): data is AgentStreamEvent {
   if (typeof data !== "object" || data === null) return false;
   const obj = data as Record<string, unknown>;
   if (typeof obj.kind !== "string") return false;
-  const validKinds: ActivityEntryKind[] = [
-    "reasoning",
-    "tool_call",
-    "tool_result",
-    "decision",
-    "error",
-  ];
-  if (!validKinds.includes(obj.kind as ActivityEntryKind)) return false;
+  if (!VALID_KINDS.includes(obj.kind as ActivityEntryKind)) return false;
   if (typeof obj.text !== "string") return false;
   if (obj.stepRef !== undefined && typeof obj.stepRef !== "string") return false;
   return true;
@@ -96,21 +151,28 @@ function isValidAgentStreamEvent(data: unknown): data is AgentStreamEvent {
 /**
  * Convert a validated stream event into an ActivityLogEntry.
  */
-function parseStreamPayload(data: unknown): ActivityLogEntry | null {
+function parseStreamPayload(data: unknown, eventType?: string): ActivityLogEntry | null {
   if (isValidAgentStreamEvent(data)) {
     return toActivityLogEntry(data);
   }
   if (typeof data !== "object" || data === null) return null;
   const obj = data as Record<string, unknown>;
-  if (typeof obj.line === "string") {
+
+  if (eventType === "log" && typeof obj.line === "string") {
     return toActivityLogEntry({ kind: "tool_result", text: obj.line });
   }
-  if ("util" in obj || "vramUsedMb" in obj || "gpu" in obj || "timestamp" in obj) {
+
+  if (eventType === "metrics" || "util" in obj || "vramUsedMb" in obj || "gpu" in obj) {
     return toActivityLogEntry({
       kind: "tool_result",
       text: `metrics: ${JSON.stringify(obj)}`,
     });
   }
+
+  if (typeof obj.line === "string") {
+    return toActivityLogEntry({ kind: "tool_result", text: obj.line });
+  }
+
   return null;
 }
 
@@ -232,7 +294,7 @@ export function useAgentStream({
 
         try {
           const data: unknown = JSON.parse(String(event.data));
-          const entry = parseStreamPayload(data);
+          const entry = parseStreamPayload(data, event.type);
           if (entry) {
             const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
             const eventId =
@@ -240,37 +302,18 @@ export function useAgentStream({
               (record && typeof record.id === "string" ? record.id : "");
             if (eventId) {
               if (seenPayloadKeysRef.current.has(eventId)) return;
-              seenPayloadKeysRef.current.add(eventId);
+              addSeenPayloadKey(seenPayloadKeysRef.current, eventId);
             } else if (replayingPrefixRef.current) {
-              if (isTruncationNotice(entry.text)) {
-                retryCountRef.current = 0;
-                onEntryRef.current(entry);
-                return;
-              }
-              const prefix = deliveredPrefixRef.current;
-              let idx = replayIndexRef.current;
-              let expected = prefix[idx];
-              if (!expected || expected.kind !== entry.kind || expected.text !== entry.text) {
-                const found = prefix.findIndex(
-                  (item, i) => i >= idx && item.kind === entry.kind && item.text === entry.text,
-                );
-                if (found === -1) {
-                  replayingPrefixRef.current = false;
-                } else {
-                  idx = found;
-                  replayIndexRef.current = found;
-                  expected = prefix[found];
-                }
-              }
-              if (replayingPrefixRef.current && expected && expected.kind === entry.kind && expected.text === entry.text) {
-                replayIndexRef.current = idx + 1;
-                if (replayIndexRef.current >= prefix.length) {
-                  replayingPrefixRef.current = false;
-                }
-                return;
-              }
+              const res = shouldSkipReplayEntry(
+                deliveredPrefixRef.current,
+                replayIndexRef.current,
+                entry,
+              );
+              replayIndexRef.current = res.nextIndex;
+              replayingPrefixRef.current = res.stillReplaying;
+              if (res.skip) return;
             }
-            deliveredPrefixRef.current.push({ kind: entry.kind, text: entry.text });
+            pushDeliveredPrefix(deliveredPrefixRef.current, { kind: entry.kind, text: entry.text });
             // A parsed payload means the stream is actually delivering data.
             retryCountRef.current = 0;
             onEntryRef.current(entry);

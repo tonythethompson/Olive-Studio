@@ -137,7 +137,7 @@ describe("BatchComparisonView", () => {
       makeRecord({ id: "a", status: "completed" }),
       makeRecord({ id: "b", status: "completed" }),
     ];
-    render(<BatchComparisonView records={records} onCompare={onCompare} completedJobCount={3} />);
+    render(<BatchComparisonView records={records} onCompare={onCompare} />);
 
     // Change to "latency" preference
     const select = screen.getByLabelText("Scoring:") as HTMLSelectElement;
@@ -155,24 +155,11 @@ describe("BatchComparisonView", () => {
   it("disables Compare Results button when fewer than 2 completed jobs", () => {
     const records = [makeRecord({ id: "a", status: "completed" })];
     const onCompare = vi.fn();
-    render(<BatchComparisonView records={records} onCompare={onCompare} completedJobCount={1} />);
+    render(<BatchComparisonView records={records} onCompare={onCompare} />);
     const btn = screen.getByText("Compare Results");
     expect(btn.getAttribute("aria-disabled")).toBe("true");
-  });
-
-  it("ignores completedJobCount when selected records are not eligible", () => {
-    const records = [makeRecord({ id: "a", status: "completed" })];
-    render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={5} />);
-    expect(screen.getByText("Compare Results").getAttribute("aria-disabled")).toBe("true");
-  });
-
-  it("enables Compare Results from selected records even if completedJobCount is low", () => {
-    const records = [
-      makeRecord({ id: "a", status: "completed" }),
-      makeRecord({ id: "b", status: "completed" }),
-    ];
-    render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={1} />);
-    expect(screen.getByText("Compare Results").getAttribute("aria-disabled")).toBe("false");
+    fireEvent.click(btn);
+    expect(onCompare).not.toHaveBeenCalled();
   });
 
   it("enables Compare Results button when 2 or more completed jobs", () => {
@@ -181,7 +168,7 @@ describe("BatchComparisonView", () => {
       makeRecord({ id: "b", status: "completed" }),
     ];
     const onCompare = vi.fn();
-    render(<BatchComparisonView records={records} onCompare={onCompare} completedJobCount={2} />);
+    render(<BatchComparisonView records={records} onCompare={onCompare} />);
     const btn = screen.getByText("Compare Results");
     expect(btn.getAttribute("aria-disabled")).toBe("false");
   });
@@ -195,19 +182,22 @@ describe("BatchComparisonView", () => {
   });
 
   it("disables Compare Results and reports the upper bound above 10 completed records", () => {
+    const onCompare = vi.fn();
     const records = Array.from({ length: 11 }, (_, i) =>
       makeRecord({ id: `rec-${i}`, status: "completed" }),
     );
-    render(<BatchComparisonView records={records} onCompare={vi.fn()} />);
+    render(<BatchComparisonView records={records} onCompare={onCompare} />);
     const btn = screen.getByText("Compare Results");
     expect(btn.getAttribute("aria-disabled")).toBe("true");
     expect(btn.getAttribute("title")).toBe("Maximum 10 completed jobs supported");
     expect(screen.getByRole("tooltip").textContent).toContain("Maximum 10 completed jobs supported");
+    fireEvent.click(btn);
+    expect(onCompare).not.toHaveBeenCalled();
   });
 
   it("shows tooltip when Compare Results is disabled", () => {
     const records = [makeRecord({ id: "a", status: "completed" })];
-    render(<BatchComparisonView records={records} onCompare={vi.fn()} completedJobCount={1} />);
+    render(<BatchComparisonView records={records} onCompare={vi.fn()} />);
     const btn = screen.getByText("Compare Results");
     const hint = screen.getByRole("tooltip");
     expect(hint).toBeDefined();
@@ -334,9 +324,9 @@ describe("BatchComparisonView", () => {
     });
     render(<BatchComparisonView records={records} compareResults={compareResults} />);
 
-    // Count the dashes (some are from the original table too)
-    const cells = screen.getAllByText("-");
-    // At minimum there should be the 3 null metrics rendered as "-"
-    expect(cells.length).toBeGreaterThanOrEqual(3);
+    const winnerRow = screen.getByTestId("winner-row");
+    const cells = Array.from(winnerRow.querySelectorAll("td")).map((c) => c.textContent?.trim());
+    // The winner row contains latency, model_size, accuracy as null => "-"
+    expect(cells.filter((text) => text === "-")).toHaveLength(3);
   });
 });

@@ -15,6 +15,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   appendEntry as appendEntryFIFO,
   createTerminalEntry,
+  currentTimestamp,
+  generateEntryId,
   truncateEntry,
 } from "@/lib/activityLog";
 import type {
@@ -34,6 +36,10 @@ function requestAgentCancel(jobId: string): Promise<Response> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jobId }),
   });
+}
+
+function requestAgentCancelQuiet(jobId: string): Promise<Response | null> {
+  return requestAgentCancel(jobId).catch(() => null);
 }
 
 // ─── Hook Return Type ───────────────────────────────────────────────────────────
@@ -177,12 +183,10 @@ export function useAgentMode(): UseAgentModeReturn {
       if (stopRequestedRef.current) return;
       runGenerationRef.current += 1;
       const orphanId = jobIdRef.current;
-      const now = new Date();
-      const ts = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
       const errorEntry: ActivityLogEntry = {
-        id: `start-timeout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: generateEntryId(),
         kind: "error",
-        timestamp: ts,
+        timestamp: currentTimestamp(),
         text: "Agent failed to start within 10 seconds",
       };
       setEntries((prev) => appendEntryFIFO(prev, errorEntry));
@@ -197,7 +201,7 @@ export function useAgentMode(): UseAgentModeReturn {
           : START_TIMEOUT_MS,
         errorDescription: "Agent failed to start within 10 seconds",
       });
-      if (orphanId) void requestAgentCancel(orphanId);
+      if (orphanId) void requestAgentCancelQuiet(orphanId);
     }, START_TIMEOUT_MS);
 
     if (!opts?.recipeJson) return;
@@ -386,7 +390,9 @@ export function useAgentMode(): UseAgentModeReturn {
   const appendEntry = useCallback((entry: ActivityLogEntry) => {
     const truncated = truncateEntry(entry);
     setEntries((prev) => appendEntryFIFO(prev, truncated));
-    stepCountRef.current += 1;
+    if (entry.stepRef) {
+      stepCountRef.current += 1;
+    }
   }, []);
 
   /**

@@ -3,7 +3,7 @@
  * Validates Requirements 6.3, 6.4, 6.6 at the controls level:
  *  - Start/Stop button enabled/disabled based on agentRunning
  *  - Status indicator reflects current agent state
- *  - Terminal outcome is surfaced in the status display
+ *  - Terminal outcome status badge is surfaced in the status display
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";

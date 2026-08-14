@@ -32,8 +32,10 @@ interface BatchComparisonViewProps {
   compareResults?: CompareResultsOutput | null;
   /** Callback to invoke comparison with the selected scoring preference. */
   onCompare?: (preference: ScoringPreference) => void;
-  /** Number of completed jobs available for comparison (used for button enable/disable). */
-  completedJobCount?: number;
+  /** Whether a compare request is currently in flight. */
+  comparing?: boolean;
+  /** Error message from a failed comparison request. */
+  compareError?: string | null;
 }
 
 type SortKey = "modelId" | "ihvProvider" | "durationMs" | "passCount" | "vramEstimateGb" | "status";
@@ -92,6 +94,8 @@ export function BatchComparisonView({
   onClose,
   compareResults,
   onCompare,
+  comparing = false,
+  compareError = null,
 }: BatchComparisonViewProps) {
   const [sortKey, setSortKey] = useState<SortKey>("durationMs");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -176,10 +180,11 @@ export function BatchComparisonView({
           <div className="relative group">
             <button
               type="button"
+              disabled={comparing}
               onClick={() => {
-                if (canCompare) onCompare(scoringPreference);
+                if (canCompare && !comparing) onCompare(scoringPreference);
               }}
-              aria-disabled={!canCompare}
+              aria-disabled={!canCompare || comparing}
               aria-describedby={!canCompare ? `${scoringSelectId}-compare-hint` : undefined}
               title={
                 !canCompare
@@ -190,12 +195,12 @@ export function BatchComparisonView({
               }
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-                canCompare
+                canCompare && !comparing
                   ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30 hover:bg-electric-blue/30"
                   : "bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed",
               )}
             >
-              Compare Results
+              {comparing ? "Comparing..." : "Compare Results"}
             </button>
             {!canCompare && (
               <div
@@ -209,6 +214,10 @@ export function BatchComparisonView({
               </div>
             )}
           </div>
+
+          {compareError && (
+            <span className="text-xs text-rose-400 font-medium">{compareError}</span>
+          )}
       </div>
       )}
 

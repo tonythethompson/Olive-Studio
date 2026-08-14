@@ -21,11 +21,11 @@ import type { ActivityLogEntry as ActivityLogEntryType } from "@/lib/types/agent
 // ─── Kind Configuration ─────────────────────────────────────────────────────────
 
 const KIND_CONFIG = {
-  reasoning: { icon: Brain, color: "text-blue-400" },
-  tool_call: { icon: Terminal, color: "text-purple-400" },
-  tool_result: { icon: CheckCircle, color: "text-emerald-400" },
-  decision: { icon: Zap, color: "text-amber-400" },
-  error: { icon: AlertTriangle, color: "text-rose-400" },
+  reasoning: { icon: Brain, color: "text-blue-400", label: "Reasoning" },
+  tool_call: { icon: Terminal, color: "text-purple-400", label: "Tool Call" },
+  tool_result: { icon: CheckCircle, color: "text-emerald-400", label: "Tool Result" },
+  decision: { icon: Zap, color: "text-amber-400", label: "Decision" },
+  error: { icon: AlertTriangle, color: "text-rose-400", label: "Error" },
 } as const;
 
 // ─── Props ──────────────────────────────────────────────────────────────────────
@@ -38,19 +38,24 @@ export interface ActivityLogEntryProps {
 
 export function ActivityLogEntry({ entry }: ActivityLogEntryProps) {
   const [expanded, setExpanded] = useState(false);
-  const { icon: Icon, color } =
-    KIND_CONFIG[entry.kind] ?? { icon: AlertTriangle, color: "text-zinc-400" };
+  const config = KIND_CONFIG[entry.kind as keyof typeof KIND_CONFIG] ?? {
+    icon: AlertTriangle,
+    color: "text-slate-400",
+    label: entry.kind || "Activity",
+  };
+  const Icon = config.icon;
   const hasTruncated = Boolean(entry.expandedText);
 
   return (
     <div className="flex items-start gap-2 px-2 py-1.5 text-sm group">
       {/* Timestamp */}
-      <span className="shrink-0 font-mono text-xs text-zinc-500 dark:text-zinc-400 pt-0.5">
+      <span className="shrink-0 font-mono text-xs text-slate-500 dark:text-slate-400 pt-0.5">
         {entry.timestamp}
       </span>
 
-      {/* Kind icon */}
-      <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", color)} aria-hidden="true" />
+      {/* Kind icon + text label for screen readers */}
+      <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", config.color)} aria-hidden="true" />
+      <span className="sr-only">[{config.label}]</span>
 
       {/* Text content */}
       <div className="min-w-0 flex-1">
