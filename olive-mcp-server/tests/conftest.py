@@ -51,3 +51,26 @@ def _drain_semantic_inflight_between_tests() -> Iterator[None]:
     wait_for_inflight_semantic_clear()
     yield
     wait_for_inflight_semantic_clear()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _warm_embedding_model_once() -> None:
+    """
+    Load the real embedding model once, outside any single test's budget.
+
+    Whichever test first triggers an unmocked "auto"-mode semantic call pays
+    for the model's first-use load (network fetch + weights load), which is
+    a real network/disk-bound operation that can take longer than the
+    per-test inflight-drain ceiling (``_INFLIGHT_DRAIN_TIMEOUT_S``). Loading
+    it once, up front, with no timeout budget, means every test's own
+    "auto"-mode calls only pay for fast inference afterwards, whichever test
+    happens to run first.
+    """
+    try:
+        from olive_mcp_server.tools.embeddings import _get_model
+
+        _get_model()
+    except Exception:
+        # Offline/sandboxed environments: leave lazy-load behavior as-is;
+        # individual tests that need semantic mode already mock it out.
+        pass
