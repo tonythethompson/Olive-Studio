@@ -47,7 +47,11 @@ for cmd in python3 python; do
   fi
 done
 if [[ -z "$PYTHON_CMD" ]]; then
-  echo "      ERROR: Python >= 3.10 not found on PATH." >&2
+  echo "      ERROR: Python 3.10–3.13 (3.12 recommended) not found on PATH." >&2
+  echo "      Debian/Ubuntu: sudo apt install -y python3 python3-venv python3-pip" >&2
+  echo "      Fedora:        sudo dnf install -y python3 python3-pip" >&2
+  echo "      macOS:         brew install python@3.12" >&2
+  echo "      Download:      https://www.python.org/downloads/" >&2
   exit 1
 fi
 

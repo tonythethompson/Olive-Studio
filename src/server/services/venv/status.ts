@@ -457,7 +457,7 @@ export async function getDualRuntimeStatus(opts?: {
   const openvinoOk = families.openvino.integrityHealthy;
   const qnnOk = families.qnn.integrityHealthy;
   const hint = !opts?.systemPython
-    ? "No system Python found. Need 3.10–3.13 (3.12 recommended). Set python.exe below or OLIVE_STUDIO_PYTHON."
+    ? "No system Python found. Need 3.10–3.13 (3.12 recommended) for live Olive runs. Download it below or set a path."
     : !families.default.exists
       ? "Default runtime (.venv) missing. Install Olive venv now, or first Execute Live will create it."
       : !defaultOk

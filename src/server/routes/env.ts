@@ -11,6 +11,7 @@ import {
   isSupportedOlivePython,
   invalidateRuntimeStatusCache,
 } from "../services/venv/index.ts";
+import { installSystemPython } from "../services/venv/installPython.ts";
 import { writeStudioConfig, addVenvToUserPath } from "../services/venv/config.ts";
 import { setRuntimeHfToken, getRuntimeHfToken } from "../services/olive/state.ts";
 import { ensureTensorRtRtx, ensureTensorRt } from "./tensorrt.ts";
@@ -176,6 +177,11 @@ export function mountEnvRoutes(router: Router): void {
     delete process.env.OLIVE_STUDIO_PYTHON;
     invalidateRuntimeStatusCache();
     return res.json({ ok: true, ...(await getRuntimeEnvStatus()) });
+  });
+
+  // Optional system Python install (winget / pymanager / brew). Linux returns a command.
+  router.post("/env/install-python", heavyCommandRateLimit, async (_req, res) => {
+    await streamNdjsonInstall(res, installSystemPython);
   });
 
   // ─── Venv Install ─────────────────────────────────────────────────────

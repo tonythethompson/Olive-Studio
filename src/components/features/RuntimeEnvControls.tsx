@@ -1,5 +1,15 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { FolderOpen, Route, RefreshCw, CheckCircle2, AlertTriangle, Terminal } from "lucide-react";
+import {
+  FolderOpen,
+  Route,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Terminal,
+  ExternalLink,
+  Copy,
+  Download,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface RuntimeEnvStatus {
@@ -14,6 +24,12 @@ export interface RuntimeEnvStatus {
   platform: string;
   hint: string;
   error?: string;
+  pythonPrerequisite?: {
+    downloadUrl: string;
+    canAutoInstall: boolean;
+    autoInstallLabel: string | null;
+    command: string;
+  } | null;
 }
 
 /**
@@ -128,6 +144,121 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
     }
   };
 
+  const consumeNdjson = async (
+    res: Response,
+    fallbackError: string,
+  ): Promise<{ ok: boolean; error?: string; message?: string; command?: string; downloadUrl?: string }> => {
+    if (!res.body) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? (res.status === 404 ? "API route not found." : `HTTP ${res.status}`));
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let finalOk: boolean | null = null;
+    let finalError: string | undefined;
+    let lastLog = fallbackError;
+    let command: string | undefined;
+    let downloadUrl: string | undefined;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let evt: {
+          type?: string;
+          message?: string;
+          ok?: boolean;
+          error?: string;
+          command?: string;
+          downloadUrl?: string;
+        };
+        try {
+          evt = JSON.parse(line) as typeof evt;
+        } catch {
+          continue;
+        }
+        if (evt.type === "log" && evt.message) {
+          lastLog = evt.message;
+          setMessage(evt.message);
+        }
+        if (evt.type === "done") {
+          finalOk = evt.ok !== false;
+          finalError = evt.error;
+          command = evt.command;
+          downloadUrl = evt.downloadUrl;
+          if (evt.message) lastLog = evt.message;
+        }
+      }
+    }
+    if (buf.trim()) {
+      try {
+        const evt = JSON.parse(buf) as {
+          type?: string;
+          message?: string;
+          ok?: boolean;
+          error?: string;
+          command?: string;
+          downloadUrl?: string;
+        };
+        if (evt.type === "log" && evt.message) lastLog = evt.message;
+        if (evt.type === "done") {
+          finalOk = evt.ok !== false;
+          finalError = evt.error;
+          command = evt.command;
+          downloadUrl = evt.downloadUrl;
+        }
+      } catch {
+        /* ignore trailing non-JSON */
+      }
+    }
+    if (finalOk === null) {
+      throw new Error(finalError || lastLog || "Install stream ended without a done event");
+    }
+    if (!res.ok || !finalOk) {
+      return { ok: false, error: finalError || lastLog || fallbackError, command, downloadUrl };
+    }
+    return { ok: true, message: lastLog, command, downloadUrl };
+  };
+
+  const installSystemPython = async () => {
+    setBusy(true);
+    setMessage("Installing Python…");
+    setError(null);
+    try {
+      const res = await fetch("/api/env/install-python", {
+        method: "POST",
+        headers: { Accept: "application/x-ndjson, application/json" },
+      });
+      const result = await consumeNdjson(res, "Could not install Python.");
+      if (!result.ok) {
+        throw new Error(result.error ?? "Could not install Python.");
+      }
+      await refresh();
+      setMessage("Python is ready.");
+      setError(null);
+    } catch (err: unknown) {
+      setMessage(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyInstallCommand = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setMessage("Install command copied.");
+      setError(null);
+    } catch {
+      setError("Could not copy the install command.");
+    }
+  };
+
   const addVenvToPath = async () => {
     setBusy(true);
     setMessage(null);
@@ -164,74 +295,9 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      if (!res.body) {
-        throw new Error(res.status === 404 ? "API route not found." : `HTTP ${res.status}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let finalOk: boolean | null = null;
-      let finalError: string | undefined;
-      let lastLog = "Installing Olive venv…";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let evt: { type?: string; message?: string; ok?: boolean; error?: string };
-          try {
-            evt = JSON.parse(line) as typeof evt;
-          } catch {
-            continue;
-          }
-          if (evt.type === "log" && evt.message) {
-            lastLog = evt.message;
-            setMessage(evt.message);
-          }
-          if (evt.type === "done") {
-            finalOk = evt.ok !== false;
-            finalError = evt.error;
-            if (evt.message) lastLog = evt.message;
-          }
-        }
-      }
-
-      buf += decoder.decode();
-      if (buf.trim()) {
-        try {
-          const evt = JSON.parse(buf) as {
-            type?: string;
-            message?: string;
-            ok?: boolean;
-            error?: string;
-          };
-          if (evt.type === "log" && evt.message) {
-            lastLog = evt.message;
-            setMessage(evt.message);
-          }
-          if (evt.type === "done") {
-            finalOk = evt.ok !== false;
-            finalError = evt.error;
-            if (evt.message) lastLog = evt.message;
-          }
-        } catch {
-          /* ignore trailing non-JSON */
-        }
-      }
-
-      if (finalOk === false) {
-        throw new Error(finalError || lastLog || "Venv install failed");
-      }
-      if (finalOk === null) {
-        throw new Error(finalError || lastLog || "Install stream ended without a done event");
-      }
-      if (!res.ok) {
-        throw new Error(finalError || `HTTP ${res.status}`);
+      const result = await consumeNdjson(res, "Installing Olive venv…");
+      if (!result.ok) {
+        throw new Error(result.error ?? "Install stream ended without a done event");
       }
 
       await refresh();
@@ -338,6 +404,55 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
             <dt className="text-slate-500">User PATH</dt>
             <dd className="text-slate-300">{status?.venvOnUserPath ? "includes .venv" : "no .venv"}</dd>
           </dl>
+
+          {!status?.systemPython && (
+            <div className="space-y-1.5 rounded border border-amber-700/40 bg-amber-950/20 p-2">
+              <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                Python 3.10–3.13 is needed for live Olive runs. 3.12 is recommended.
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <a
+                  href={status?.pythonPrerequisite?.downloadUrl ?? "https://www.python.org/downloads/"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue font-sans text-[11px]"
+                >
+                  <ExternalLink className="h-3 w-3" aria-hidden />
+                  Download Python 3.12
+                </a>
+                {status?.pythonPrerequisite?.canAutoInstall && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void installSystemPython()}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-[11px]"
+                  >
+                    {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                    {status.pythonPrerequisite.autoInstallLabel ?? "Install Python 3.12"}
+                  </button>
+                )}
+              </div>
+              {status?.pythonPrerequisite?.command && (
+                <div className="flex gap-1">
+                  <input
+                    readOnly
+                    aria-label="Python install command"
+                    value={status.pythonPrerequisite.command}
+                    className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-slate-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void copyInstallCommand(status.pythonPrerequisite!.command)}
+                    className="shrink-0 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue font-sans text-[11px]"
+                    title="Copy install command"
+                  >
+                    <Copy className="h-3 w-3" aria-hidden />
+                    <span className="sr-only">Copy install command</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="block text-[11px] text-slate-400 font-sans" htmlFor="studio-python-path">

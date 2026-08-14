@@ -52,7 +52,9 @@ foreach ($cmd in @("python", "python3")) {
 }
 if (-not $pythonCmd) {
     Write-Host "      ERROR: Python >= 3.10 not found on PATH." -ForegroundColor Red
-    Write-Host "      Install Python 3.10+ and ensure 'python' is on PATH." -ForegroundColor Red
+    Write-Host "      Install Python 3.10–3.13 (3.12 recommended) and ensure 'python' is on PATH." -ForegroundColor Red
+    Write-Host "      Download: https://www.python.org/downloads/windows/" -ForegroundColor DarkGray
+    Write-Host "      Or:       winget install -e --id Python.Python.3.12" -ForegroundColor DarkGray
     exit 1
 }
 

@@ -18,6 +18,13 @@ export interface ApiResponse<T = unknown> {
 
 // ─── Runtime / Environment ──────────────────────────────────────────────────
 
+export interface PythonInstallGuidance {
+  downloadUrl: string;
+  canAutoInstall: boolean;
+  autoInstallLabel: string | null;
+  command: string;
+}
+
 export interface RuntimeEnvStatus {
   venvExists: boolean;
   venvPython: string | null;
@@ -29,6 +36,7 @@ export interface RuntimeEnvStatus {
   venvOnUserPath: boolean;
   platform: string;
   hint: string;
+  pythonPrerequisite?: PythonInstallGuidance | null;
 }
 
 export interface PythonPathRequest {

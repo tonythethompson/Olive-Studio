@@ -32,6 +32,9 @@ export function getAllowedPythonRoots(): string[] {
     roots.push(path.resolve("C:\\Python312"));
     roots.push(path.resolve("C:\\Python313"));
   }
+  if (process.platform === "darwin") {
+    roots.push(path.resolve("/Library/Frameworks/Python.framework"));
+  }
   return roots;
 }
 
