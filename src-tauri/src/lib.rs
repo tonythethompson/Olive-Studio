@@ -319,7 +319,17 @@ pub fn run() {
       if !cfg!(debug_assertions) {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
-          match handle.updater() {
+          // Windows install runs on_before_exit then std::process::exit(0), which
+          // skips RunEvent::Exit. Stop the Node sidecar there so it is not orphaned.
+          let cleanup_handle = handle.clone();
+          match handle
+            .updater_builder()
+            .on_before_exit(move || {
+              stop_managed_sidecar(&cleanup_handle.state::<SidecarState>());
+              cleanup_handle.cleanup_before_exit();
+            })
+            .build()
+          {
             Ok(updater) => match updater.check().await {
               Ok(Some(update)) => {
                 log::info!(
