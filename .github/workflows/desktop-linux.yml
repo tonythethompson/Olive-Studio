@@ -1,0 +1,108 @@
+name: Linux Desktop Package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-linux.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/desktop-linux.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle Node runtime
+        shell: bash
+        run: |
+          mkdir -p src-tauri/node-runtime
+          install -m 0755 "$(command -v node)" src-tauri/node-runtime/node
+          src-tauri/node-runtime/node --version
+
+      - name: Build DEB and AppImage
+        run: pnpm exec tauri build --bundles deb,appimage --config src-tauri/tauri.ci.conf.json
+
+      - name: Verify packaged Node runtime and server smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          DEB="$(find "$BUNDLE_DIR/deb" -name '*.deb' -print -quit)"
+          APPIMAGE="$(find "$BUNDLE_DIR/appimage" -name '*.AppImage' -print -quit)"
+          test -n "$DEB"
+          test -n "$APPIMAGE"
+          NODE_REL="$(dpkg-deb --fsys-tarfile "$DEB" | tar -tf - | awk '/node-runtime\/node$/ && !found { sub(/^\.\//, ""); print; found=1 }')"
+          echo "Packaged Node archive path: $NODE_REL"
+          test -n "$NODE_REL"
+          EXTRACT_DIR="$(mktemp -d)"
+          trap 'rm -rf "$EXTRACT_DIR"; kill ${SERVER_PID:-} 2>/dev/null || true' EXIT
+          dpkg-deb -x "$DEB" "$EXTRACT_DIR"
+          NODE="$EXTRACT_DIR/$NODE_REL"
+          echo "Packaged Node path: $NODE"
+          ls -l "$NODE"
+          test -x "$NODE"
+          if NODE_VERSION="$("$NODE" --version 2>&1)"; then
+            echo "Packaged Node version: $NODE_VERSION"
+          else
+            STATUS=$?
+            echo "Packaged Node failed to execute (status $STATUS): $NODE_VERSION"
+            file "$NODE" || true
+            ldd "$NODE" || true
+            exit 1
+          fi
+          SERVER_MJS="$(find "$EXTRACT_DIR" -type f -path '*/dist/server.mjs' -print -quit)"
+          test -n "$SERVER_MJS"
+          SERVER_ROOT="$(dirname "$(dirname "$SERVER_MJS")")"
+          echo "Packaged server entry: $SERVER_MJS"
+          if [ ! -d "$SERVER_ROOT/node_modules" ] && [ ! -d "$SERVER_ROOT/dist/node_modules" ]; then
+            echo "ERROR: Packaged server dependencies (node_modules) not found next to $SERVER_MJS"
+            exit 1
+          fi
+          (cd "$SERVER_ROOT" && PORT=31415 "$NODE" "dist/server.mjs") &
+          SERVER_PID=$!
+          for _ in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:31415/api/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "Bundled Node runtime did not start the packaged production server"
+          exit 1
