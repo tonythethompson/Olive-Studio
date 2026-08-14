@@ -49,8 +49,8 @@ interface AgentStreamEvent {
   stepRef?: string;
 }
 
-const MAX_SEEN_KEYS = 500;
-const MAX_PREFIX_ENTRIES = 200;
+const MAX_SEEN_KEYS = 1000;
+const MAX_PREFIX_ENTRIES = 1000;
 
 function addSeenPayloadKey(set: Set<string>, key: string) {
   set.add(key);
