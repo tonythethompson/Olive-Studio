@@ -392,12 +392,12 @@ describe("useAgentStream", () => {
       expect(onEntry).toHaveBeenCalledTimes(1);
     });
 
-    it("dedupes reconnect replay for more than 500 keyed events (up to 1000 capacity)", () => {
+    it("dedupes reconnect replay for more than 1000 keyed events (up to trim watermark)", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       act(() => {
-        for (let i = 1; i <= 600; i++) {
+        for (let i = 1; i <= 1100; i++) {
           mockEventSources[0].onmessage?.(
             new MessageEvent("message", {
               data: JSON.stringify({ kind: "reasoning", text: `event-${i}` }),
@@ -406,7 +406,7 @@ describe("useAgentStream", () => {
           );
         }
       });
-      expect(onEntry).toHaveBeenCalledTimes(600);
+      expect(onEntry).toHaveBeenCalledTimes(1100);
 
       act(() => {
         mockEventSources[0].onerror?.();
@@ -419,7 +419,7 @@ describe("useAgentStream", () => {
       });
 
       act(() => {
-        for (let i = 1; i <= 601; i++) {
+        for (let i = 1; i <= 1101; i++) {
           mockEventSources[1].onmessage?.(
             new MessageEvent("message", {
               data: JSON.stringify({ kind: "reasoning", text: `event-${i}` }),
@@ -428,16 +428,16 @@ describe("useAgentStream", () => {
           );
         }
       });
-      expect(onEntry).toHaveBeenCalledTimes(601);
-      expect(onEntry.mock.calls[600][0].text).toBe("event-601");
+      expect(onEntry).toHaveBeenCalledTimes(1101);
+      expect(onEntry.mock.calls[1100][0].text).toBe("event-1101");
     });
 
-    it("skips reconnect replay prefix for more than 200 unkeyed events (up to 1000 capacity)", () => {
+    it("skips reconnect replay prefix across the pre-trim server buffer (1001-1250 logs)", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
 
       act(() => {
-        for (let i = 1; i <= 300; i++) {
+        for (let i = 1; i <= 1200; i++) {
           mockEventSources[0].onmessage?.(
             new MessageEvent("message", {
               data: JSON.stringify({ line: `[INFO] pass log line ${i}` }),
@@ -445,7 +445,7 @@ describe("useAgentStream", () => {
           );
         }
       });
-      expect(onEntry).toHaveBeenCalledTimes(300);
+      expect(onEntry).toHaveBeenCalledTimes(1200);
 
       act(() => {
         mockEventSources[0].onerror?.();
@@ -458,7 +458,7 @@ describe("useAgentStream", () => {
       });
 
       act(() => {
-        for (let i = 1; i <= 301; i++) {
+        for (let i = 1; i <= 1201; i++) {
           mockEventSources[1].onmessage?.(
             new MessageEvent("message", {
               data: JSON.stringify({ line: `[INFO] pass log line ${i}` }),
@@ -466,8 +466,8 @@ describe("useAgentStream", () => {
           );
         }
       });
-      expect(onEntry).toHaveBeenCalledTimes(301);
-      expect(onEntry.mock.calls[300][0].text).toBe("[INFO] pass log line 301");
+      expect(onEntry).toHaveBeenCalledTimes(1201);
+      expect(onEntry.mock.calls[1200][0].text).toBe("[INFO] pass log line 1201");
     });
 
     it("ignores events with invalid kind field", () => {

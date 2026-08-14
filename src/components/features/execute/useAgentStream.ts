@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useRef, useCallback } from "react";
+import { JOB_LOG_TRIM_WATERMARK } from "@/lib/oliveJobLogLimits";
 import type { ActivityLogEntry, ActivityEntryKind } from "@/lib/types/agentTypes";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ function isTruncationNotice(text: string): boolean {
   return text.includes("Earlier log lines were trimmed");
 }
 
-/** Server may replay up to MAX_JOB_LOG_LINES logs; metrics must not consume that budget. */
+/** Server may replay up to JOB_LOG_TRIM_WATERMARK logs; metrics must not consume that budget. */
 function isMetricsStreamEvent(eventType: string, data: unknown): boolean {
   if (eventType === "metrics") return true;
   if (!data || typeof data !== "object") return false;
@@ -58,8 +59,9 @@ interface AgentStreamEvent {
   stepRef?: string;
 }
 
-const MAX_SEEN_KEYS = 1000;
-const MAX_PREFIX_ENTRIES = 1000;
+/** Must cover the server's pre-trim replay window ({@link JOB_LOG_TRIM_WATERMARK}). */
+const MAX_SEEN_KEYS = JOB_LOG_TRIM_WATERMARK;
+const MAX_PREFIX_ENTRIES = JOB_LOG_TRIM_WATERMARK;
 
 function addSeenPayloadKey(set: Set<string>, key: string) {
   set.add(key);
