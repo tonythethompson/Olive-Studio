@@ -186,7 +186,9 @@ function parseMultiLoraAdaptersFromRecipe(
   if (Array.isArray(rawAdapters) && rawAdapters.length > 0) {
     const out: NonNullable<UIState["multiLoraAdapters"]> = [];
     for (const item of rawAdapters) {
-      if (!isRecord(item)) continue;
+      if (!isRecord(item)) {
+        return { ok: false, reason: "each adapter must be a non-null object" };
+      }
       const parsed = parseRecipeAdapterEntry(item);
       if (!parsed.ok) return parsed;
       if (parsed.adapter) out.push(parsed.adapter);
