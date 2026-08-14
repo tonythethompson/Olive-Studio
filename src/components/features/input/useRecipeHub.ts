@@ -148,7 +148,12 @@ export function useRecipeHub({ setState, hardwareProbe }: UseRecipeHubOpts) {
       setImportError(`Recipe targets ${hw.targetDevice} but this machine cannot run it.\n${hw.reason}\nUse "Apply anyway" for remote/cross-compile workflows.`);
       return;
     }
-    setState(deriveUiStateFromOliveRecipe(recipe, { replacePasses: true }));
+    try {
+      setState(deriveUiStateFromOliveRecipe(recipe, { replacePasses: true }));
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to apply imported recipe.");
+      return;
+    }
     setAppliedRecipeLabel("Custom JSON recipe");
     setRecipeRailExpanded(false);
     setSourceConfigExpanded(true);
