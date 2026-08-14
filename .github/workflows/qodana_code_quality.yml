@@ -26,6 +26,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
       - name: 'Qodana Scan'
         uses: JetBrains/qodana-action@v2026.1
         with:
