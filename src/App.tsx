@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
 import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
@@ -115,9 +115,13 @@ function Dashboard() {
   const { state: pipelineState } = usePipelineState();
   const { data: hardwareProbe } = useHardwareProbe();
   const modelSelected = useMemo(() => hasSelectedModel(pipelineState), [pipelineState]);
+  // Deferred so status-summary validation doesn't run synchronously on every keystroke,
+  // matching ExecutionWorkspace's deferredState pattern.
+  const deferredPipelineState = useDeferredValue(pipelineState);
   const validation: PipelineValidationResult = useMemo(
-    () => getPipelineValidation(pipelineState, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null }),
-    [pipelineState, hardwareProbe],
+    () =>
+      getPipelineValidation(deferredPipelineState, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null }),
+    [deferredPipelineState, hardwareProbe],
   );
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
