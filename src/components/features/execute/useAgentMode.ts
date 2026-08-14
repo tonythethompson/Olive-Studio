@@ -233,6 +233,8 @@ export function useAgentMode(): UseAgentModeReturn {
       if (stopRequestedRef.current && thisGen === runGenerationRef.current) {
         if (!data.jobId) {
           stopRequestedRef.current = false;
+          clearStartTimeout();
+          runGenerationRef.current += 1;
           applyCancelledOutcome();
           resolvePendingStop(true);
           return;
@@ -249,11 +251,17 @@ export function useAgentMode(): UseAgentModeReturn {
           return;
         }
         if (cancelOk) {
+          // Settle before the 10s startup timer can append a second terminal entry.
+          clearStartTimeout();
+          runGenerationRef.current += 1;
           applyCancelledOutcome();
           resolvePendingStop(true);
           return;
         }
+        // Cancel failed: keep the job attached, but drop the startup timer so it
+        // cannot mark this still-running session as a start failure.
         stopRequestedRef.current = false;
+        clearStartTimeout();
         setJobId(data.jobId);
         jobIdRef.current = data.jobId;
         setAgentRunning(true);

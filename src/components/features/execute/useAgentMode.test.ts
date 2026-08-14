@@ -378,6 +378,70 @@ describe("useAgentMode", () => {
 
       expect(result.current.agentRunning).toBe(false);
       expect(result.current.outcome?.status).toBe("cancelled");
+
+      // Startup timer must not corrupt the settled cancelled session.
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(result.current.outcome?.status).toBe("cancelled");
+      expect(result.current.agentRunning).toBe(false);
+      expect(
+        result.current.entries.filter((e) =>
+          /cancelled|failed to start/i.test(e.text ?? ""),
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("does not let startup timer fail a session after cancel-during-submit fails", async () => {
+      let resolveSubmit: (value: Response) => void = () => {};
+      const submitPromise = new Promise<Response>((resolve) => {
+        resolveSubmit = resolve;
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({ error: "cancel failed" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      let startDone: Promise<void> = Promise.resolve();
+      act(() => {
+        startDone = result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent();
+      });
+
+      await act(async () => {
+        resolveSubmit({
+          ok: true,
+          json: async () => ({ jobId: "job-reattach" }),
+        } as Response);
+        await startDone;
+        expect(await stopResult).toBe(false);
+      });
+
+      expect(result.current.jobId).toBe("job-reattach");
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.outcome?.errorDescription).toBe("Failed to cancel agent job");
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(result.current.jobId).toBe("job-reattach");
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.outcome?.errorDescription).toBe("Failed to cancel agent job");
+      expect(
+        result.current.entries.some((e) => e.text?.includes("failed to start")),
+      ).toBe(false);
     });
 
     it("applies cancelled when stop-during-submit gets no jobId", async () => {
