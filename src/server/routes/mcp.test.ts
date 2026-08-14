@@ -57,7 +57,7 @@ import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
 import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
 import { kbSyncRateLimit, mcpSettingsRateLimit } from "../middleware/rateLimit.ts";
-import { writeStudioConfig } from "../config.ts";
+import { readStudioConfig, writeStudioConfig } from "../config.ts";
 
 function tripMcpBreaker(): void {
   for (let i = 0; i < 3; i += 1) {
@@ -387,5 +387,27 @@ describe("POST /api/mcp/settings", () => {
       mcpSettings?: { retrievalMode?: string; preloadEmbeddings?: boolean };
     };
     expect(body2.mcpSettings).toEqual({ retrievalMode: "keyword", preloadEmbeddings: true });
+  });
+
+  it("reverts on-disk config when reconnectMcpClient fails", async () => {
+    writeStudioConfig({ mcpSettings: { retrievalMode: "auto", preloadEmbeddings: false } });
+
+    mcpToolMocks.reconnectMcpClientImpl = async () => {
+      throw new Error("Failed to spawn process");
+    };
+
+    const res = await fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "semantic" }),
+    });
+
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { ok?: boolean; error?: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("Failed to restart MCP server with new settings");
+
+    const onDisk = readStudioConfig();
+    expect(onDisk.mcpSettings).toEqual({ retrievalMode: "auto", preloadEmbeddings: false });
   });
 });

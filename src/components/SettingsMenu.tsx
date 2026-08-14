@@ -27,16 +27,23 @@ const RETRIEVAL_MODE_OPTIONS: {
 async function updateMcpSettings(patch: {
   retrievalMode?: McpRetrievalMode;
   preloadEmbeddings?: boolean;
-}): Promise<boolean> {
+}): Promise<{
+  ok: boolean;
+  mcpSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean };
+}> {
   try {
     const res = await fetch("/api/mcp/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
-    return res.ok;
+    if (!res.ok) return { ok: false };
+    const data = (await res.json()) as {
+      mcpSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean };
+    };
+    return { ok: true, mcpSettings: data.mcpSettings };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
@@ -47,8 +54,12 @@ export function SettingsMenu() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  /** Bumped on each user write so a stale GET/POST cannot overwrite newer state. */
-  const settingsGenRef = useRef(0);
+  /** Monotonically increasing write sequence counter for tracking setting requests. */
+  const writeSeqRef = useRef(0);
+  /** Last request sequence whose response was applied to state. */
+  const lastAppliedSeqRef = useRef(0);
+  /** Count of in-flight write requests. */
+  const inFlightCountRef = useRef(0);
 
   const themePreference = usePreferencesStore((s) => s.themePreference);
   const setThemePreference = usePreferencesStore((s) => s.setThemePreference);
@@ -56,6 +67,19 @@ export function SettingsMenu() {
   const setMcpRetrievalMode = usePreferencesStore((s) => s.setMcpRetrievalMode);
   const mcpPreloadEmbeddings = usePreferencesStore((s) => s.mcpPreloadEmbeddings);
   const setMcpPreloadEmbeddings = usePreferencesStore((s) => s.setMcpPreloadEmbeddings);
+
+  const applyServerMcpSettings = useCallback(
+    (serverSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean }) => {
+      if (!serverSettings) return;
+      if (serverSettings.retrievalMode) {
+        setMcpRetrievalMode(serverSettings.retrievalMode);
+      }
+      if (typeof serverSettings.preloadEmbeddings === "boolean") {
+        setMcpPreloadEmbeddings(serverSettings.preloadEmbeddings);
+      }
+    },
+    [setMcpRetrievalMode, setMcpPreloadEmbeddings],
+  );
 
   const handleThemeSelect = useCallback(
     (value: ThemePreference) => {
@@ -69,7 +93,7 @@ export function SettingsMenu() {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    const gen = settingsGenRef.current;
+    const currentSeq = writeSeqRef.current;
     void (async () => {
       try {
         const res = await fetch("/api/mcp/settings");
@@ -77,12 +101,8 @@ export function SettingsMenu() {
         const data = (await res.json()) as {
           mcpSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean };
         };
-        if (cancelled || gen !== settingsGenRef.current) return;
-        const server = data.mcpSettings;
-        if (server?.retrievalMode) setMcpRetrievalMode(server.retrievalMode);
-        if (typeof server?.preloadEmbeddings === "boolean") {
-          setMcpPreloadEmbeddings(server.preloadEmbeddings);
-        }
+        if (cancelled || writeSeqRef.current !== currentSeq) return;
+        applyServerMcpSettings(data.mcpSettings);
       } catch {
         // Keep persisted local defaults if the server is unreachable.
       }
@@ -90,34 +110,49 @@ export function SettingsMenu() {
     return () => {
       cancelled = true;
     };
-  }, [open, setMcpRetrievalMode, setMcpPreloadEmbeddings]);
+  }, [open, applyServerMcpSettings]);
 
-  const handleRetrievalModeSelect = useCallback(
-    async (value: McpRetrievalMode) => {
-      const gen = ++settingsGenRef.current;
+  const performMcpSettingsUpdate = useCallback(
+    async (
+      patch: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean },
+      errorMessage: string,
+    ) => {
+      const seq = ++writeSeqRef.current;
+      inFlightCountRef.current++;
       setRestarting(true);
       setSettingsError(null);
-      const ok = await updateMcpSettings({ retrievalMode: value });
-      if (gen !== settingsGenRef.current) return;
-      if (ok) setMcpRetrievalMode(value);
-      else setSettingsError("Could not apply retrieval mode.");
-      setRestarting(false);
+
+      const res = await updateMcpSettings(patch);
+
+      inFlightCountRef.current = Math.max(0, inFlightCountRef.current - 1);
+      if (inFlightCountRef.current === 0) {
+        setRestarting(false);
+      }
+
+      if (seq >= lastAppliedSeqRef.current) {
+        lastAppliedSeqRef.current = seq;
+        if (res.ok && res.mcpSettings) {
+          applyServerMcpSettings(res.mcpSettings);
+        } else if (!res.ok) {
+          setSettingsError(errorMessage);
+        }
+      }
     },
-    [setMcpRetrievalMode],
+    [applyServerMcpSettings],
+  );
+
+  const handleRetrievalModeSelect = useCallback(
+    (value: McpRetrievalMode) => {
+      void performMcpSettingsUpdate({ retrievalMode: value }, "Could not apply retrieval mode.");
+    },
+    [performMcpSettingsUpdate],
   );
 
   const handlePreloadToggle = useCallback(
-    async (enabled: boolean) => {
-      const gen = ++settingsGenRef.current;
-      setRestarting(true);
-      setSettingsError(null);
-      const ok = await updateMcpSettings({ preloadEmbeddings: enabled });
-      if (gen !== settingsGenRef.current) return;
-      if (ok) setMcpPreloadEmbeddings(enabled);
-      else setSettingsError("Could not apply embedding preload.");
-      setRestarting(false);
+    (enabled: boolean) => {
+      void performMcpSettingsUpdate({ preloadEmbeddings: enabled }, "Could not apply embedding preload.");
     },
-    [setMcpPreloadEmbeddings],
+    [performMcpSettingsUpdate],
   );
 
   // Focus first menu item when menu opens

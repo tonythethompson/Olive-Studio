@@ -407,14 +407,23 @@ export function mountMcpRoutes(router: Router): void {
     try {
       const mcpSettings = await enqueueMcpSettingsWrite(async () => {
         const current = readStudioConfig();
+        const previousMcpSettings = current.mcpSettings;
         const next = {
-          ...current.mcpSettings,
+          ...previousMcpSettings,
           ...(parsed.retrievalMode !== undefined && { retrievalMode: parsed.retrievalMode }),
           ...(parsed.preloadEmbeddings !== undefined && { preloadEmbeddings: parsed.preloadEmbeddings }),
         };
         writeStudioConfig({ mcpSettings: next });
-        await reconnectMcpClient();
-        return next;
+        try {
+          await reconnectMcpClient();
+          return next;
+        } catch (err) {
+          // Revert config on disk if reconnect failed so failed settings are not persisted
+          writeStudioConfig({ mcpSettings: previousMcpSettings });
+          // Attempt best-effort reconnect with previous settings
+          void reconnectMcpClient().catch(() => undefined);
+          throw err;
+        }
       });
       return res.json({ ok: true, mcpSettings });
     } catch {

@@ -14,6 +14,7 @@ import { Client, SSEClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import mcpBreaker, { resetMcpBreaker, type McpCallAdmission } from "./breaker.ts";
 import { getMcpPython, buildPythonEnv, mcpServerDir } from "./paths.ts";
+import { readStudioConfig } from "../../config.ts";
 
 export type McpToolCallResult = { result?: unknown; error?: string; unavailable?: boolean };
 export type McpToolRequest = { toolName: string; args?: Record<string, unknown> };
@@ -56,6 +57,20 @@ async function connect(): Promise<void> {
         // The Compose MCP service exposes the SSE endpoint at /sse.
         const url = new URL(remoteUrl);
         if (url.pathname === "/" || url.pathname === "") url.pathname = "/sse";
+
+        const { mcpSettings } = readStudioConfig();
+        if (mcpSettings) {
+          if (mcpSettings.retrievalMode) {
+            url.searchParams.set("retrieval_mode", mcpSettings.retrievalMode);
+            process.env.OLIVE_MCP_RETRIEVAL_MODE = mcpSettings.retrievalMode;
+          }
+          if (mcpSettings.preloadEmbeddings !== undefined) {
+            const val = mcpSettings.preloadEmbeddings ? "1" : "0";
+            url.searchParams.set("preload_embeddings", val);
+            process.env.OLIVE_MCP_PRELOAD_EMBEDDINGS = val;
+          }
+        }
+
         transport = new SSEClientTransport(url);
       } else {
         const python = getMcpPython();
