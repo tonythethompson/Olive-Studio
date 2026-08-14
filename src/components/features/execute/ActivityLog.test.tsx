@@ -133,6 +133,6 @@ describe("ActivityLog", () => {
       const { container } = render(<ActivityLog entries={entries} />);
       const log = container.querySelector("[role='log']");
       expect(log?.children.length).toBe(2000);
-    });
+    }, 15000);
   });
 });

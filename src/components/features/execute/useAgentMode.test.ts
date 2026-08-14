@@ -302,7 +302,7 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.status).toBe("failure");
     });
 
-    it("does not complete a deferred stop on start timeout before cancel", async () => {
+    it("resolves deferred stop on start timeout when submit is pending", async () => {
       let resolveSubmit: (value: Response) => void = () => {};
       const submitPromise = new Promise<Response>((resolve) => {
         resolveSubmit = resolve;
@@ -335,16 +335,8 @@ describe("useAgentMode", () => {
       await act(async () => {
         vi.advanceTimersByTime(10_000);
       });
-      expect(stopSettled).toBeUndefined();
-      expect(result.current.agentRunning).toBe(true);
-
-      await act(async () => {
-        resolveSubmit({
-          ok: true,
-          json: async () => ({ jobId: "job-after-timeout" }),
-        } as Response);
-        expect(await stopResult).toBe(true);
-      });
+      expect(await stopResult).toBe(true);
+      expect(stopSettled).toBe(true);
 
       expect(result.current.agentRunning).toBe(false);
       expect(result.current.outcome?.status).toBe("cancelled");

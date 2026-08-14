@@ -92,6 +92,7 @@ export function useAgentMode(): UseAgentModeReturn {
 
   // Ref to hold the start timeout so we can clear it on success or stop.
   const startTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitControllerRef = useRef<AbortController | null>(null);
   // Ref to track current step count for cancellation entries.
   const stepCountRef = useRef(0);
   // Ref for startedAt to avoid stale closure in stopAgent during React batching.
@@ -125,6 +126,7 @@ export function useAgentMode(): UseAgentModeReturn {
   useEffect(() => {
     return () => {
       clearStartTimeout();
+      submitControllerRef.current?.abort();
     };
   }, [clearStartTimeout]);
 
@@ -173,14 +175,24 @@ export function useAgentMode(): UseAgentModeReturn {
     setStartedAt(nowIso);
     startedAtRef.current = nowIso;
 
+    const submitController = new AbortController();
+    submitControllerRef.current = submitController;
+
     // Start 10-second failure timeout (Requirement 6.4)
     clearStartTimeout();
     startTimeoutRef.current = setTimeout(() => {
       if (thisGen !== runGenerationRef.current) return;
       startTimeoutRef.current = null;
-      // A deferred Stop is waiting on submit+cancel. Do not claim success or
-      // bump generation — that would hide Stop and skip a checked cancel.
-      if (stopRequestedRef.current) return;
+      submitControllerRef.current?.abort();
+
+      if (stopRequestedRef.current) {
+        stopRequestedRef.current = false;
+        runGenerationRef.current += 1;
+        applyCancelledOutcome();
+        resolvePendingStop(true);
+        return;
+      }
+
       runGenerationRef.current += 1;
       const orphanId = jobIdRef.current;
       const errorEntry: ActivityLogEntry = {
@@ -215,6 +227,7 @@ export function useAgentMode(): UseAgentModeReturn {
           recipeJson: opts.recipeJson,
           cudaVersion: opts.cudaVersion ?? "auto",
         }),
+        signal: submitController.signal,
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
       if (stopRequestedRef.current && thisGen === runGenerationRef.current) {
@@ -294,6 +307,9 @@ export function useAgentMode(): UseAgentModeReturn {
       resolvePendingStop(true);
     } finally {
       submitInFlightRef.current = false;
+      if (submitControllerRef.current === submitController) {
+        submitControllerRef.current = null;
+      }
     }
   }, [applyCancelledOutcome, clearStartTimeout, resolvePendingStop]);
 
@@ -309,8 +325,6 @@ export function useAgentMode(): UseAgentModeReturn {
    * Appends a terminal cancellation entry and disables running state.
    */
   const stopAgent = useCallback(async (): Promise<boolean> => {
-    clearStartTimeout();
-
     const activeJobId = jobIdRef.current;
     if (!activeJobId) {
       if (submitInFlightRef.current) {
@@ -324,6 +338,7 @@ export function useAgentMode(): UseAgentModeReturn {
         }
         return pendingStopWaiterRef.current.promise;
       }
+      clearStartTimeout();
       if (!stopRequestedRef.current) {
         runGenerationRef.current += 1;
         stopRequestedRef.current = true;
@@ -331,6 +346,8 @@ export function useAgentMode(): UseAgentModeReturn {
       }
       return true;
     }
+
+    clearStartTimeout();
 
     if (stopRequestedRef.current) return false;
     runGenerationRef.current += 1;
