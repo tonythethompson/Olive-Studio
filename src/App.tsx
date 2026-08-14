@@ -248,7 +248,6 @@ function Dashboard() {
   useEffect(() => {
     if (!pendingResolveIssues || activeView !== "execute") return;
 
-    let observer: MutationObserver | undefined;
     let completed = false;
 
     const complete = () => {
@@ -273,20 +272,20 @@ function Dashboard() {
       return;
     }
 
-    observer = new MutationObserver(() => {
+    const observer = new MutationObserver(() => {
       if (tryExpandAndScroll()) {
-        observer?.disconnect();
+        observer.disconnect();
         complete();
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
     const safetyTimer = window.setTimeout(() => {
-      observer?.disconnect();
+      observer.disconnect();
       complete();
     }, 5000);
 
     return () => {
-      observer?.disconnect();
+      observer.disconnect();
       window.clearTimeout(safetyTimer);
     };
   }, [pendingResolveIssues, activeView]);
