@@ -62,7 +62,10 @@ describe("getModuleLibsDir", () => {
     await expect(getModuleLibsDir("/venv/python", "tensorrt_libs")).resolves.toBe(tmpRoot);
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       "/venv/python",
-      ["-c", "import os, tensorrt_libs; print(os.path.dirname(tensorrt_libs.__file__))"],
+      [
+        "-c",
+        "import importlib, os; m = importlib.import_module(\"tensorrt_libs\"); print(os.path.dirname(m.__file__))",
+      ],
       { timeout: PROBE_TIMEOUT },
     );
   });
