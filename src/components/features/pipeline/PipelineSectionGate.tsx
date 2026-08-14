@@ -19,7 +19,7 @@ export function PipelineSectionGate({ locked, children, className }: PipelineSec
         {children}
       </div>
       {locked && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex items-start justify-center bg-slate-950/70 p-4 pt-24 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 text-center shadow-xl">
             <Lock className="mx-auto mb-3 h-8 w-8 text-slate-400" />
             <h3 className="text-sm font-semibold text-slate-200">Locked until you choose a model</h3>

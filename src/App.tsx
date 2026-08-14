@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation } from "@/lib/pipelineNavigation";
 import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
-import { PipelineStepperHeader } from "@/components/features/pipeline/PipelineStepperHeader";
 import { PipelineStatusSummary } from "@/components/features/pipeline/PipelineStatusSummary";
 import { PipelineSectionGate } from "@/components/features/pipeline/PipelineSectionGate";
 
@@ -428,13 +427,6 @@ function Dashboard() {
                 </div>
               </header>
               <div className="shrink-0 border-b border-slate-800 bg-slate-950/95 backdrop-blur z-10">
-                <PipelineStepperHeader
-                  sections={SECTIONS}
-                  activeView={activeView}
-                  modelSelected={modelSelected}
-                  validation={validation}
-                  onNavigate={scrollToSection}
-                />
                 <PipelineStatusSummary
                   state={pipelineState}
                   validation={validation}
