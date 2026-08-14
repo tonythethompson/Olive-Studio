@@ -81,6 +81,81 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
+function readOptionalRecipeTargetModules(
+  item: Record<string, unknown>,
+): string[] | undefined {
+  const rawModules = Array.isArray(item.targetModules)
+    ? item.targetModules
+    : Array.isArray(item.target_modules)
+      ? item.target_modules
+      : undefined;
+  if (
+    !Array.isArray(rawModules) ||
+    !rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
+  ) {
+    return undefined;
+  }
+  return rawModules;
+}
+
+/**
+ * Parse one recipe `adapters[]` entry into UIState MultiLoRA shape.
+ */
+function parseRecipeAdapterEntry(
+  item: Record<string, unknown>,
+): NonNullable<UIState["multiLoraAdapters"]>[number] | null {
+  const path =
+    typeof item.path === "string" && item.path.length > 0 ? item.path : undefined;
+  if (!path) return null;
+
+  const name =
+    typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
+  const rank =
+    typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
+  const alpha =
+    typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
+  const targetModules = readOptionalRecipeTargetModules(item);
+
+  return {
+    path,
+    ...(name ? { name } : {}),
+    ...(rank !== undefined ? { rank } : {}),
+    ...(alpha !== undefined ? { alpha } : {}),
+    ...(targetModules ? { targetModules } : {}),
+  };
+}
+
+function legacyAdapterPathFromInput(
+  inputConfig: Record<string, unknown>,
+): UIState["multiLoraAdapters"] | undefined {
+  const adapterPath =
+    typeof inputConfig.adapter_path === "string" && inputConfig.adapter_path.length > 0
+      ? inputConfig.adapter_path
+      : undefined;
+  return adapterPath ? [{ path: adapterPath }] : undefined;
+}
+
+/**
+ * Parse recipe-level multi-LoRA adapters (or legacy adapter_path) into UIState shape.
+ */
+function parseMultiLoraAdaptersFromRecipe(
+  recipe: Record<string, unknown> | undefined,
+  inputConfig: Record<string, unknown>,
+): UIState["multiLoraAdapters"] | undefined {
+  const rawAdapters = recipe?.adapters;
+  if (Array.isArray(rawAdapters) && rawAdapters.length > 0) {
+    const out: NonNullable<UIState["multiLoraAdapters"]> = [];
+    for (const item of rawAdapters) {
+      if (!isRecord(item)) continue;
+      const parsed = parseRecipeAdapterEntry(item);
+      if (parsed) out.push(parsed);
+    }
+    if (out.length > 0) return out;
+  }
+
+  return legacyAdapterPathFromInput(inputConfig);
+}
+
 /**
  * Parses a GitHub repository or file URL into its repository, branch, and file path components.
  *
@@ -557,6 +632,12 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
       continue;
     }
 
+    if (lowerType.includes("extractadapters") || key === "extract_adapters") {
+      next.peft = true;
+      if (!next.peftMethod) next.peftMethod = "lora";
+      continue;
+    }
+
     if (lowerType.includes("lora") || key === "peft") {
       next.peft = true;
       next.peftMethod = "lora";
@@ -667,6 +748,17 @@ export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUi
       const base = options?.basePasses ?? DEFAULT_PASSES;
       incomingState.passes = { ...base, ...mapped };
     }
+  }
+
+  const adapters = parseMultiLoraAdaptersFromRecipe(recipe, icfg);
+  if (adapters) {
+    incomingState.multiLoraAdapters = adapters;
+    const basePasses = incomingState.passes ?? options?.basePasses ?? DEFAULT_PASSES;
+    incomingState.passes = {
+      ...basePasses,
+      peft: true,
+      peftMethod: basePasses.peftMethod || "lora",
+    };
   }
 
   return incomingState;

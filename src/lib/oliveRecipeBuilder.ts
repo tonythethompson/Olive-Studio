@@ -858,6 +858,80 @@ export interface AdapterGateResult {
  * @param vramGb - Available VRAM in gigabytes (for count limit enforcement)
  * @returns Gating result with validated adapters or rejection reason
  */
+/**
+ * Last path segment without regex (CodeQL: polynomial regex on uncontrolled paths).
+ * Accepts `/` and `\` separators; strips trailing separators.
+ */
+function basenameFromFsPath(path: string): string {
+  let end = path.length;
+  while (end > 0) {
+    const c = path.charCodeAt(end - 1);
+    if (c !== 47 /* / */ && c !== 92 /* \ */) break;
+    end -= 1;
+  }
+  if (end === 0) return "";
+  let start = end;
+  while (start > 0) {
+    const c = path.charCodeAt(start - 1);
+    if (c === 47 || c === 92) break;
+    start -= 1;
+  }
+  return path.slice(start, end);
+}
+
+function readOptionalTargetModules(obj: Record<string, unknown>): string[] | undefined {
+  const rawModules = Array.isArray(obj.targetModules)
+    ? obj.targetModules
+    : Array.isArray(obj.target_modules)
+      ? obj.target_modules
+      : undefined;
+  if (
+    !Array.isArray(rawModules) ||
+    !rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
+  ) {
+    return undefined;
+  }
+  return rawModules;
+}
+
+function resolveAdapterFallbackName(path: string, index: number): string {
+  return basenameFromFsPath(path) || (index === 0 ? "default" : `adapter-${index}`);
+}
+
+function resolvePositiveInt(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function resolvePositiveFinite(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/**
+ * Normalize a path-bearing adapter entry so MCP path-only payloads and
+ * flag-off single-adapter mode share the same name/rank/alpha defaults.
+ * Returns null when `path` is missing or empty (still invalid).
+ */
+function normalizePathBearingAdapter(
+  entry: unknown,
+  index: number,
+): AdapterEntry | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const obj = entry as Record<string, unknown>;
+  if (typeof obj.path !== "string" || obj.path.length === 0) return null;
+
+  const targetModules = readOptionalTargetModules(obj);
+  const fallbackName = resolveAdapterFallbackName(obj.path, index);
+
+  return {
+    name:
+      typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
+    path: obj.path,
+    rank: resolvePositiveInt(obj.rank, 8),
+    alpha: resolvePositiveFinite(obj.alpha, 16),
+    ...(targetModules ? { targetModules } : {}),
+  };
+}
+
 export function gateMultiLoraAdapters(
   adapters: unknown[],
   vramGb: number,
@@ -875,22 +949,9 @@ export function gateMultiLoraAdapters(
     }
     // Single adapter (or empty) is allowed even with flag off — treated as legacy single-adapter mode
     if (adapters.length === 1) {
-      const entry = adapters[0];
-      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        const obj = entry as Record<string, unknown>;
-        if (typeof obj.path === "string" && obj.path.length > 0) {
-          return {
-            allowed: true,
-            adapters: [{
-              name: (typeof obj.name === "string" && obj.name.length > 0) ? obj.name : "default",
-              path: obj.path,
-              rank: (typeof obj.rank === "number" && Number.isInteger(obj.rank) && obj.rank > 0) ? obj.rank : 8,
-              alpha: (typeof obj.alpha === "number" && Number.isFinite(obj.alpha) && obj.alpha > 0) ? obj.alpha : 16,
-              ...(Array.isArray(obj.targetModules) ? { targetModules: obj.targetModules as string[] } : {}),
-            }],
-            reason: undefined,
-          };
-        }
+      const normalized = normalizePathBearingAdapter(adapters[0], 0);
+      if (normalized) {
+        return { allowed: true, adapters: [normalized], reason: undefined };
       }
       return {
         allowed: false,
@@ -902,8 +963,14 @@ export function gateMultiLoraAdapters(
     return { allowed: true, adapters: [], reason: undefined };
   }
 
-  // Flag is enabled — validate via multiLoraValidation
-  const result = validateAdapters(adapters, vramGb);
+  // Flag is enabled — normalize path-only MCP bridge entries, then validate.
+  // Path-only payloads are accepted by the bridge; apply the same defaults as
+  // flag-off mode so evaluate/build do not reject otherwise usable adapters.
+  const normalized = adapters.map((entry, i) => {
+    const withDefaults = normalizePathBearingAdapter(entry, i);
+    return withDefaults ?? entry;
+  });
+  const result = validateAdapters(normalized, vramGb);
   if (result.valid) {
     return { allowed: true, adapters: result.adapters, reason: undefined };
   }
