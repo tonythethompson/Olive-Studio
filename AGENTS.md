@@ -92,13 +92,9 @@ The Olive MCP server (`olive-mcp-server/`) is an optional stdio server. The web 
 
 # Linux/macOS:
 ./scripts/setup-mcp.sh
-
-# To also rebuild semantic search indexes:
-.\scripts\setup-mcp.ps1 -RebuildIndex
-./scripts/setup-mcp.sh --rebuild-index
 ```
 
-This creates the venv, installs all deps (including `sentence-transformers` for semantic search, `mcp<2`), and verifies the server starts.
+This creates the venv, installs all deps (including `sentence-transformers` for semantic search, `mcp<2`), rebuilds the semantic search indexes when stale (`OLIVE_MCP_REBUILD_INDEX=1` or `--rebuild-index` / `-RebuildIndex` forces a rebuild), and verifies the server starts. Requires Python 3.10–3.13 (3.12/3.13 preferred — some dependencies do not support Python 3.14 yet).
 
 For manual setup or pytest:
 ```bash
@@ -153,13 +149,9 @@ The `olive-mcp-tools` Power provides the MCP connection config, but the Python v
 
 # Linux / macOS:
 ./scripts/setup-mcp.sh
-
-# With semantic search index rebuild (optional — shipped indexes work out of the box):
-.\scripts\setup-mcp.ps1 -RebuildIndex
-./scripts/setup-mcp.sh --rebuild-index
 ```
 
-This creates `olive-mcp-server/.venv`, installs all deps (including `sentence-transformers` for semantic search), and verifies the server starts. A `SessionStart` hook warns if the venv is missing.
+This creates `olive-mcp-server/.venv`, installs all deps (including `sentence-transformers` for semantic search), rebuilds the semantic search indexes when stale (`OLIVE_MCP_REBUILD_INDEX=1` or `--rebuild-index` / `-RebuildIndex` forces a rebuild), and verifies the server starts. Requires Python 3.10–3.13 (3.12/3.13 preferred — some dependencies do not support Python 3.14 yet). A `SessionStart` hook warns if the venv is missing.
 
 > **Note:** `.kiro/settings/mcp.json` is NOT needed — the Power at `.kiro/powers/olive-mcp-tools/mcp.json` provides the server connection. Only create a settings file if you need to override the Power's config (e.g., different Python path or env vars).
 

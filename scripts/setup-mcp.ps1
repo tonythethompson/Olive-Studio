@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     Creates the venv, installs core + dev + semantic dependencies, verifies the
-    server starts cleanly, and optionally rebuilds the semantic search indexes.
+    server starts cleanly, and rebuilds semantic search indexes when stale
+    (set OLIVE_MCP_REBUILD_INDEX=1 or pass -RebuildIndex to force).
 
     Run from the repo root:
       .\scripts\setup-mcp.ps1
@@ -97,6 +98,36 @@ if (-not $pythonCmd) {
             Write-Host "      Found: $($ver.Trim())" -ForegroundColor Green
             break
         }
+    }
+}
+
+if (-not $pythonCmd) {
+    $uvBases = @()
+    if ($env:LOCALAPPDATA) { $uvBases += Join-Path $env:LOCALAPPDATA "uv\python" }
+    if ($HOME) {
+        $uvBases += Join-Path $HOME ".local\share\uv\python"
+        $uvBases += Join-Path $HOME "Library/Application Support/uv/python"
+    }
+    foreach ($base in $uvBases) {
+        if (-not (Test-Path $base)) { continue }
+        foreach ($minor in @(13, 12, 11, 10)) {
+            $dirs = Get-ChildItem -Path $base -Directory -Filter "cpython-3.$minor.*" -ErrorAction SilentlyContinue |
+                Sort-Object -Property Name -Descending
+            foreach ($dir in $dirs) {
+                $bin = Join-Path $dir.FullName "python.exe"
+                if (-not (Test-Path $bin)) {
+                    $bin = Join-Path $dir.FullName (Join-Path "bin" "python3.$minor")
+                }
+                if ((Test-Path $bin) -and (Test-SupportedPython -Command $bin)) {
+                    $pythonCmd = $bin
+                    $ver = & $bin --version 2>&1 | Out-String
+                    Write-Host "      Found: $($ver.Trim()) ($bin)" -ForegroundColor Green
+                    break
+                }
+            }
+            if ($pythonCmd) { break }
+        }
+        if ($pythonCmd) { break }
     }
 }
 
@@ -193,22 +224,29 @@ if (-not $SkipVerify) {
     Write-Host "[4/5] Skipping verification (--SkipVerify)." -ForegroundColor DarkGray
 }
 
-# ── Step 5: Optionally rebuild semantic indexes ────────────────────────────────
+# ── Step 5: Build semantic search indexes (skip when hashes match) ─────────────
+Write-Host "[5/5] Building semantic search indexes (skipped when already up to date)..." -ForegroundColor Yellow
+Write-Host "      (embeds KB docs via sentence-transformers; a fresh build may take a few minutes)" -ForegroundColor DarkGray
+$pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
+if (-not (Test-Path $pythonVenv)) {
+    $pythonVenv = Join-Path $VenvDir "bin\python"
+}
+$indexScript = Join-Path $McpDir (Join-Path "scripts" "build_kb_index.py")
 if ($RebuildIndex) {
-    Write-Host "[5/5] Rebuilding semantic search indexes..." -ForegroundColor Yellow
-    $pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
-    if (-not (Test-Path $pythonVenv)) {
-        $pythonVenv = Join-Path $VenvDir "bin\python"
-    }
-    & $pythonVenv (Join-Path $McpDir "scripts\build_kb_index.py")
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "      WARNING: Index rebuild failed. Shipped indexes will be used." -ForegroundColor Yellow
-    } else {
-        Write-Host "      Indexes rebuilt successfully." -ForegroundColor Green
-    }
+    $env:OLIVE_MCP_REBUILD_INDEX = "1"
+}
+$prevEapIndex = $ErrorActionPreference
+try {
+    $ErrorActionPreference = "Continue"
+    & $pythonVenv $indexScript
+    $indexExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $prevEapIndex
+}
+if ($indexExit -eq 0) {
+    Write-Host "      Semantic search indexes are up to date." -ForegroundColor Green
 } else {
-    Write-Host "[5/5] Skipping index rebuild (use -RebuildIndex to regenerate)." -ForegroundColor DarkGray
-    Write-Host "      Pre-built indexes ship with the repo and work out of the box." -ForegroundColor DarkGray
+    Write-Host "      WARNING: Index build failed. Shipped indexes will be used." -ForegroundColor Yellow
 }
 
 Write-Host ""

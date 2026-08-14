@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Set up the Olive MCP Server Python virtual environment with all dependencies.
 #
+# Requires Python >= 3.10 and < 3.14 (3.13 or 3.12 preferred). Indexes are
+# rebuilt when stale; --rebuild-index or OLIVE_MCP_REBUILD_INDEX=1 forces it.
+#
 # Usage (from repo root):
 #   ./scripts/setup-mcp.sh
 #   ./scripts/setup-mcp.sh --rebuild-index
@@ -103,6 +106,21 @@ if [[ -z "$PYTHON_CMD" ]] && command -v py >/dev/null 2>&1; then
 fi
 
 if [[ -z "$PYTHON_CMD" ]]; then
+  for base in "$HOME/.local/share/uv/python" "$HOME/Library/Application Support/uv/python"; do
+    [[ -d "$base" ]] || continue
+    for minor in 13 12 11 10; do
+      for cand in "$base"/cpython-3."$minor".*/bin/python3."$minor"; do
+        if [[ -x "$cand" ]] && supported_python "$cand"; then
+          PYTHON_CMD="$cand"
+          echo "      Found: $("$cand" --version 2>&1 || true) ($cand)"
+          break 3
+        fi
+      done
+    done
+  done
+fi
+
+if [[ -z "$PYTHON_CMD" ]]; then
   echo "      ERROR: Python 3.10–3.13 (3.12 recommended) not found on PATH." >&2
   echo "      Debian/Ubuntu: sudo apt install -y python3 python3-venv python3-pip" >&2
   echo "      Fedora:        sudo dnf install -y python3 python3-pip" >&2
@@ -181,16 +199,15 @@ else
   echo "[4/5] Skipping verification (--skip-verify)."
 fi
 
+echo "[5/5] Building semantic search indexes (skipped when already up to date)..."
+echo "      (embeds KB docs via sentence-transformers; a fresh build may take a few minutes)"
 if [[ "$REBUILD_INDEX" -eq 1 ]]; then
-  echo "[5/5] Rebuilding semantic search indexes..."
-  if ! "$PY_VENV" "$MCP_DIR/scripts/build_kb_index.py"; then
-    echo "      WARNING: Index rebuild failed. Shipped indexes will be used."
-  else
-    echo "      Indexes rebuilt successfully."
-  fi
+  export OLIVE_MCP_REBUILD_INDEX=1
+fi
+if ! "$PY_VENV" "$MCP_DIR/scripts/build_kb_index.py"; then
+  echo "      WARNING: Index build failed. Shipped indexes will be used." >&2
 else
-  echo "[5/5] Skipping index rebuild (use --rebuild-index to regenerate)."
-  echo "      Pre-built indexes ship with the repo and work out of the box."
+  echo "      Semantic search indexes are up to date."
 fi
 
 echo ""
