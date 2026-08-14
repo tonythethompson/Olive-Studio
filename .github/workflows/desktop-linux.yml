@@ -101,11 +101,32 @@ jobs:
           else
             echo "No packaged node_modules; desktop build must emit a fully bundled dist/server.mjs"
           fi
-          (cd "$SERVER_ROOT" && PORT=31415 "$NODE" "dist/server.mjs") &
-          SERVER_PID=$!
-          for _ in $(seq 1 20); do
-            curl -fsS http://127.0.0.1:31415/api/health >/dev/null && exit 0
-            sleep 1
-          done
-          echo "Bundled Node runtime did not start the packaged production server"
-          exit 1
+          smoke_server() {
+            local root="$1" node="$2" label="$3"
+            (cd "$root" && PORT=31415 "$node" "dist/server.mjs") &
+            SERVER_PID=$!
+            for _ in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:31415/api/health >/dev/null; then
+                kill "$SERVER_PID" 2>/dev/null || true
+                wait "$SERVER_PID" 2>/dev/null || true
+                unset SERVER_PID
+                return 0
+              fi
+              sleep 1
+            done
+            echo "$label bundled Node runtime did not start the packaged production server"
+            return 1
+          }
+          smoke_server "$SERVER_ROOT" "$NODE" "DEB"
+
+          APPIMAGE_DIR="$EXTRACT_DIR/appimage"
+          mkdir -p "$APPIMAGE_DIR"
+          (cd "$APPIMAGE_DIR" && APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract >/dev/null)
+          APPIMAGE_ROOT="$APPIMAGE_DIR/squashfs-root"
+          APPIMAGE_NODE="$(find "$APPIMAGE_ROOT" -type f -path '*/node-runtime/node' -print -quit)"
+          APPIMAGE_SERVER_MJS="$(find "$APPIMAGE_ROOT" -type f -path '*/dist/server.mjs' -print -quit)"
+          test -n "$APPIMAGE_NODE"
+          test -n "$APPIMAGE_SERVER_MJS"
+          test -x "$APPIMAGE_NODE"
+          APPIMAGE_SERVER_ROOT="$(dirname "$(dirname "$APPIMAGE_SERVER_MJS")")"
+          smoke_server "$APPIMAGE_SERVER_ROOT" "$APPIMAGE_NODE" "AppImage"
