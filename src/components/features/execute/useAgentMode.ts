@@ -33,6 +33,12 @@ const START_TIMEOUT_MS = 10_000;
 /** Bound cancel waits so mode-switch / stop UI cannot hang on a stalled network. */
 const CANCEL_TIMEOUT_MS = 15_000;
 
+/**
+ * Extra wait after the start timeout while a deferred stop is waiting on submit.
+ * Keeps submit alive long enough to learn a jobId and cancel, but bounds mode-switch.
+ */
+const STOP_SUBMIT_GRACE_MS = 30_000;
+
 function requestAgentCancel(jobId: string, init?: RequestInit): Promise<Response> {
   return fetch("/api/olive/agent/cancel", {
     method: "POST",
@@ -118,6 +124,7 @@ export function useAgentMode(): UseAgentModeReturn {
 
   // Ref to hold the start timeout so we can clear it on success or stop.
   const startTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopSubmitGraceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
   // Ref to track current step count for cancellation entries.
   const stepCountRef = useRef(0);
@@ -148,13 +155,21 @@ export function useAgentMode(): UseAgentModeReturn {
     }
   }, []);
 
+  const clearStopSubmitGrace = useCallback(() => {
+    if (stopSubmitGraceRef.current !== null) {
+      clearTimeout(stopSubmitGraceRef.current);
+      stopSubmitGraceRef.current = null;
+    }
+  }, []);
+
   // Clear the start timeout on unmount to prevent stale state updates
   useEffect(() => {
     return () => {
       clearStartTimeout();
+      clearStopSubmitGrace();
       submitControllerRef.current?.abort();
     };
-  }, [clearStartTimeout]);
+  }, [clearStartTimeout, clearStopSubmitGrace]);
 
   // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -188,6 +203,7 @@ export function useAgentMode(): UseAgentModeReturn {
     runGenerationRef.current += 1;
     const thisGen = runGenerationRef.current;
     stopRequestedRef.current = false;
+    clearStopSubmitGrace();
     resolvePendingStop(false);
     setEntries([]);
     setOutcome(undefined);
@@ -206,19 +222,38 @@ export function useAgentMode(): UseAgentModeReturn {
 
     // Start 10-second failure timeout (Requirement 6.4)
     clearStartTimeout();
+    clearStopSubmitGrace();
     startTimeoutRef.current = setTimeout(() => {
       if (thisGen !== runGenerationRef.current) return;
       startTimeoutRef.current = null;
 
       if (stopRequestedRef.current) {
-        // Mode-switch/stop is waiting on submit. Do not abort or resolve success:
-        // the server may already have registered the job, and we need its jobId
-        // to cancel. The in-flight submit path cancels once the response arrives.
+        // Keep submit alive so we can cancel by jobId, but bound mode-switch wait.
+        clearStopSubmitGrace();
+        stopSubmitGraceRef.current = setTimeout(() => {
+          if (thisGen !== runGenerationRef.current) return;
+          if (!stopRequestedRef.current) return;
+          stopSubmitGraceRef.current = null;
+          submitControllerRef.current?.abort();
+          stopRequestedRef.current = false;
+          runGenerationRef.current += 1;
+          setAgentRunning(false);
+          setOutcome({
+            status: "failure",
+            totalSteps: stepCountRef.current,
+            elapsedMs: startedAtRef.current
+              ? Date.now() - new Date(startedAtRef.current).getTime()
+              : START_TIMEOUT_MS + STOP_SUBMIT_GRACE_MS,
+            errorDescription: "Timed out waiting to cancel pending agent submission",
+          });
+          resolvePendingStop(false);
+        }, STOP_SUBMIT_GRACE_MS);
         return;
       }
 
-      submitControllerRef.current?.abort();
-
+      // Do not abort submit here: the server may already have created a job.
+      // Bump generation and fail the UI; when submit returns, the stale-gen
+      // path cancels that jobId instead of attaching it.
       runGenerationRef.current += 1;
       const orphanId = jobIdRef.current;
       const errorEntry: ActivityLogEntry = {
@@ -260,6 +295,7 @@ export function useAgentMode(): UseAgentModeReturn {
         if (!data.jobId) {
           stopRequestedRef.current = false;
           clearStartTimeout();
+          clearStopSubmitGrace();
           runGenerationRef.current += 1;
           applyCancelledOutcome();
           resolvePendingStop(true);
@@ -279,6 +315,7 @@ export function useAgentMode(): UseAgentModeReturn {
         if (cancelOk) {
           // Settle before the 10s startup timer can append a second terminal entry.
           clearStartTimeout();
+          clearStopSubmitGrace();
           runGenerationRef.current += 1;
           applyCancelledOutcome();
           resolvePendingStop(true);
@@ -288,6 +325,7 @@ export function useAgentMode(): UseAgentModeReturn {
         // cannot mark this still-running session as a start failure.
         stopRequestedRef.current = false;
         clearStartTimeout();
+        clearStopSubmitGrace();
         setJobId(data.jobId);
         jobIdRef.current = data.jobId;
         setAgentRunning(true);
@@ -319,6 +357,7 @@ export function useAgentMode(): UseAgentModeReturn {
       if (!resp.ok || !data.jobId) {
         throw new Error(data.error || `HTTP ${resp.status}`);
       }
+      clearStopSubmitGrace();
       setJobId(data.jobId);
       jobIdRef.current = data.jobId;
     } catch (err) {
@@ -328,6 +367,7 @@ export function useAgentMode(): UseAgentModeReturn {
       }
       stopRequestedRef.current = false;
       clearStartTimeout();
+      clearStopSubmitGrace();
       const message = err instanceof Error ? err.message : "Failed to submit agent job";
       setAgentRunning(false);
       setOutcome({
@@ -345,7 +385,7 @@ export function useAgentMode(): UseAgentModeReturn {
         submitControllerRef.current = null;
       }
     }
-  }, [applyCancelledOutcome, clearStartTimeout, resolvePendingStop]);
+  }, [applyCancelledOutcome, clearStartTimeout, clearStopSubmitGrace, resolvePendingStop]);
 
   /**
    * Confirm that the agent has successfully started (clears the 10s timeout).
