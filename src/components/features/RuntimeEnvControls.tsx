@@ -39,6 +39,99 @@ interface RuntimeEnvControlsProps {
   compact?: boolean;
 }
 
+type NdjsonInstallEvent = {
+  type?: string;
+  message?: string;
+  ok?: boolean;
+  error?: string;
+  command?: string;
+  downloadUrl?: string;
+};
+
+type NdjsonStreamAcc = {
+  lastLog: string;
+  finalOk: boolean | null;
+  finalError?: string;
+  command?: string;
+  downloadUrl?: string;
+};
+
+function parseNdjsonEvent(line: string): NdjsonInstallEvent | null {
+  if (!line.trim()) return null;
+  try {
+    return JSON.parse(line) as NdjsonInstallEvent;
+  } catch {
+    return null;
+  }
+}
+
+function applyNdjsonEvent(
+  evt: NdjsonInstallEvent,
+  acc: NdjsonStreamAcc,
+  onLog?: (message: string) => void,
+): void {
+  if (evt.type === "log" && evt.message) {
+    acc.lastLog = evt.message;
+    onLog?.(evt.message);
+  }
+  if (evt.type !== "done") return;
+  acc.finalOk = evt.ok !== false;
+  acc.finalError = evt.error;
+  acc.command = evt.command;
+  acc.downloadUrl = evt.downloadUrl;
+  if (evt.message) acc.lastLog = evt.message;
+}
+
+function finalizeNdjsonResult(
+  res: Response,
+  acc: NdjsonStreamAcc,
+  leftover: string,
+  fallbackError: string,
+): { ok: boolean; error?: string; message?: string; command?: string; downloadUrl?: string } {
+  const leftoverEvt = parseNdjsonEvent(leftover);
+  if (leftoverEvt) applyNdjsonEvent(leftoverEvt, acc);
+  if (acc.finalOk === null) {
+    throw new Error(acc.finalError || acc.lastLog || "Install stream ended without a done event");
+  }
+  if (!res.ok || !acc.finalOk) {
+    return {
+      ok: false,
+      error: acc.finalError || acc.lastLog || fallbackError,
+      command: acc.command,
+      downloadUrl: acc.downloadUrl,
+    };
+  }
+  return { ok: true, message: acc.lastLog, command: acc.command, downloadUrl: acc.downloadUrl };
+}
+
+async function consumeNdjson(
+  res: Response,
+  fallbackError: string,
+  onLog?: (message: string) => void,
+): Promise<{ ok: boolean; error?: string; message?: string; command?: string; downloadUrl?: string }> {
+  if (!res.body) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? (res.status === 404 ? "API route not found." : `HTTP ${res.status}`));
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const acc: NdjsonStreamAcc = { lastLog: fallbackError, finalOk: null };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buf += decoder.decode(value, { stream: !done });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      const evt = parseNdjsonEvent(line);
+      if (evt) applyNdjsonEvent(evt, acc, onLog);
+    }
+    if (done) break;
+  }
+  return finalizeNdjsonResult(res, acc, buf, fallbackError);
+}
+
 export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = false }: RuntimeEnvControlsProps) {
   const [status, setStatus] = useState<RuntimeEnvStatus | null>(null);
   const [open, setOpen] = useState(false);
@@ -144,87 +237,6 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
     }
   };
 
-  const consumeNdjson = async (
-    res: Response,
-    fallbackError: string,
-  ): Promise<{ ok: boolean; error?: string; message?: string; command?: string; downloadUrl?: string }> => {
-    if (!res.body) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(data.error ?? (res.status === 404 ? "API route not found." : `HTTP ${res.status}`));
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    let finalOk: boolean | null = null;
-    let finalError: string | undefined;
-    let lastLog = fallbackError;
-    let command: string | undefined;
-    let downloadUrl: string | undefined;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      buf += decoder.decode(value, { stream: !done });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let evt: {
-          type?: string;
-          message?: string;
-          ok?: boolean;
-          error?: string;
-          command?: string;
-          downloadUrl?: string;
-        };
-        try {
-          evt = JSON.parse(line) as typeof evt;
-        } catch {
-          continue;
-        }
-        if (evt.type === "log" && evt.message) {
-          lastLog = evt.message;
-          setMessage(evt.message);
-        }
-        if (evt.type === "done") {
-          finalOk = evt.ok !== false;
-          finalError = evt.error;
-          command = evt.command;
-          downloadUrl = evt.downloadUrl;
-          if (evt.message) lastLog = evt.message;
-        }
-      }
-      if (done) break;
-    }
-    if (buf.trim()) {
-      try {
-        const evt = JSON.parse(buf) as {
-          type?: string;
-          message?: string;
-          ok?: boolean;
-          error?: string;
-          command?: string;
-          downloadUrl?: string;
-        };
-        if (evt.type === "log" && evt.message) lastLog = evt.message;
-        if (evt.type === "done") {
-          finalOk = evt.ok !== false;
-          finalError = evt.error;
-          command = evt.command;
-          downloadUrl = evt.downloadUrl;
-        }
-      } catch {
-        /* ignore trailing non-JSON */
-      }
-    }
-    if (finalOk === null) {
-      throw new Error(finalError || lastLog || "Install stream ended without a done event");
-    }
-    if (!res.ok || !finalOk) {
-      return { ok: false, error: finalError || lastLog || fallbackError, command, downloadUrl };
-    }
-    return { ok: true, message: lastLog, command, downloadUrl };
-  };
-
   const installSystemPython = async () => {
     setBusy(true);
     setMessage("Installing Python…");
@@ -234,7 +246,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
         method: "POST",
         headers: { Accept: "application/x-ndjson, application/json" },
       });
-      const result = await consumeNdjson(res, "Could not install Python.");
+      const result = await consumeNdjson(res, "Could not install Python.", setMessage);
       if (!result.ok) {
         throw new Error(result.error ?? "Could not install Python.");
       }
@@ -295,7 +307,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      const result = await consumeNdjson(res, "Installing Olive venv…");
+      const result = await consumeNdjson(res, "Installing Olive venv…", setMessage);
       if (!result.ok) {
         throw new Error(result.error ?? "Install stream ended without a done event");
       }

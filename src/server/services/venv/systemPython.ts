@@ -140,53 +140,42 @@ function listImmediateSubdirInterpreters(root: string, nameRe: RegExp, relPython
   return found;
 }
 
-/**
- * Known-good install locations, 3.12 first.
- * Exported for unit tests (no process spawn).
- */
-export function collectPreferredPythonFileCandidates(
-  platform: NodeJS.Platform,
-  env: NodeJS.ProcessEnv = process.env,
-): string[] {
+function collectWindowsPythonFileCandidates(env: NodeJS.ProcessEnv, home: string): string[] {
   const fileCandidates: string[] = [];
-  const home = os.homedir();
-
-  if (platform === "win32") {
-    const localAppData = env.LOCALAPPDATA ?? "";
-    const programFiles = env.ProgramFiles ?? "C:\\Program Files";
-    const programFilesX86 = env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
-    for (const ver of ["312", "311", "313", "310"]) {
-      if (localAppData) {
-        pushUnique(fileCandidates, path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
-        pushUnique(fileCandidates, path.join(localAppData, "Python", "bin", `python3.${ver.slice(1)}.exe`));
-        pushUnique(fileCandidates, path.join(localAppData, "Python", "bin", "python.exe"));
-      }
-      pushUnique(fileCandidates, path.join(programFiles, "Python" + ver, "python.exe"));
-      pushUnique(fileCandidates, path.join(programFilesX86, "Python" + ver, "python.exe"));
-      pushUnique(fileCandidates, path.join(`C:\\Python${ver}`, "python.exe"));
-    }
+  const localAppData = env.LOCALAPPDATA ?? "";
+  const programFiles = env.ProgramFiles ?? "C:\\Program Files";
+  const programFilesX86 = env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+  for (const ver of ["312", "311", "313", "310"]) {
     if (localAppData) {
-      const managerRoot = path.join(localAppData, "Python");
-      for (const p of listImmediateSubdirInterpreters(
-        managerRoot,
-        /^pythoncore-3\.(10|11|12|13)\b/i,
-        ["python.exe"],
-      )) {
-        pushUnique(fileCandidates, p);
-      }
+      pushUnique(fileCandidates, path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
+      pushUnique(fileCandidates, path.join(localAppData, "Python", "bin", `python3.${ver.slice(1)}.exe`));
+      pushUnique(fileCandidates, path.join(localAppData, "Python", "bin", "python.exe"));
     }
-    if (home) {
-      pushUnique(fileCandidates, path.join(home, "scoop", "apps", "python", "current", "python.exe"));
-      pushUnique(fileCandidates, path.join(home, "scoop", "apps", "python312", "current", "python.exe"));
-    }
-    return fileCandidates;
+    pushUnique(fileCandidates, path.join(programFiles, "Python" + ver, "python.exe"));
+    pushUnique(fileCandidates, path.join(programFilesX86, "Python" + ver, "python.exe"));
+    pushUnique(fileCandidates, path.join(`C:\\Python${ver}`, "python.exe"));
   }
+  if (localAppData) {
+    for (const p of listImmediateSubdirInterpreters(
+      path.join(localAppData, "Python"),
+      /^pythoncore-3\.(10|11|12|13)\b/i,
+      ["python.exe"],
+    )) {
+      pushUnique(fileCandidates, p);
+    }
+  }
+  if (home) {
+    pushUnique(fileCandidates, path.join(home, "scoop", "apps", "python", "current", "python.exe"));
+    pushUnique(fileCandidates, path.join(home, "scoop", "apps", "python312", "current", "python.exe"));
+  }
+  return fileCandidates;
+}
 
+function collectPosixPythonFileCandidates(platform: NodeJS.Platform, home: string): string[] {
+  const fileCandidates: string[] = [];
   const versionedNames = PREFERRED_PYTHON_MINORS.flatMap((minor) => [`python3.${minor}`, `python${minor}`]);
   const binDirs = ["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin", "/home/linuxbrew/.linuxbrew/bin"];
-  if (home) {
-    binDirs.push(path.join(home, ".local", "bin"));
-  }
+  if (home) binDirs.push(path.join(home, ".local", "bin"));
   for (const dir of binDirs) {
     for (const name of versionedNames) {
       pushUnique(fileCandidates, path.join(dir, name));
@@ -195,14 +184,8 @@ export function collectPreferredPythonFileCandidates(
 
   if (platform === "darwin") {
     for (const minor of PREFERRED_PYTHON_MINORS) {
-      pushUnique(
-        fileCandidates,
-        `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3`,
-      );
-      pushUnique(
-        fileCandidates,
-        `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3.${minor}`,
-      );
+      pushUnique(fileCandidates, `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3`);
+      pushUnique(fileCandidates, `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3.${minor}`);
     }
   }
 
@@ -215,8 +198,20 @@ export function collectPreferredPythonFileCandidates(
       pushUnique(fileCandidates, p);
     }
   }
-
   return fileCandidates;
+}
+
+/**
+ * Known-good install locations, 3.12 first.
+ * Exported for unit tests (no process spawn).
+ */
+export function collectPreferredPythonFileCandidates(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const home = os.homedir();
+  if (platform === "win32") return collectWindowsPythonFileCandidates(env, home);
+  return collectPosixPythonFileCandidates(platform, home);
 }
 
 async function execLiteralList(
