@@ -121,6 +121,7 @@ jobs:
 
           APPIMAGE_DIR="$EXTRACT_DIR/appimage"
           mkdir -p "$APPIMAGE_DIR"
+          APPIMAGE="$(realpath "$APPIMAGE")"
           (cd "$APPIMAGE_DIR" && APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract >/dev/null)
           APPIMAGE_ROOT="$APPIMAGE_DIR/squashfs-root"
           APPIMAGE_NODE="$(find "$APPIMAGE_ROOT" -type f -path '*/node-runtime/node' -print -quit)"
