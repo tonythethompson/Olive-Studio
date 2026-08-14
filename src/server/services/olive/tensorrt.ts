@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { getInstalledModuleVersion, getModuleLibsDir } from "../shared/venvProbe.ts";
 import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
@@ -42,15 +43,7 @@ const TRT_FAIL_MARK = "OLIVE_TRT_FAIL:";
 // ─── Version / directory queries ─────────────────────────────────────────
 
 export async function getInstalledTensorRtVersion(python: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt; print(tensorrt.__version__)"], {
-      timeout: 30_000,
-    });
-    const version = stdout.trim();
-    return version || null;
-  } catch {
-    return null;
-  }
+  return getInstalledModuleVersion(python, "tensorrt");
 }
 
 /**
@@ -60,16 +53,7 @@ export async function getInstalledTensorRtVersion(python: string): Promise<strin
  * @returns The existing `tensorrt_libs` directory path, or `null` if it cannot be located
  */
 export async function getTensorRtLibsDir(python: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import os, tensorrt_libs; print(os.path.dirname(tensorrt_libs.__file__))",
-    ], { timeout: 30_000 });
-    const dir = stdout.trim();
-    return dir && fs.existsSync(dir) ? dir : null;
-  } catch {
-    return null;
-  }
+  return getModuleLibsDir(python, "tensorrt_libs");
 }
 
 /**
@@ -331,7 +315,7 @@ export async function ensureDeps(
         const { stdout } = await execFileAsync(
           venvPython,
           ["-c", "import torch; print(torch.version.cuda or 'NONE')"],
-          { env },
+          { env, timeout: 30_000 },
         );
         const installedCuda = stdout.trim();
         const needsGpu = !pkg.installArgs.some(
@@ -402,7 +386,7 @@ export async function ensureDeps(
         await execFileAsync(
           venvPython,
           ["-c", `import importlib; importlib.import_module(${JSON.stringify(pkg.importName)})`],
-          { env },
+          { env, timeout: 30_000 },
         );
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
@@ -414,7 +398,7 @@ export async function ensureDeps(
         const { stdout } = await execFileAsync(
           venvPython,
           ["-c", "import onnxruntime as ort; print(ort.__version__)"],
-          { env },
+          { env, timeout: 60_000 },
         );
         const installed = stdout.trim();
         const expected = pinnedOrtGpuInstallArgs()[0]?.split("==")[1];
@@ -432,7 +416,7 @@ export async function ensureDeps(
       }
     } else {
       try {
-        await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`], { env });
+        await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`], { env, timeout: 30_000 });
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
       } catch {

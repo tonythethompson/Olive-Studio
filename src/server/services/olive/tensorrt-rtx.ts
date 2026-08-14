@@ -20,6 +20,7 @@
 import fs from "fs";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { getInstalledModuleVersion, getModuleLibsDir } from "../shared/venvProbe.ts";
 import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
@@ -41,28 +42,11 @@ import { ensureOnnxRuntimeGpu } from "./cuda.ts";
  * @returns The installed TensorRT RTX version, or `null` if it cannot be retrieved
  */
 export async function getInstalledTensorRtRtxVersion(python: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import tensorrt_rtx; print(tensorrt_rtx.__version__)",
-    ], { timeout: 30_000 });
-    return stdout.trim() || null;
-  } catch {
-    return null;
-  }
+  return getInstalledModuleVersion(python, "tensorrt_rtx");
 }
 
 export async function getTensorRtRtxLibsDir(python: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import os, tensorrt_rtx_libs; print(os.path.dirname(tensorrt_rtx_libs.__file__))",
-    ], { timeout: 30_000 });
-    const dir = stdout.trim();
-    return dir && fs.existsSync(dir) ? dir : null;
-  } catch {
-    return null;
-  }
+  return getModuleLibsDir(python, "tensorrt_rtx_libs");
 }
 
 /**
