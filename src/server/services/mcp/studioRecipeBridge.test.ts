@@ -55,6 +55,36 @@ describe("mergeBridgeUiState MultiLoRA", () => {
     expect(merged.error).toMatch(/targetModules must be an array of non-empty strings/i);
   });
 
+  it("rejects adapters with explicitly invalid rank instead of defaulting", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", rank: "high", alpha: 32 }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/rank must be a positive integer/i);
+  });
+
+  it("rejects adapters with non-finite alpha instead of defaulting", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", rank: 8, alpha: Number.NaN }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/alpha must be a positive finite number/i);
+  });
+
+  it("rejects adapters with non-positive rank instead of defaulting", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", rank: 0, alpha: 16 }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/rank must be a positive integer/i);
+  });
+
   it("rejects adapters whose target_modules mix strings with non-strings", () => {
     const merged = mergeBridgeUiState(createDefaultPipelineState(), {
       multi_lora_adapters: [{ path: "/a", target_modules: ["q_proj", 1] }],

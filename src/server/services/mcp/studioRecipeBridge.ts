@@ -133,12 +133,38 @@ type BridgeAdapterParseResult =
   | { ok: true; adapter: NonNullable<UIState["multiLoraAdapters"]>[number] | null }
   | { ok: false; reason: string };
 
+type BridgeOptionalNumberResult =
+  | { ok: true; value?: number }
+  | { ok: false; reason: string };
+
+/** Absent rank is fine; present-but-invalid must not become the builder default. */
+function parseBridgeRank(item: Record<string, unknown>): BridgeOptionalNumberResult {
+  if (!("rank" in item)) return { ok: true, value: undefined };
+  const value = item.rank;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer" };
+}
+
+/** Absent alpha is fine; present-but-invalid must not become the builder default. */
+function parseBridgeAlpha(item: Record<string, unknown>): BridgeOptionalNumberResult {
+  if (!("alpha" in item)) return { ok: true, value: undefined };
+  const value = item.alpha;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number" };
+}
+
 function parseSingleBridgeAdapter(item: Record<string, unknown>): BridgeAdapterParseResult {
   const adapterPath = clipString(item.path, 1024);
   if (!adapterPath) return { ok: true, adapter: null };
   const name = clipString(item.name, 128);
-  const rank = typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
-  const alpha = typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
+  const rankResult = parseBridgeRank(item);
+  if (!rankResult.ok) return rankResult;
+  const alphaResult = parseBridgeAlpha(item);
+  if (!alphaResult.ok) return alphaResult;
   const hasTargetModulesKey = "targetModules" in item || "target_modules" in item;
   const rawModules = Array.isArray(item.targetModules)
     ? item.targetModules
@@ -157,8 +183,8 @@ function parseSingleBridgeAdapter(item: Record<string, unknown>): BridgeAdapterP
     adapter: {
       path: adapterPath,
       ...(name ? { name } : {}),
-      ...(rank !== undefined ? { rank } : {}),
-      ...(alpha !== undefined ? { alpha } : {}),
+      ...(rankResult.value !== undefined ? { rank: rankResult.value } : {}),
+      ...(alphaResult.value !== undefined ? { alpha: alphaResult.value } : {}),
       ...(targetModulesResult.modules ? { targetModules: targetModulesResult.modules } : {}),
     },
   };
