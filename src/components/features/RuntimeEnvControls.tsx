@@ -124,17 +124,22 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       setMessage(data.message ?? "Updated user PATH.");
     });
 
-  const runNdjsonInstall = async (url: string, fallback: string, success: string) => {
+  const runNdjsonInstall = async (
+    url: string,
+    initialMessage: string,
+    fallbackError: string,
+    success: string,
+  ) => {
     setBusy(true);
-    setMessage(fallback);
+    setMessage(initialMessage);
     setError(null);
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { Accept: "application/x-ndjson, application/json" },
       });
-      const result = await consumeInstallNdjson(res, fallback, setMessage);
-      if (!result.ok) throw new Error(result.error ?? fallback);
+      const result = await consumeInstallNdjson(res, fallbackError, setMessage);
+      if (!result.ok) throw new Error(result.error ?? fallbackError);
       await refresh();
       setMessage(success);
       setError(null);
@@ -221,7 +226,12 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
           }
           onCopyCommand={(cmd) => void copyInstallCommand(cmd)}
           onEnsureVenv={() =>
-            void runNdjsonInstall("/api/env/venv-install", "Installing Olive venv…", "Olive venv ready.")
+            void runNdjsonInstall(
+              "/api/env/venv-install",
+              "Installing Olive venv…",
+              "Could not install Olive venv.",
+              "Olive venv ready.",
+            )
           }
           onAddVenvToPath={() => void addVenvToPath()}
         />
