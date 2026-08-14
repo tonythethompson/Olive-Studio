@@ -24,12 +24,38 @@ vi.mock("@/lib/featureFlags", () => ({
 import {
   gateMultiLoraAdapters,
   buildExtractAdaptersPass,
+  buildOliveRecipe,
 } from "@/lib/oliveRecipeBuilder";
+import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
+import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import type { UIState, IHVProvider } from "@/types";
 import {
   isMultiLoraEnabled,
   FEATURE_FLAG_MULTI_LORA,
 } from "@/lib/featureFlags";
 
+function baseState(overrides?: Partial<UIState>): UIState {
+  return {
+    modelSource: "huggingface",
+    localFiles: [],
+    azureModelPath: "",
+    hfModelId: "meta-llama/Meta-Llama-3-8B",
+    hfDataset: "",
+    ihvProvider: "CUDAExecutionProvider" as IHVProvider,
+    openvinoTargetDevice: "CPU",
+    memoryOffload: "gpu_only",
+    cudaVersion: "auto",
+    cacheDir: "",
+    azureStr: "",
+    distributedCaching: false,
+    activeJobId: null,
+    ...overrides,
+    passes: {
+      ...DEFAULT_PASSES,
+      ...overrides?.passes,
+    },
+  };
+}
 describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag", () => {
   beforeEach(() => {
     mockIsMultiLoraEnabled.mockReturnValue(false);
@@ -143,13 +169,29 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
 
     it("rejects invalid adapters even when flag is enabled", () => {
       const adapters = [
-        { name: "", path: "/weights/a", rank: 8, alpha: 16 },
-        { name: "lora-b", path: "", rank: 4, alpha: 8 },
+        { name: "lora-a", path: "", rank: 8, alpha: 16 },
+        { name: "lora-b", path: "/weights/b", rank: 4, alpha: 8 },
       ];
       const result = gateMultiLoraAdapters(adapters, 24);
       expect(result.allowed).toBe(false);
       expect(result.reason).toBeDefined();
       expect(result.reason!.length).toBeGreaterThan(0);
+    });
+
+    it("normalizes path-only adapters with the same defaults as flag-off mode", () => {
+      const adapters = [{ path: "/adapters/style" }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(true);
+      expect(result.adapters).toEqual([
+        { name: "style", path: "/adapters/style", rank: 8, alpha: 16 },
+      ]);
+    });
+
+    it("normalizes target_modules snake_case from MCP payloads", () => {
+      const adapters = [{ path: "/a", target_modules: ["q_proj", "v_proj"] }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(true);
+      expect(result.adapters[0].targetModules).toEqual(["q_proj", "v_proj"]);
     });
 
     it("respects VRAM-based adapter count limits (<=12GB: max 2)", () => {
@@ -235,6 +277,88 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       ];
       const result = buildExtractAdaptersPass(adapters);
       expect(result!.config).not.toHaveProperty("adapters");
+    });
+  });
+
+  // ─── MultiLoRA recipe import round-trip ──────────────────────────────
+
+  describe("MultiLoRA recipe round-trip through deriveUiStateFromOliveRecipe", () => {
+    beforeEach(() => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+    });
+
+    it("preserves adapter metadata and ExtractAdapters on import → rebuild", () => {
+      const state = baseState({
+        vramEstimateGb: 24,
+        multiLoraAdapters: [
+          { name: "style", path: "/adapters/style", rank: 16, alpha: 32, targetModules: ["q_proj"] },
+          { name: "tone", path: "/adapters/tone", rank: 8, alpha: 16 },
+        ],
+        passes: {
+          ...DEFAULT_PASSES,
+          peft: true,
+          peftMethod: "lora",
+          conversion: true,
+          conversionFormat: "onnx",
+        },
+      });
+
+      const recipe = buildOliveRecipe(state);
+      expect((recipe as Record<string, unknown>).adapters).toEqual([
+        {
+          name: "style",
+          path: "/adapters/style",
+          rank: 16,
+          alpha: 32,
+          target_modules: ["q_proj"],
+        },
+        { name: "tone", path: "/adapters/tone", rank: 8, alpha: 16 },
+      ]);
+      expect(
+        ((recipe.passes as Record<string, unknown>).extract_adapters as { type: string }).type,
+      ).toBe("ExtractAdapters");
+
+      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+      expect(imported.multiLoraAdapters).toEqual([
+        { name: "style", path: "/adapters/style", rank: 16, alpha: 32, targetModules: ["q_proj"] },
+        { name: "tone", path: "/adapters/tone", rank: 8, alpha: 16 },
+      ]);
+      expect(imported.passes?.peft).toBe(true);
+
+      const rebuilt = buildOliveRecipe(
+        baseState({
+          ...imported,
+          vramEstimateGb: 24,
+          multiLoraAdapters: imported.multiLoraAdapters,
+          passes: { ...DEFAULT_PASSES, ...imported.passes },
+        }),
+      );
+      expect((rebuilt as Record<string, unknown>).adapters).toEqual(
+        (recipe as Record<string, unknown>).adapters,
+      );
+      expect(
+        ((rebuilt.passes as Record<string, unknown>).extract_adapters as { type: string }).type,
+      ).toBe("ExtractAdapters");
+    });
+
+    it("restores legacy adapter_path as multiLoraAdapters on import", () => {
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: {
+            model_path: "meta-llama/Meta-Llama-3-8B",
+            adapter_path: "/legacy/adapter",
+          },
+        },
+        systems: {},
+        passes: {
+          peft: { type: "LoRA", config: {} },
+        },
+        engine: {},
+      };
+      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+      expect(imported.multiLoraAdapters).toEqual([{ path: "/legacy/adapter" }]);
+      expect(imported.passes?.peft).toBe(true);
     });
   });
 });
