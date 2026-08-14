@@ -14,6 +14,11 @@ interface SettingsMenuProps {
   onTakeTour?: () => void;
 }
 
+/**
+ * Renders a settings menu for selecting the theme and optionally starting the product tour.
+ *
+ * @param onTakeTour - Callback invoked when the user selects “Take the tour”
+ */
 export function SettingsMenu({ onTakeTour }: SettingsMenuProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);

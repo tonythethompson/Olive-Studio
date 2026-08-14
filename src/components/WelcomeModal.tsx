@@ -11,6 +11,12 @@ interface WelcomeModalProps {
   onClose: () => void;
 }
 
+/**
+ * Displays an introductory dialog for Olive Studio and handles its dismissal.
+ *
+ * @param open - Whether the dialog is visible
+ * @param onClose - Callback invoked when the dialog is dismissed
+ */
 export function WelcomeModal({ open, onClose }: WelcomeModalProps) {
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const dismissWelcome = usePreferencesStore((s) => s.dismissWelcome);

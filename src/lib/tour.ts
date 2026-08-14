@@ -82,8 +82,10 @@ export const TOUR_STEPS: DriveStep[] = [
 ];
 
 /**
- * Starts the guided tour immediately. `onSettled` is called exactly once when
- * the tour ends, whether the user finishes it or skips it partway through.
+ * Starts the guided tour and handles completion or dismissal.
+ *
+ * @param onSettled - Callback invoked once when the tour ends or is skipped
+ * @returns The configured guided tour instance
  */
 export function startGuidedTour(onSettled: () => void) {
   const driverObj = driver({
