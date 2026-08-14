@@ -71,12 +71,12 @@ jobs:
           APPIMAGE="$(find "$BUNDLE_DIR/appimage" -name '*.AppImage' -print -quit)"
           test -n "$DEB"
           test -n "$APPIMAGE"
-          dpkg-deb -c "$DEB" | grep -Eq 'resources/node-runtime/node$'
+          NODE_REL="$(dpkg-deb -c "$DEB" | awk '$NF ~ /node-runtime\/node$/ { sub(/^\.\//, "", $NF); print $NF; exit }')"
+          echo "Packaged Node archive path: $NODE_REL"
+          test -n "$NODE_REL"
           EXTRACT_DIR="$(mktemp -d)"
           trap 'rm -rf "$EXTRACT_DIR"; kill ${SERVER_PID:-} 2>/dev/null || true' EXIT
           dpkg-deb -x "$DEB" "$EXTRACT_DIR"
-          NODE_REL="$(dpkg-deb -c "$DEB" | awk '$NF ~ /resources\/node-runtime\/node$/ { sub(/^\.\//, "", $NF); print $NF; exit }')"
-          test -n "$NODE_REL"
           NODE="$EXTRACT_DIR/$NODE_REL"
           echo "Packaged Node path: $NODE"
           ls -l "$NODE"
