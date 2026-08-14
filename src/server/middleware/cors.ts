@@ -1,28 +1,24 @@
 import type { RequestHandler } from "express";
 
+/** Same-origin, loopback, and Tauri webview origins. Missing Origin is treated as a non-browser local client. */
+export function isTrustedStudioOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  if (origin === "tauri://localhost" || origin === "https://tauri.localhost") return true;
+  try {
+    const url = new URL(origin);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * CORS middleware — browser + Tauri webviews.
  * Allows same-origin, localhost, and Tauri origins.
  */
 export const corsMiddleware: RequestHandler = (req, res, next) => {
-  const origin = req.headers.origin;
-  let allowed = false;
-
-  if (!origin) {
-    allowed = true;
-  } else if (origin === "tauri://localhost" || origin === "https://tauri.localhost") {
-    allowed = true;
-  } else {
-    try {
-      const url = new URL(origin);
-      const hostname = url.hostname;
-      if (hostname === "localhost" || hostname === "127.0.0.1") {
-        allowed = true;
-      }
-    } catch {
-      allowed = false;
-    }
-  }
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  const allowed = isTrustedStudioOrigin(origin);
 
   if (allowed) {
     res.setHeader("Access-Control-Allow-Origin", origin || "*");

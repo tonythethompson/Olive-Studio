@@ -84,7 +84,8 @@
         "displayLanguageSelector": true,
         "installerIcon": "icons/icon.ico",
         "headerImage": "icons/128x128.png",
-        "sidebarImage": "icons/128x128.png"
+        "sidebarImage": "icons/128x128.png",
+        "installerHooks": "./windows/hooks.nsh"
       }
     },
     "macOS": {
@@ -116,8 +117,20 @@
           "libgtk-3-0",
           "libayatana-appindicator3-1"
         ],
+        "recommends": [
+          "python3 (>= 3.10)",
+          "python3-venv",
+          "python3-pip"
+        ],
+        "postInstallScript": "./linux/deb-postinst.sh",
         "section": "utils",
         "priority": "optional"
+      },
+      "rpm": {
+        "recommends": [
+          "python3 >= 3.10"
+        ],
+        "postInstallScript": "./linux/rpm-post.sh"
       }
     }
   }
