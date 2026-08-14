@@ -97,6 +97,6 @@ export async function consumeInstallNdjson(
   }
 
   const trailing = parseInstallStreamEvent(buf);
-  if (trailing) applyInstallStreamEvent(acc, trailing);
+  if (trailing) applyInstallStreamEvent(acc, trailing, onLog);
   return finishInstallStream(acc, res, fallbackError);
 }
