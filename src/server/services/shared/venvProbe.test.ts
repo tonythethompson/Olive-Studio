@@ -30,7 +30,10 @@ describe("getInstalledModuleVersion", () => {
     await expect(getInstalledModuleVersion("/venv/python", "tensorrt")).resolves.toBe("10.3.0");
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       "/venv/python",
-      ["-c", "import tensorrt; print(tensorrt.__version__)"],
+      [
+        "-c",
+        "import importlib; m = importlib.import_module(\"tensorrt\"); print(getattr(m, \"__version__\"))",
+      ],
       { timeout: PROBE_TIMEOUT },
     );
   });
