@@ -5,7 +5,7 @@ and troubleshoot Microsoft Olive model optimization workflows.
 
 ## Status
 
-Phase 1-4 plus Studio bridge + local feedback: registered tools (including
+Phase 1-4 plus Studio bridge + local feedback: 32 registered tools (including
 `diagnose_error` alias, UIState recipe bridge tools, and
 `record_troubleshoot_feedback`), live external fetchers, and a versioned
 knowledge base with Olive + Olive Studio domains.
@@ -94,6 +94,10 @@ Optional env for local feedback storage:
 
 ## Tools
 
+This table is the public tool contract. A regression test compares these names
+with FastMCP's registered tool list so additions and removals must update the
+documentation in the same change.
+
 | Tool                              | Purpose                                                        |
 | --------------------------------- | -------------------------------------------------------------- |
 | `get_olive_passes`                | List available passes, filtered by category                    |
@@ -111,8 +115,10 @@ Optional env for local feedback storage:
 | `get_pass_parameters`              | Deep-dive into a pass parameter schema                         |
 | `evaluate_optimization_tradeoff`  | Analyze quality vs. performance tradeoff for a pass sequence   |
 | `get_integration_recipe`          | Return full Olive recipe templates or filtered summaries       |
+| `get_context_for_pipeline`        | Return relevant passive context for a pipeline configuration   |
 | `validate_ui_state_recipe`        | Validate a (partial) Studio UIState via local bridge (no Olive run) |
 | `get_recipe_for_ui_state`         | Same bridge evaluation plus built `olive_recipe` JSON          |
+| `get_runtime_ep_hints`            | Recommend runtime execution-provider settings                  |
 | `record_troubleshoot_feedback`    | Local aggregate thumbs feedback for a matched KB entry         |
 | `get_mcp_capabilities`            | Capability state for agents (not transport/process health)     |
 | `list_optimization_jobs`          | Read-only list of Studio jobs (loopback Studio required)       |
@@ -121,6 +127,11 @@ Optional env for local feedback storage:
 | `validate_optimization_job`       | Studio preflight + fingerprint (never starts Olive)            |
 | `submit_optimization_job`         | Policy-gated submit via Studio (idempotent)                    |
 | `cancel_optimization_job`         | Policy-gated cancel via Studio                                 |
+| `plan_optimization`               | Create a staged optimization plan for an agent                 |
+| `execute_and_observe`             | Execute an approved plan through Studio and observe progress   |
+| `diagnose_and_fix`                | Diagnose a failed agent run and propose a corrected plan       |
+| `compare_results`                 | Compare optimization results against goals and baselines       |
+| `get_model_info`                  | Inspect model metadata needed for agent planning               |
 
 ### Agent clients (Phases 0–3)
 
