@@ -47,8 +47,7 @@ describe("WelcomeModal", () => {
     await userEvent.click(screen.getByLabelText(/don't show again/i));
     rerender(<WelcomeModal open={false} onClose={() => {}} />);
     rerender(<WelcomeModal open={true} onClose={() => {}} />);
-    expect(screen.getByLabelText(/don't show again/i)).not.toBeChecked?.() ??
-      expect((screen.getByLabelText(/don't show again/i) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/don't show again/i) as HTMLInputElement).checked).toBe(false);
   });
 
   it("does not persist 'Don't show again' on backdrop click", async () => {
