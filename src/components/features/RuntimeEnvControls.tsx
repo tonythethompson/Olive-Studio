@@ -1,135 +1,19 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import {
-  FolderOpen,
-  Route,
-  RefreshCw,
-  CheckCircle2,
-  AlertTriangle,
-  Terminal,
-  ExternalLink,
-  Copy,
-  Download,
-} from "lucide-react";
+import { CheckCircle2, AlertTriangle, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { consumeInstallNdjson } from "@/lib/runtimeEnvNdjson";
+import { RuntimeEnvMenu } from "@/components/features/runtime/RuntimeEnvMenu";
+import {
+  runtimeLabelFor,
+  runtimeNeedsAttention,
+  runtimeTitleFor,
+} from "@/components/features/runtime/runtimeEnvLabels";
+import type { RuntimeEnvStatus } from "@/components/features/runtime/runtimeEnvTypes";
 
-export interface RuntimeEnvStatus {
-  venvExists: boolean;
-  venvPython: string | null;
-  venvScripts: string;
-  oliveInstalled: boolean;
-  oliveVersion: string | null;
-  systemPython: string | null;
-  configuredPython: string | null;
-  venvOnUserPath: boolean;
-  platform: string;
-  hint: string;
-  error?: string;
-  pythonPrerequisite?: {
-    downloadUrl: string;
-    canAutoInstall: boolean;
-    autoInstallLabel: string | null;
-    command: string;
-  } | null;
-}
+export type { RuntimeEnvStatus };
 
-/**
- * Header control: show Python/Olive readiness and fix PATH / interpreter from the UI.
- */
 interface RuntimeEnvControlsProps {
   compact?: boolean;
-}
-
-type NdjsonInstallEvent = {
-  type?: string;
-  message?: string;
-  ok?: boolean;
-  error?: string;
-  command?: string;
-  downloadUrl?: string;
-};
-
-type NdjsonStreamAcc = {
-  lastLog: string;
-  finalOk: boolean | null;
-  finalError?: string;
-  command?: string;
-  downloadUrl?: string;
-};
-
-function parseNdjsonEvent(line: string): NdjsonInstallEvent | null {
-  if (!line.trim()) return null;
-  try {
-    return JSON.parse(line) as NdjsonInstallEvent;
-  } catch {
-    return null;
-  }
-}
-
-function applyNdjsonEvent(
-  evt: NdjsonInstallEvent,
-  acc: NdjsonStreamAcc,
-  onLog?: (message: string) => void,
-): void {
-  if (evt.type === "log" && evt.message) {
-    acc.lastLog = evt.message;
-    onLog?.(evt.message);
-  }
-  if (evt.type !== "done") return;
-  acc.finalOk = evt.ok !== false;
-  acc.finalError = evt.error;
-  acc.command = evt.command;
-  acc.downloadUrl = evt.downloadUrl;
-  if (evt.message) acc.lastLog = evt.message;
-}
-
-function finalizeNdjsonResult(
-  res: Response,
-  acc: NdjsonStreamAcc,
-  leftover: string,
-  fallbackError: string,
-): { ok: boolean; error?: string; message?: string; command?: string; downloadUrl?: string } {
-  const leftoverEvt = parseNdjsonEvent(leftover);
-  if (leftoverEvt) applyNdjsonEvent(leftoverEvt, acc);
-  if (acc.finalOk === null) {
-    throw new Error(acc.finalError || acc.lastLog || "Install stream ended without a done event");
-  }
-  if (!res.ok || !acc.finalOk) {
-    return {
-      ok: false,
-      error: acc.finalError || acc.lastLog || fallbackError,
-      command: acc.command,
-      downloadUrl: acc.downloadUrl,
-    };
-  }
-  return { ok: true, message: acc.lastLog, command: acc.command, downloadUrl: acc.downloadUrl };
-}
-
-async function consumeNdjson(
-  res: Response,
-  fallbackError: string,
-  onLog?: (message: string) => void,
-): Promise<{ ok: boolean; error?: string; message?: string; command?: string; downloadUrl?: string }> {
-  if (!res.body) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? (res.status === 404 ? "API route not found." : `HTTP ${res.status}`));
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  const acc: NdjsonStreamAcc = { lastLog: fallbackError, finalOk: null };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    buf += decoder.decode(value, { stream: !done });
-    const lines = buf.split("\n");
-    buf = lines.pop() ?? "";
-    for (const line of lines) {
-      const evt = parseNdjsonEvent(line);
-      if (evt) applyNdjsonEvent(evt, acc, onLog);
-    }
-    if (done) break;
-  }
-  return finalizeNdjsonResult(res, acc, buf, fallbackError);
 }
 
 export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = false }: RuntimeEnvControlsProps) {
@@ -172,9 +56,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       setMenuPos(null);
       return;
     }
-
     updateMenuPos();
-
     const handlePointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         const menu = document.getElementById("runtime-env-menu");
@@ -185,7 +67,6 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-
     window.addEventListener("resize", updateMenuPos);
     window.addEventListener("scroll", updateMenuPos, { capture: true, passive: true });
     document.addEventListener("mousedown", handlePointerDown);
@@ -198,11 +79,21 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
     };
   }, [open, updateMenuPos]);
 
-  const savePython = async () => {
+  const runJsonAction = async (fn: () => Promise<void>) => {
     setBusy(true);
     setMessage(null);
     setError(null);
     try {
+      await fn();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePython = () =>
+    runJsonAction(async () => {
       const res = await fetch("/api/env/python-path", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,46 +103,40 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setStatus(data);
       setMessage("Python path saved for this project.");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const clearPython = async () => {
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-    try {
+  const clearPython = () =>
+    runJsonAction(async () => {
       const res = await fetch("/api/env/python-path", { method: "DELETE" });
       const data = (await res.json()) as RuntimeEnvStatus & { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setStatus(data);
       setPythonPath("");
       setMessage("Cleared saved Python path.");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const installSystemPython = async () => {
+  const addVenvToPath = () =>
+    runJsonAction(async () => {
+      const res = await fetch("/api/env/venv-path", { method: "POST" });
+      const data = (await res.json()) as RuntimeEnvStatus & { ok?: boolean; error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setStatus(data);
+      setMessage(data.message ?? "Updated user PATH.");
+    });
+
+  const runNdjsonInstall = async (url: string, fallback: string, success: string) => {
     setBusy(true);
-    setMessage("Installing Python…");
+    setMessage(fallback);
     setError(null);
     try {
-      const res = await fetch("/api/env/install-python", {
+      const res = await fetch(url, {
         method: "POST",
         headers: { Accept: "application/x-ndjson, application/json" },
       });
-      const result = await consumeNdjson(res, "Could not install Python.", setMessage);
-      if (!result.ok) {
-        throw new Error(result.error ?? "Could not install Python.");
-      }
+      const result = await consumeInstallNdjson(res, fallback, setMessage);
+      if (!result.ok) throw new Error(result.error ?? fallback);
       await refresh();
-      setMessage("Python is ready.");
+      setMessage(success);
       setError(null);
     } catch (err: unknown) {
       setMessage(null);
@@ -271,72 +156,10 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
     }
   };
 
-  const addVenvToPath = async () => {
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-    try {
-      const res = await fetch("/api/env/venv-path", { method: "POST" });
-      const data = (await res.json()) as RuntimeEnvStatus & {
-        ok?: boolean;
-        error?: string;
-        message?: string;
-      };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setStatus(data);
-      setMessage(data.message ?? "Updated user PATH.");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const ensureVenvNow = async () => {
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-    setMessage("Installing Olive venv…");
-    try {
-      // Canonical route is NDJSON `/api/env/venv-install` (ensure-venv is a JSON alias).
-      const res = await fetch("/api/env/venv-install", {
-        method: "POST",
-        headers: { Accept: "application/x-ndjson, application/json" },
-      });
-      if (!res.ok && !res.body) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? `HTTP ${res.status}`);
-      }
-      const result = await consumeNdjson(res, "Installing Olive venv…", setMessage);
-      if (!result.ok) {
-        throw new Error(result.error ?? "Install stream ended without a done event");
-      }
-
-      await refresh();
-      setMessage("Olive venv ready.");
-      setError(null);
-    } catch (err: unknown) {
-      setMessage(null);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const needsAttention = status && (!status.systemPython || !status.oliveInstalled || !status.venvExists);
+  const needsAttention = runtimeNeedsAttention(status);
+  const runtimeTitle = runtimeTitleFor(status, needsAttention);
+  const runtimeLabel = runtimeLabelFor(status, needsAttention);
   const pathOk = status?.venvOnUserPath;
-
-  const runtimeTitle = status?.oliveInstalled
-    ? `Olive ${status.oliveVersion ?? "ready"} in project .venv`
-    : needsAttention
-      ? "Python / Olive runtime needs setup. Click to install the project venv or set a Python path"
-      : "Python / Olive runtime and PATH";
-
-  const runtimeLabel = status?.oliveInstalled
-    ? `Olive ${status.oliveVersion ?? "ok"}`
-    : needsAttention
-      ? "Setup runtime"
-      : "Runtime";
 
   return (
     <div ref={rootRef} className="relative text-[clamp(0.625rem,0.55rem+0.3vw,0.75rem)] font-mono overflow-visible">
@@ -377,166 +200,26 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       </button>
 
       {open && menuPos && (
-        <div
-          id="runtime-env-menu"
-          role="dialog"
-          aria-label="Runtime and PATH setup"
-          style={{ top: menuPos.top, left: menuPos.left }}
-          className="fixed z-50 w-[min(100vw-2rem,22rem)] rounded border border-slate-700 bg-slate-900 shadow-xl p-3 space-y-3 text-left"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-sm font-semibold text-slate-200 font-sans">Runtime &amp; PATH</div>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-sans">
-                {status?.hint ?? "Checking…"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="text-slate-500 hover:text-electric-blue p-0.5"
-              title="Refresh"
-              aria-label="Refresh runtime status"
-            >
-              <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-
-          <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px]">
-            <dt className="text-slate-500">System Python</dt>
-            <dd className="text-slate-300 truncate" title={status?.systemPython ?? undefined}>
-              {status?.systemPython ?? "not found"}
-            </dd>
-            <dt className="text-slate-500">Project .venv</dt>
-            <dd className="text-slate-300">{status?.venvExists ? "present" : "missing"}</dd>
-            <dt className="text-slate-500">olive-ai</dt>
-            <dd className="text-slate-300">
-              {status?.oliveInstalled ? (status.oliveVersion ?? "installed") : "not installed"}
-            </dd>
-            <dt className="text-slate-500">User PATH</dt>
-            <dd className="text-slate-300">{status?.venvOnUserPath ? "includes .venv" : "no .venv"}</dd>
-          </dl>
-
-          {!status?.systemPython && (
-            <div className="space-y-1.5 rounded border border-amber-700/40 bg-amber-950/20 p-2">
-              <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
-                Python 3.10–3.13 is needed for live Olive runs. 3.12 is recommended.
-              </p>
-              <div className="flex flex-wrap gap-1">
-                <a
-                  href={status?.pythonPrerequisite?.downloadUrl ?? "https://www.python.org/downloads/"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue font-sans text-[11px]"
-                >
-                  <ExternalLink className="h-3 w-3" aria-hidden />
-                  Download Python 3.12
-                </a>
-                {status?.pythonPrerequisite?.canAutoInstall && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void installSystemPython()}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-[11px]"
-                  >
-                    {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                    {status.pythonPrerequisite.autoInstallLabel ?? "Install Python 3.12"}
-                  </button>
-                )}
-              </div>
-              {status?.pythonPrerequisite?.command && (
-                <div className="flex gap-1">
-                  <input
-                    readOnly
-                    aria-label="Python install command"
-                    value={status.pythonPrerequisite.command}
-                    className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[10px] text-slate-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void copyInstallCommand(status.pythonPrerequisite!.command)}
-                    className="shrink-0 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue font-sans text-[11px]"
-                    title="Copy install command"
-                  >
-                    <Copy className="h-3 w-3" aria-hidden />
-                    <span className="sr-only">Copy install command</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <label className="block text-[11px] text-slate-400 font-sans" htmlFor="studio-python-path">
-              Python 3.10–3.13 (3.12 recommended)
-            </label>
-            <div className="flex gap-1">
-              <input
-                id="studio-python-path"
-                type="text"
-                value={pythonPath}
-                onChange={(e) => setPythonPath(e.target.value)}
-                placeholder={
-                  status?.platform === "win32" ? "C:\\Users\\…\\Python312\\python.exe" : "/usr/bin/python3.12"
-                }
-                className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:border-electric-blue outline-none"
-              />
-              <button
-                type="button"
-                disabled={busy || !pythonPath.trim()}
-                onClick={() => void savePython()}
-                className="shrink-0 px-2 py-1 rounded border border-slate-600 text-slate-200 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 flex items-center gap-1 font-sans text-[11px]"
-              >
-                <FolderOpen className="h-3 w-3" />
-                Save
-              </button>
-            </div>
-            {status?.configuredPython && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void clearPython()}
-                className="text-[11px] text-slate-500 hover:text-slate-300 font-sans"
-              >
-                Clear saved path
-              </button>
-            )}
-          </div>
-
-          <button
-            type="button"
-            disabled={busy || Boolean(status?.oliveInstalled && status?.venvExists)}
-            onClick={() => void ensureVenvNow()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-xs"
-            title="Create project .venv and install olive-ai now (while you configure the pipeline)"
-          >
-            {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Terminal className="h-3.5 w-3.5" />}
-            {status?.oliveInstalled && status?.venvExists ? "Olive venv ready" : "Install Olive venv now"}
-          </button>
-
-          <button
-            type="button"
-            disabled={busy || !status?.venvExists || status.venvOnUserPath}
-            onClick={() => void addVenvToPath()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-slate-600 text-slate-300 hover:border-electric-blue hover:text-electric-blue disabled:opacity-40 font-sans text-xs"
-            title={
-              status?.venvOnUserPath
-                ? "Already on user PATH"
-                : "Prepend project .venv Scripts/bin to your user PATH"
-            }
-          >
-            <Route className="h-3.5 w-3.5" />
-            {status?.venvOnUserPath ? "Already on user PATH" : "Add project .venv to user PATH"}
-          </button>
-
-          <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-            Install the Olive venv while you build the recipe. No need to wait for Execute Live. The app
-            always uses the project <code className="text-slate-400">.venv</code> for runs.
-          </p>
-
-          {message && <p className="text-[11px] text-emerald-500 font-sans">{message}</p>}
-          {error && <p className="text-[11px] text-red-400 font-sans">{error}</p>}
-        </div>
+        <RuntimeEnvMenu
+          status={status}
+          busy={busy}
+          pythonPath={pythonPath}
+          message={message}
+          error={error}
+          menuPos={menuPos}
+          onRefresh={() => void refresh()}
+          onPythonPathChange={setPythonPath}
+          onSavePython={() => void savePython()}
+          onClearPython={() => void clearPython()}
+          onInstallPython={() =>
+            void runNdjsonInstall("/api/env/install-python", "Installing Python…", "Python is ready.")
+          }
+          onCopyCommand={(cmd) => void copyInstallCommand(cmd)}
+          onEnsureVenv={() =>
+            void runNdjsonInstall("/api/env/venv-install", "Installing Olive venv…", "Olive venv ready.")
+          }
+          onAddVenvToPath={() => void addVenvToPath()}
+        />
       )}
     </div>
   );
