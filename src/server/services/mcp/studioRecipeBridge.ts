@@ -198,7 +198,9 @@ function parseBridgeAdapters(raw: unknown): BridgeAdaptersParseResult {
   if (!Array.isArray(raw)) return { ok: true, adapters: undefined };
   const out: NonNullable<UIState["multiLoraAdapters"]> = [];
   for (const item of raw) {
-    if (!isObjectRecord(item)) continue;
+    if (!isObjectRecord(item)) {
+      return { ok: false, reason: "each adapter must be a non-null object" };
+    }
     const parsed = parseSingleBridgeAdapter(item);
     if (!parsed.ok) return parsed;
     if (parsed.adapter) {
