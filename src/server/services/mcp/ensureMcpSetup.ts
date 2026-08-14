@@ -26,6 +26,7 @@ let attemptedThisProcess = false;
 // without a shell, so there's no command-injection surface here.
 function run(cmd: string, args: string[], cwd: string): Promise<boolean> {
   return new Promise((resolve) => {
+    // nosemgrep: javascript.lang.security.detect-child-process -- cmd is internal-only, see comment above this function
     const child = spawn(cmd, args, { cwd, stdio: "pipe" });
     // eslint-disable-next-line no-console -- intentional background setup progress logging
     child.stdout?.on("data", (d: Buffer) => console.log(`[mcp-setup] ${d.toString().trim()}`));

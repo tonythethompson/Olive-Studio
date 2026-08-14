@@ -29,6 +29,7 @@ export function venvPython(mcpDir) {
 /** Whether the given venv python can actually import the pinned `mcp` package. */
 export function venvIsWorking(python, mcpDir) {
   // `mcp` (pinned <2) has no __version__ attribute -- just check it imports.
+  // nosemgrep: javascript.lang.security.detect-child-process -- python/mcpDir are internal-only, see module header
   const r = spawnSync(python, ["-c", "import mcp"], {
     encoding: "utf8",
     env: { ...process.env, PYTHONPATH: mcpDir },
@@ -40,6 +41,7 @@ export function venvIsWorking(python, mcpDir) {
 export function findSystemPython() {
   const candidates = process.platform === "win32" ? ["python", "python3"] : ["python3", "python"];
   for (const cmd of candidates) {
+    // nosemgrep: javascript.lang.security.detect-child-process -- cmd is from the fixed `candidates` list above, see module header
     const r = spawnSync(cmd, ["--version"], { encoding: "utf8" });
     if (r.status === 0) {
       const match = /Python 3\.(\d+)/.exec(r.stdout || r.stderr || "");
