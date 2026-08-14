@@ -50,6 +50,7 @@ async function updateMcpSettings(patch: {
 export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [isRemoteMcp, setIsRemoteMcp] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -100,8 +101,10 @@ export function SettingsMenu() {
         if (!res.ok) return;
         const data = (await res.json()) as {
           mcpSettings?: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean };
+          isRemote?: boolean;
         };
         if (cancelled || writeSeqRef.current !== currentSeq) return;
+        setIsRemoteMcp(Boolean(data.isRemote));
         applyServerMcpSettings(data.mcpSettings);
       } catch {
         // Keep persisted local defaults if the server is unreachable.
@@ -115,6 +118,7 @@ export function SettingsMenu() {
   const performMcpSettingsUpdate = useCallback(
     async (
       patch: { retrievalMode?: McpRetrievalMode; preloadEmbeddings?: boolean },
+      successUpdate: () => void,
       errorMessage: string,
     ) => {
       const seq = ++writeSeqRef.current;
@@ -131,9 +135,13 @@ export function SettingsMenu() {
 
       if (seq >= lastAppliedSeqRef.current) {
         lastAppliedSeqRef.current = seq;
-        if (res.ok && res.mcpSettings) {
-          applyServerMcpSettings(res.mcpSettings);
-        } else if (!res.ok) {
+        if (res.ok) {
+          if (res.mcpSettings) {
+            applyServerMcpSettings(res.mcpSettings);
+          } else {
+            successUpdate();
+          }
+        } else {
           setSettingsError(errorMessage);
         }
       }
@@ -143,16 +151,24 @@ export function SettingsMenu() {
 
   const handleRetrievalModeSelect = useCallback(
     (value: McpRetrievalMode) => {
-      void performMcpSettingsUpdate({ retrievalMode: value }, "Could not apply retrieval mode.");
+      void performMcpSettingsUpdate(
+        { retrievalMode: value },
+        () => setMcpRetrievalMode(value),
+        "Could not apply retrieval mode.",
+      );
     },
-    [performMcpSettingsUpdate],
+    [performMcpSettingsUpdate, setMcpRetrievalMode],
   );
 
   const handlePreloadToggle = useCallback(
     (enabled: boolean) => {
-      void performMcpSettingsUpdate({ preloadEmbeddings: enabled }, "Could not apply embedding preload.");
+      void performMcpSettingsUpdate(
+        { preloadEmbeddings: enabled },
+        () => setMcpPreloadEmbeddings(enabled),
+        "Could not apply embedding preload.",
+      );
     },
-    [performMcpSettingsUpdate],
+    [performMcpSettingsUpdate, setMcpPreloadEmbeddings],
   );
 
   // Focus first menu item when menu opens
@@ -252,84 +268,91 @@ export function SettingsMenu() {
           onKeyDown={handleMenuKeyDown}
         >
           {/* Theme section */}
-          <div className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">
-            Theme
+          <div role="group" aria-labelledby="settings-theme-header">
+            <div id="settings-theme-header" className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">
+              Theme
+            </div>
+            {THEME_OPTIONS.map(({ value, label, Icon }) => {
+              const idx = itemIndex++;
+              return (
+                <button
+                  key={value}
+                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={value === themePreference}
+                  tabIndex={-1}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
+                    "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
+                    value === themePreference
+                      ? "text-electric-blue"
+                      : "text-slate-300",
+                  )}
+                  onClick={() => handleThemeSelect(value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleThemeSelect(value);
+                    }
+                  }}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{label}</span>
+                  {value === themePreference && (
+                    <span className="ml-auto text-[10px]">✓</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          {THEME_OPTIONS.map(({ value, label, Icon }) => {
-            const idx = itemIndex++;
-            return (
-              <button
-                key={value}
-                ref={(el) => { itemRefs.current[idx] = el; }}
-                type="button"
-                role="menuitemradio"
-                aria-checked={value === themePreference}
-                tabIndex={-1}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
-                  "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
-                  value === themePreference
-                    ? "text-electric-blue"
-                    : "text-slate-300",
-                )}
-                onClick={() => handleThemeSelect(value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleThemeSelect(value);
-                  }
-                }}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{label}</span>
-                {value === themePreference && (
-                  <span className="ml-auto text-[10px]">✓</span>
-                )}
-              </button>
-            );
-          })}
 
           {/* Divider */}
           <div className="my-1 border-t border-slate-700" />
 
           {/* MCP Server section */}
-          <div className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">
-            MCP Retrieval
+          <div role="group" aria-labelledby="settings-mcp-header">
+            <div id="settings-mcp-header" className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">
+              MCP Retrieval
+            </div>
+            {RETRIEVAL_MODE_OPTIONS.map(({ value, label, Icon, hint }) => {
+              const idx = itemIndex++;
+              return (
+                <button
+                  key={value}
+                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={value === mcpRetrievalMode}
+                  disabled={restarting || isRemoteMcp}
+                  aria-busy={restarting}
+                  tabIndex={-1}
+                  title={isRemoteMcp ? "Retrieval settings are managed by the remote MCP server" : hint}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
+                    "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
+                    value === mcpRetrievalMode
+                      ? "text-electric-blue"
+                      : "text-slate-300",
+                    (restarting || isRemoteMcp) && "opacity-50 cursor-not-allowed",
+                  )}
+                  onClick={() => handleRetrievalModeSelect(value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleRetrievalModeSelect(value);
+                    }
+                  }}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{label}</span>
+                  {value === mcpRetrievalMode && (
+                    <span className="ml-auto text-[10px]">✓</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          {RETRIEVAL_MODE_OPTIONS.map(({ value, label, Icon, hint }) => {
-            const idx = itemIndex++;
-            return (
-              <button
-                key={value}
-                ref={(el) => { itemRefs.current[idx] = el; }}
-                type="button"
-                role="menuitemradio"
-                aria-checked={value === mcpRetrievalMode}
-                tabIndex={-1}
-                title={hint}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
-                  "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
-                  value === mcpRetrievalMode
-                    ? "text-electric-blue"
-                    : "text-slate-300",
-                )}
-                onClick={() => handleRetrievalModeSelect(value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleRetrievalModeSelect(value);
-                  }
-                }}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{label}</span>
-                {value === mcpRetrievalMode && (
-                  <span className="ml-auto text-[10px]">✓</span>
-                )}
-              </button>
-            );
-          })}
 
           {/* Preload embeddings toggle */}
           <div className="my-1 border-t border-slate-700" />
@@ -338,12 +361,15 @@ export function SettingsMenu() {
             type="button"
             role="menuitemcheckbox"
             aria-checked={mcpPreloadEmbeddings}
+            disabled={restarting || isRemoteMcp}
+            aria-busy={restarting}
             tabIndex={-1}
-            title="Warm the embedding model at server startup for zero-latency first query"
+            title={isRemoteMcp ? "Retrieval settings are managed by the remote MCP server" : "Warm the embedding model at server startup for zero-latency first query"}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
               "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
               mcpPreloadEmbeddings ? "text-electric-blue" : "text-slate-300",
+              (restarting || isRemoteMcp) && "opacity-50 cursor-not-allowed",
             )}
             onClick={() => handlePreloadToggle(!mcpPreloadEmbeddings)}
             onKeyDown={(e) => {

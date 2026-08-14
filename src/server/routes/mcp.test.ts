@@ -351,6 +351,16 @@ describe("POST /api/mcp/studio-recipe mcpAccess", () => {
 });
 
 describe("POST /api/mcp/settings", () => {
+  let initialMcpSettings: ReturnType<typeof readStudioConfig>["mcpSettings"];
+
+  beforeEach(() => {
+    initialMcpSettings = readStudioConfig().mcpSettings;
+  });
+
+  afterEach(() => {
+    writeStudioConfig({ mcpSettings: initialMcpSettings });
+  });
+
   it("serializes overlapping writes so the later patch cannot restore stale fields", async () => {
     writeStudioConfig({ mcpSettings: { retrievalMode: "auto", preloadEmbeddings: false } });
 
@@ -409,5 +419,27 @@ describe("POST /api/mcp/settings", () => {
 
     const onDisk = readStudioConfig();
     expect(onDisk.mcpSettings).toEqual({ retrievalMode: "auto", preloadEmbeddings: false });
+  });
+
+  it("rejects settings changes when OLIVE_MCP_URL is configured", async () => {
+    const originalUrl = process.env.OLIVE_MCP_URL;
+    process.env.OLIVE_MCP_URL = "http://localhost:8080/sse";
+    try {
+      const res = await fetch(`${baseUrl}/api/mcp/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retrievalMode: "keyword" }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toContain("remote MCP server");
+    } finally {
+      if (originalUrl !== undefined) {
+        process.env.OLIVE_MCP_URL = originalUrl;
+      } else {
+        delete process.env.OLIVE_MCP_URL;
+      }
+    }
   });
 });

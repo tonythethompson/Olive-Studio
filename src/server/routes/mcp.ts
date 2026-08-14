@@ -389,6 +389,10 @@ export function mountMcpRoutes(router: Router): void {
 
   // ─── MCP Settings (update env vars + restart server) ───────────────────
   router.post("/mcp/settings", studioLocalOnly, mcpSettingsRateLimit, async (req, res) => {
+    if (process.env.OLIVE_MCP_URL) {
+      return res.status(400).json({ error: "Retrieval settings cannot be changed when running against a remote MCP server." });
+    }
+
     const body = parseBody<{
       retrievalMode?: "auto" | "keyword" | "semantic";
       preloadEmbeddings?: boolean;
@@ -434,6 +438,9 @@ export function mountMcpRoutes(router: Router): void {
   // ─── MCP Settings (read current) ───────────────────────────────────────
   router.get("/mcp/settings", kbStatusRateLimit, (_req, res) => {
     const { mcpSettings } = readStudioConfig();
-    return res.json({ mcpSettings: mcpSettings ?? {} });
+    return res.json({
+      mcpSettings: mcpSettings ?? {},
+      isRemote: Boolean(process.env.OLIVE_MCP_URL),
+    });
   });
 }

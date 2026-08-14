@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 
@@ -381,6 +383,8 @@ def test_scoring_uses_index_entry_list(monkeypatch: pytest.MonkeyPatch):
 
 def test_real_bge_paraphrased_oom_optional():
     """Real-model check when sentence-transformers is installed: paraphrased OOM."""
+    if not os.getenv("RUN_REAL_BGE_TESTS"):
+        pytest.skip("Opt-in real BGE test; set RUN_REAL_BGE_TESTS=1 to run")
     pytest.importorskip("sentence_transformers")
     ts._ts_index_cache = {}
 
@@ -393,8 +397,39 @@ def test_real_bge_paraphrased_oom_optional():
         mode="semantic",
     )
     # BGE-small often ranks this paraphrase near other resource entries;
-    # require a diagnosis rather than a specific id.
-    assert result["matched_entry"] is not None
+    # require a diagnosis/OOM entry rather than a specific id.
+    matched = result["matched_entry"]
+    assert matched is not None
+    diagnosis = f"{result.get('title', '')} {result.get('root_cause', '')}"
+    oom_terms = ("oom", "memory", "gpu", "vram", "alloc", "resource", "out-of-memory", "cuda")
+    if diagnosis and any(k in diagnosis.lower() for k in oom_terms):
+        assert True
+    else:
+        assert any(k in str(matched).lower() for k in oom_terms)
+
+
+def test_explicit_domain_semantic_mode_allows_cosine_only(monkeypatch: pytest.MonkeyPatch):
+    """Explicit domain (olive or studio) in semantic mode allows cosine-only matches with no keyword overlap."""
+    _mock_embeddings(
+        monkeypatch,
+        scores_by_entry_id={"oom-quantization": 0.85, "studio-ai-provider-inactive": 0.88},
+    )
+
+    res_olive = troubleshoot_olive_error(
+        error_message="completely nonmatching phrase xyz123",
+        domain="olive",
+        mode="semantic",
+    )
+    assert res_olive["matched_entry"] is not None
+    assert res_olive["domain"] == "olive"
+
+    res_studio = troubleshoot_olive_error(
+        error_message="completely nonmatching phrase xyz123",
+        domain="studio",
+        mode="semantic",
+    )
+    assert res_studio["matched_entry"] is not None
+    assert res_studio["domain"] == "studio"
 
 
 # ---------------------------------------------------------------------------

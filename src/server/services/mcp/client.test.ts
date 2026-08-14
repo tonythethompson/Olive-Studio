@@ -245,6 +245,22 @@ describe("persistentClient circuit-breaker integration", () => {
     expect(mocks.connect).toHaveBeenCalled();
   });
 
+  it("propagates failure on failed reconnect and allows subsequent fresh reconnect", async () => {
+    tripMcpBreaker();
+    expect(mcpBreaker.status().open).toBe(true);
+
+    mocks.connect.mockRejectedValueOnce(new Error("Spawn failed"));
+
+    await expect(reconnectMcpClient()).rejects.toThrow("Failed to connect to Olive MCP server");
+    expect(mcpBreaker.status().open).toBe(true);
+
+    mocks.connect.mockResolvedValueOnce(undefined);
+    await reconnectMcpClient();
+
+    expect(mcpBreaker.status().open).toBe(false);
+    expect(mocks.connect).toHaveBeenCalledTimes(2);
+  });
+
   it("shares one reconnect when two settings updates overlap", async () => {
     let release!: () => void;
     mocks.connect.mockImplementationOnce(

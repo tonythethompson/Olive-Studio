@@ -14,7 +14,6 @@ import { Client, SSEClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import mcpBreaker, { resetMcpBreaker, type McpCallAdmission } from "./breaker.ts";
 import { getMcpPython, buildPythonEnv, mcpServerDir } from "./paths.ts";
-import { readStudioConfig } from "../../config.ts";
 
 export type McpToolCallResult = { result?: unknown; error?: string; unavailable?: boolean };
 export type McpToolRequest = { toolName: string; args?: Record<string, unknown> };
@@ -22,6 +21,8 @@ export type McpToolRequest = { toolName: string; args?: Record<string, unknown> 
 /** Client-safe message returned when the MCP server is short-circuited or down. */
 export const MCP_UNAVAILABLE_ERROR =
   "MCP server unavailable — verify the Olive MCP server is installed before retrying.";
+
+const MCP_CALL_TIMEOUT_MS = 45_000;
 
 // ─── Connection State Machine ──────────────────────────────────────────
 
@@ -57,19 +58,6 @@ async function connect(): Promise<void> {
         // The Compose MCP service exposes the SSE endpoint at /sse.
         const url = new URL(remoteUrl);
         if (url.pathname === "/" || url.pathname === "") url.pathname = "/sse";
-
-        const { mcpSettings } = readStudioConfig();
-        if (mcpSettings) {
-          if (mcpSettings.retrievalMode) {
-            url.searchParams.set("retrieval_mode", mcpSettings.retrievalMode);
-            process.env.OLIVE_MCP_RETRIEVAL_MODE = mcpSettings.retrievalMode;
-          }
-          if (mcpSettings.preloadEmbeddings !== undefined) {
-            const val = mcpSettings.preloadEmbeddings ? "1" : "0";
-            url.searchParams.set("preload_embeddings", val);
-            process.env.OLIVE_MCP_PRELOAD_EMBEDDINGS = val;
-          }
-        }
 
         transport = new SSEClientTransport(url);
       } else {
@@ -181,7 +169,6 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
   // ── Execute tool calls sequentially ──
   const results: McpToolCallResult[] = [];
   let hadInfraFailure = false;
-  const MCP_CALL_TIMEOUT_MS = 45_000;
 
   for (const req of requests) {
     // Check connection is still alive before each call
@@ -379,7 +366,19 @@ export async function reconnectMcpClient(): Promise<void> {
     state = "idle";
     connectingPromise = null;
 
-    await connect();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        connect(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error(`MCP client reconnect timed out after ${MCP_CALL_TIMEOUT_MS / 1000} seconds`));
+          }, MCP_CALL_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
     // Forced reconnect succeeded — do not leave a previously tripped breaker open.
     resetMcpBreaker();
   })().finally(() => {

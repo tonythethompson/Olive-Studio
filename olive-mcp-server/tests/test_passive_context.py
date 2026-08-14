@@ -146,10 +146,15 @@ def test_return_shape():
         "retrieval",
     }
     assert result["status"] == "ok"
+    assert set(result["retrieval"].keys()) >= {"mode", "effective", "degraded"}
+    assert result["retrieval"]["mode"] == "auto"
+    assert result["retrieval"]["effective"] == "none"
+    assert result["retrieval"]["degraded"] is False
 
 
 def test_semantic_failure_falls_back_to_keyword(monkeypatch: pytest.MonkeyPatch):
     """When semantic search fails, keyword fallback must be used (not empty results)."""
+    monkeypatch.setenv("OLIVE_MCP_RETRIEVAL_MODE", "auto")
 
     def boom():
         raise RuntimeError("model unavailable")
@@ -205,6 +210,7 @@ def test_keyword_mode_skips_semantic(monkeypatch: pytest.MonkeyPatch):
 
 def test_both_retrieval_paths_fail(monkeypatch: pytest.MonkeyPatch):
     """Only when both semantic and keyword fail should status be retrieval_failed."""
+    monkeypatch.setenv("OLIVE_MCP_RETRIEVAL_MODE", "auto")
 
     def boom():
         raise RuntimeError("model unavailable")
