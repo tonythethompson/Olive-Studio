@@ -902,6 +902,44 @@ type NormalizeAdapterResult =
   | { ok: true; adapter: AdapterEntry }
   | { ok: false; reason: string };
 
+type ResolveFieldResult<T> = { ok: true; value: T } | { ok: false; reason: string };
+
+/** Missing rank defaults to 8; present-but-invalid rank is rejected. */
+function resolveAdapterRank(value: unknown): ResolveFieldResult<number> {
+  if (value === undefined) return { ok: true, value: 8 };
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer." };
+}
+
+/** Missing alpha defaults to 16; present-but-invalid alpha is rejected. */
+function resolveAdapterAlpha(value: unknown): ResolveFieldResult<number> {
+  if (value === undefined) return { ok: true, value: 16 };
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number." };
+}
+
+/**
+ * Absent targetModules/target_modules is fine. If either key is present, the
+ * value must be a non-empty-string array (or we reject).
+ */
+function resolveAdapterTargetModules(
+  obj: Record<string, unknown>,
+): ResolveFieldResult<string[] | undefined> {
+  const hasTargetModulesKey = "targetModules" in obj || "target_modules" in obj;
+  const targetModules = readOptionalTargetModules(obj);
+  if (hasTargetModulesKey && targetModules === undefined) {
+    return {
+      ok: false,
+      reason: "targetModules must be an array of non-empty strings.",
+    };
+  }
+  return { ok: true, value: targetModules };
+}
+
 /**
  * Normalize a path-bearing adapter entry so MCP path-only payloads and
  * flag-off single-adapter mode share the same name/rank/alpha defaults.
@@ -921,32 +959,14 @@ function normalizePathBearingAdapter(
     return { ok: false, reason: "path must be a non-empty string." };
   }
 
-  const hasTargetModulesKey = "targetModules" in obj || "target_modules" in obj;
-  const targetModules = readOptionalTargetModules(obj);
-  if (hasTargetModulesKey && targetModules === undefined) {
-    return {
-      ok: false,
-      reason: "targetModules must be an array of non-empty strings.",
-    };
-  }
+  const targetModules = resolveAdapterTargetModules(obj);
+  if (!targetModules.ok) return targetModules;
 
-  let rank: number;
-  if (obj.rank === undefined) {
-    rank = 8;
-  } else if (typeof obj.rank === "number" && Number.isInteger(obj.rank) && obj.rank > 0) {
-    rank = obj.rank;
-  } else {
-    return { ok: false, reason: "rank must be a positive integer." };
-  }
+  const rank = resolveAdapterRank(obj.rank);
+  if (!rank.ok) return rank;
 
-  let alpha: number;
-  if (obj.alpha === undefined) {
-    alpha = 16;
-  } else if (typeof obj.alpha === "number" && Number.isFinite(obj.alpha) && obj.alpha > 0) {
-    alpha = obj.alpha;
-  } else {
-    return { ok: false, reason: "alpha must be a positive finite number." };
-  }
+  const alpha = resolveAdapterAlpha(obj.alpha);
+  if (!alpha.ok) return alpha;
 
   const fallbackName = resolveAdapterFallbackName(obj.path, index);
   return {
@@ -955,9 +975,9 @@ function normalizePathBearingAdapter(
       name:
         typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
       path: obj.path,
-      rank,
-      alpha,
-      ...(targetModules ? { targetModules } : {}),
+      rank: rank.value,
+      alpha: alpha.value,
+      ...(targetModules.value ? { targetModules: targetModules.value } : {}),
     },
   };
 }
