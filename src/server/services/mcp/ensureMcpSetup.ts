@@ -15,7 +15,11 @@ import path from "path";
 import { mcpServerDir } from "./paths.ts";
 import { readStudioConfig, writeStudioConfig } from "../../config.ts";
 // Plain ESM (not TS) so scripts/postinstall-mcp-setup.mjs can share it with zero build step.
-import { venvPython, venvIsWorking, findSystemPython } from "../../../../scripts/mcpVenvProbe.mjs";
+import { venvPython, venvIsWorking, findSystemPython as findPathPython } from "../../../../scripts/mcpVenvProbe.mjs";
+// Full resolver (env override -> persisted systemPython -> known install locations -> PATH).
+// Only usable here (TS, bundled server code) -- the plain-.mjs probe above stays PATH-only so
+// the zero-build-step postinstall script can keep importing it directly.
+import { findSystemPython as findConfiguredPython } from "../venv/systemPython.ts";
 
 const RETRY_BACKOFF_MS = 60 * 60 * 1000;
 
@@ -38,7 +42,16 @@ function run(cmd: string, args: string[], cwd: string): Promise<boolean> {
 }
 
 function recordResult(lastResult: "ok" | "python-missing" | "failed"): void {
-  writeStudioConfig({ mcpAutoSetup: { lastAttemptAt: new Date().toISOString(), lastResult } });
+  // Never throw out of a fire-and-forget setup step: on a packaged install where the
+  // resource dir (and thus .olive-studio/config.json under it) isn't writable, this
+  // write itself can fail. Swallow it -- setup is still best-effort either way, and an
+  // unhandled rejection here would otherwise propagate out of the caller's void-called
+  // promise chain.
+  try {
+    writeStudioConfig({ mcpAutoSetup: { lastAttemptAt: new Date().toISOString(), lastResult } });
+  } catch (err: unknown) {
+    console.warn("[mcp-setup] Failed to persist setup result:", err instanceof Error ? err.message : err);
+  }
 }
 
 async function performSetup(mcpDir: string, pythonCmd: string): Promise<void> {
@@ -77,6 +90,22 @@ async function performSetup(mcpDir: string, pythonCmd: string): Promise<void> {
   recordResult("ok");
 }
 
+/**
+ * Resolves the Python interpreter to use for setup: prefers the full config-aware
+ * resolver (OLIVE_STUDIO_PYTHON -> persisted systemPython -> known per-OS install
+ * locations -> PATH) so a user who selected Python via Runtime -> Set Python (or has
+ * it outside PATH) is honored here too, then falls back to the PATH-only probe.
+ */
+async function resolveSetupPython(): Promise<string | null> {
+  try {
+    const configured = await findConfiguredPython();
+    if (configured) return configured;
+  } catch {
+    // fall through to the PATH-only probe below
+  }
+  return findPathPython();
+}
+
 /** Fire-and-forget: call once at server startup. Safe to call in any context. */
 export function ensureMcpSetupInBackground(): void {
   if (attemptedThisProcess) return;
@@ -88,20 +117,22 @@ export function ensureMcpSetupInBackground(): void {
   const existing = venvPython(mcpDir);
   if (existing && venvIsWorking(existing, mcpDir)) return; // already set up
 
-  const pythonCmd = findSystemPython();
-  if (!pythonCmd) {
-    console.warn(
-      "[mcp-setup] Python >= 3.10 not found on PATH. MCP features are unavailable until Python is installed " +
-        "(the app will retry automatically on next launch).",
-    );
-    recordResult("python-missing");
-    return;
-  }
+  void (async () => {
+    const pythonCmd = await resolveSetupPython();
+    if (!pythonCmd) {
+      console.warn(
+        "[mcp-setup] Python >= 3.10 not found. MCP features are unavailable until Python is installed " +
+          "(the app will retry automatically on next launch).",
+      );
+      recordResult("python-missing");
+      return;
+    }
 
-  const last = readStudioConfig().mcpAutoSetup;
-  if (last?.lastResult === "failed" && Date.now() - Date.parse(last.lastAttemptAt) < RETRY_BACKOFF_MS) {
-    return; // avoid hammering a failing install (e.g. offline) on every relaunch
-  }
+    const last = readStudioConfig().mcpAutoSetup;
+    if (last?.lastResult === "failed" && Date.now() - Date.parse(last.lastAttemptAt) < RETRY_BACKOFF_MS) {
+      return; // avoid hammering a failing install (e.g. offline) on every relaunch
+    }
 
-  void performSetup(mcpDir, pythonCmd);
+    await performSetup(mcpDir, pythonCmd);
+  })();
 }
