@@ -18,16 +18,18 @@ import { PEFT_UNSUPPORTED_PROVIDERS } from "@/lib/providerRuntimeKind";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
-  "NvTensorRTRTXExecutionProvider" as IHVProvider,
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
-  "ROCMExecutionProvider" as IHVProvider,
+  "ROCMExecutionProvider",
   "WebGpuExecutionProvider",
 ];
 
+// Canonical set — shared with pipelineValidation.ts via import. Structured
+// sparsity requires NVIDIA CUDA or TensorRT tensor-core hardware.
 const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
-  "DmlExecutionProvider",
 ];
 
 // ─── Inlined Helpers (avoid pulling in vramEstimate/hardwareProbe chain) ──────
@@ -35,9 +37,9 @@ const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
 /** GPU providers that support memory offload (mirrors memoryOffload.ts). */
 const OFFLOAD_GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
-  "NvTensorRTRTXExecutionProvider" as IHVProvider,
+  "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
-  "ROCMExecutionProvider" as IHVProvider,
+  "ROCMExecutionProvider",
   "DmlExecutionProvider",
 ];
 
@@ -97,37 +99,77 @@ export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], pro
 
 // ─── Cross-Pass Coercion Rules ────────────────────────────────────────────────
 
-interface CrossPassCoercion {
+export interface CrossPassCoercion {
+  /** Matches the `CrossPassRule.id` of the matching CROSS_PASS_RULES entry. */
+  id: string;
   applies: (passes: UIState["passes"], provider: IHVProvider) => boolean;
   fix: Partial<UIState["passes"]>;
 }
 
 /**
  * Auto-coercion rules: applied silently on every state commit to prevent
- * impossible pass combinations. These mirror the `autoCoerce: true` entries
- * from CROSS_PASS_RULES in pipelineValidation.ts.
+ * impossible pass combinations. This is the single source of truth for the
+ * `autoCoerce: true` behavior of CROSS_PASS_RULES in pipelineValidation.ts —
+ * that table spreads these entries (by id) so coercion and validation cannot
+ * drift. Rule order matches CROSS_PASS_RULES and is significant.
  */
-const AUTO_COERCE_RULES: CrossPassCoercion[] = [
+export const AUTO_COERCE_RULES: CrossPassCoercion[] = [
   {
     // LoRA + base quant → switch to QLoRA
+    id: "peft-lora-quant",
     applies: (passes) =>
       passes.peft && passes.quantization && passes.quantPrecision !== "fp16" && passes.peftMethod === "lora",
     fix: { peftMethod: "qlora" },
   },
   {
     // INT4 + pruning double compression → upgrade to INT8
+    id: "pruning-int4-collapse",
     applies: (passes) => passes.pruning && passes.quantization && passes.quantPrecision === "int4",
     fix: { quantPrecision: "int8" },
   },
   {
     // OpenVINO conversion + ONNX transforms clash → disable transforms
+    id: "openvino-onnx-transforms-clash",
     applies: (passes) => passes.conversion && passes.conversionFormat === "openvino" && passes.onnxTransforms,
     fix: { onnxTransforms: false },
   },
   {
     // Splitting + QAT incompatibility → disable splitting
+    id: "splitting-qat-conflict",
     applies: (passes) => passes.splitting && passes.quantization && passes.quantMethod === "qat",
     fix: { splitting: false },
+  },
+  {
+    // QairtPipeline produces no ONNX graph → disable discrepancy check
+    id: "qairt-discrepancy-incompatible",
+    applies: (passes, provider) =>
+      passes.onnxDiscrepancyCheck &&
+      passes.qairtPipeline &&
+      (provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider"),
+    fix: { onnxDiscrepancyCheck: false },
+  },
+  {
+    // QairtPipeline only runs on QNN providers
+    id: "qairt-pipeline-requires-qnn",
+    applies: (passes, provider) =>
+      passes.qairtPipeline && provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider",
+    fix: { qairtPipeline: false },
+  },
+  {
+    // SimplifiedLayerNormToRMSNorm targets QNN only
+    id: "simplified-layernorm-requires-qnn",
+    applies: (passes, provider) =>
+      passes.simplifiedLayerNormToRMSNorm &&
+      provider !== "QNNExecutionProvider" &&
+      provider !== "QnnAbiExecutionProvider",
+    fix: { simplifiedLayerNormToRMSNorm: false },
+  },
+  {
+    // MobiusBuilder targets CPU/CUDA, never QNN
+    id: "mobius-builder-incompatible-qnn",
+    applies: (passes, provider) =>
+      passes.mobiusBuilder && (provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider"),
+    fix: { mobiusBuilder: false },
   },
 ];
 
@@ -153,9 +195,8 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
     next.peftMethod = "lora";
   }
 
-  if (next.trustRemoteCode === undefined) {
-    next.trustRemoteCode = false;
-  }
+  // Persisted state may carry non-boolean values; consent is boolean-only.
+  next.trustRemoteCode = next.trustRemoteCode === true;
 
   if (isReplacementExportPipeline(next)) {
     Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
@@ -175,6 +216,10 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
 export type UiStatePatch = Partial<Omit<UIState, "passes">> & { passes?: Partial<UIState["passes"]> };
 
 export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
+  // Replace (do not deep-merge) when the key is present so recipe loads can
+  // clear stale MCP overrides with `passRecipeOverrides: {}`. Callers that need
+  // incremental accumulation (MCP Apply Fix) must merge onto current overrides
+  // before setState.
   const passRecipeOverrides =
     patch.passRecipeOverrides !== undefined ? patch.passRecipeOverrides : state.passRecipeOverrides;
 
@@ -190,7 +235,7 @@ export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
  * Sanitize pipeline state: enforce structural invariants without requiring
  * the heavy validation pipeline. Applies EP coercion + cross-pass auto-fixes.
  */
-export function sanitizePipelineState(state: UIState): UIState {
+export function sanitizePipelineStateShallow(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
       state.openvinoTargetDevice === "GPU" ||
@@ -198,21 +243,19 @@ export function sanitizePipelineState(state: UIState): UIState {
       ? state.openvinoTargetDevice
       : "CPU";
 
-  const current: UIState = {
+  return {
     ...state,
     openvinoTargetDevice,
     memoryOffload:
       state.memoryOffload === "auto" && !isMemoryOffloadAvailable(state) ? "gpu_only" : state.memoryOffload,
     passes: coercePassFields(state.passes, state.ihvProvider),
   };
-
-  return current;
 }
 
 /**
- * The single state-commit entry point: merge + sanitize.
- * Used by pipelineStore.ts on every setState/replaceState/resetState.
+ * Shallow merge + sanitize. `commitUiStateUpdate` in pipelineValidation.ts stays
+ * the state-mutation entry point used by pipelineStore.ts.
  */
-export function commitUiStateUpdate(prev: UIState, partial: Partial<UIState>): UIState {
-  return sanitizePipelineState(mergeUiState(prev, partial));
+export function commitUiStateUpdateShallow(prev: UIState, partial: Partial<UIState>): UIState {
+  return sanitizePipelineStateShallow(mergeUiState(prev, partial));
 }

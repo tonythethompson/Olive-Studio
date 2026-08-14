@@ -57,6 +57,7 @@ interface SettingsMenuProps {
  * Settings menu for theme, MCP retrieval, and optionally starting the product tour.
  *
  * @param onTakeTour - Callback invoked when the user selects "Take the tour"
+ * @param onOpenLicense - Callback invoked when the user opens the license view
  */
 export function SettingsMenu({ onTakeTour, onOpenLicense }: SettingsMenuProps) {
   const [open, setOpen] = useState(false);

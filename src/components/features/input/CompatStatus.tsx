@@ -35,6 +35,7 @@ interface CompatStatusPillProps {
  * Renders a hardware compatibility status badge with an icon and label.
  *
  * @param tier - The compatibility tier to display
+ * @param className - Optional extra classes merged onto the pill
  * @param size - The badge size
  */
 export function CompatStatusPill({ tier, className, size = "sm" }: CompatStatusPillProps) {

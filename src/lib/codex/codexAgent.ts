@@ -64,7 +64,7 @@ export function isModuleNotFoundError(err: unknown): boolean {
       ? err.specifier
       : "url" in err && typeof err.url === "string" && err.url
         ? err.url
-        : err.message.match(/Cannot find (?:package|module) ['"]([^'\"]+)['\"]/)?.[1]) ??
+        : err.message.match(/Cannot find (?:package|module) ['"]([^'"]+)['"]/)?.[1]) ??
     "";
 
   return specifier === "@openai/codex-sdk";

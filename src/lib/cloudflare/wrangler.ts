@@ -31,8 +31,7 @@ let loginChild: ReturnType<typeof spawn> | null = null;
 /** On Windows, bare `wrangler` / `.cmd` shims need `shell: true`. */
 export function wranglerSpawnUsesShell(command: string, platform = process.platform): boolean {
   if (platform !== "win32") return false;
-  if (/\.exe$/i.test(command.trim())) return false;
-  return true;
+  return !/\.exe$/i.test(command.trim());
 }
 
 /**
@@ -143,7 +142,7 @@ export function parseWranglerStdoutJson<T>(text: string, commandLabel = "wrangle
     try {
       return JSON.parse(candidate) as T;
     } catch {
-      continue;
+      /* try the next candidate line */
     }
   }
 
@@ -153,7 +152,7 @@ export function parseWranglerStdoutJson<T>(text: string, commandLabel = "wrangle
     try {
       return JSON.parse(trimmed.slice(i)) as T;
     } catch {
-      continue;
+      /* try the next offset */
     }
   }
 

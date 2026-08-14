@@ -134,7 +134,7 @@ describe("AssistantSidebar", () => {
     expect(openAside!.getAttribute("aria-hidden")).toBe("false");
     expect(openAside!.hasAttribute("inert")).toBe(false);
     expect(openAside!.className).toMatch(/max-wide:fixed/);
-    expect(openAside!.className).toMatch(/wide:w-\[420px\]/);
+    expect(openAside!.className).toMatch(/wide:w-\[420px]/);
 
     const scrim = screen.getByRole("button", { name: /dismiss assistant/i });
     expect(scrim.className).toMatch(/wide:hidden/);

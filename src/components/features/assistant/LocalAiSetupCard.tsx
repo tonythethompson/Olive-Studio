@@ -22,8 +22,7 @@ function resolveDisplaySize(model: LocalStarterModel, modelSizes: Record<string,
       const colonStem = t.split(":")[0] ?? "";
       if (colonStem.length >= MODEL_ID_FUZZY_MIN_LEN && k.includes(colonStem)) return true;
       const keyTail = k.split("/").pop() ?? "";
-      if (keyTail.length >= MODEL_ID_FUZZY_MIN_LEN && t.includes(keyTail)) return true;
-      return false;
+      return keyTail.length >= MODEL_ID_FUZZY_MIN_LEN && t.includes(keyTail);
     });
   })?.[1];
   return sizeBytes ? formatBytes(sizeBytes) : model.fallbackSize;
@@ -76,6 +75,8 @@ interface EngineMissingBannerProps {
  * Displays setup guidance and installation actions for an unavailable local AI engine.
  *
  * @param isLms - Whether the banner is for LM Studio rather than Ollama
+ * @param accentBg - Accent background classes for the setup button
+ * @param accentText - Accent text classes for the manual install link
  * @param installing - Whether engine installation is in progress
  * @param disabled - Whether the setup action is disabled
  * @param onInstall - Called when the setup action is selected
@@ -134,6 +135,7 @@ interface StarterModelCardProps {
  *
  * @param model - The starter model to display
  * @param displaySize - The formatted model size
+ * @param accentBg - Accent background classes for the download button
  * @param isPulling - Whether this model is currently being downloaded and activated
  * @param pullBusy - Whether any starter pull is in progress
  * @param installedId - Installed engine model id when already present locally

@@ -14,7 +14,7 @@ export function isLocalEngineBaseUrl(url?: string | null): boolean {
   try {
     const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `http://${raw}`;
     const u = new URL(withScheme);
-    const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    const host = u.hostname.toLowerCase().replace(/^\[|]$/g, "");
     const localHost = host === "127.0.0.1" || host === "localhost" || host === "::1";
     if (!localHost) return false;
     const port = u.port || (u.protocol === "https:" ? "443" : "80");

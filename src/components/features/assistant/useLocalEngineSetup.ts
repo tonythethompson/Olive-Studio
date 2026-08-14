@@ -585,10 +585,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
 
     const controller = new AbortController();
     pullAbortRef.current = controller;
-    const completion = new Promise<void>((resolve) => {
+    pullCompletionRef.current = new Promise<void>((resolve) => {
       resolvePullCompletionRef.current = resolve;
     });
-    pullCompletionRef.current = completion;
 
     setPullingModel(modelTag);
     setLocalPullError("");

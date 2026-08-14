@@ -26,7 +26,7 @@ import {
   verifyInstalledAfterPull,
   LMS_GET_MAX_MS,
 } from "./localEngines.ts";
-import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { preparePullStream } from "./streamHelpers.ts";
 import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
 
 export function mountLmStudioRoutes(router: Router): void {
@@ -126,18 +126,9 @@ export function mountLmStudioRoutes(router: Router): void {
   });
 
   router.post("/ai/local-pull", heavyCommandRateLimit, async (req, res) => {
-    const body = parseBody<{ modelTag: string }>(req.body, {
-      modelTag: { type: "string", message: "Missing modelTag" },
-    });
-    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
-    const { modelTag } = body.parsed;
-    const guard = trackStreamClient(req, res);
-    const rawSend = beginPullSse(res);
-    const send = (evt: Record<string, unknown>) => {
-      if (guard.disconnected()) return;
-      rawSend(evt);
-    };
-    const tag = String(modelTag);
+    const stream = preparePullStream(req, res);
+    if (!stream) return;
+    const { tag, guard, send } = stream;
     let ownsBusy = false;
     let resolveTeardown: (() => void) | null = null;
     const teardown = new Promise<void>((resolve) => {

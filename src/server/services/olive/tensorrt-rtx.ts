@@ -59,6 +59,7 @@ export async function getTensorRtRtxLibsDir(python: string): Promise<string | nu
  * descriptive failure detail so the install path can act.
  *
  * @param python - Path to the Python interpreter to probe
+ * @param env - Environment passed to the probe subprocess
  * @returns The load status, with the detected version when successful or an error detail when unsuccessful
  */
 export async function probeTensorRtRtxLoadable(

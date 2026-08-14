@@ -19,6 +19,17 @@ interface ImportParseResult<T> {
   collisions: string[];
 }
 
+/** Failure branch returned by parsers when the file is invalid. */
+interface ImportParseError {
+  ok: false;
+  error: string;
+}
+
+/** Explicit type guard so narrowing works regardless of discriminant inference. */
+function isParseError<T>(result: ImportParseResult<T> | ImportParseError): result is ImportParseError {
+  return result.ok === false;
+}
+
 /**
  * Shared import-file logic for preset inspectors.
  *
@@ -37,7 +48,7 @@ interface ImportParseResult<T> {
 export function useImportPresets<T>(opts: {
   customPresets: T[];
   setError: (msg: string) => void;
-  parseImport: (json: string, existing: T[]) => ImportParseResult<T> | { ok: false; error: string };
+  parseImport: (json: string, existing: T[]) => ImportParseResult<T> | ImportParseError;
 }): {
   handleImport: () => void;
   importConfirm: ImportConfirmState<T> | null;
@@ -60,7 +71,7 @@ export function useImportPresets<T>(opts: {
         if (generation !== importGenerationRef.current) return;
         const text = ev.target?.result as string;
         const result = parseImport(text, customPresets);
-        if (result.ok === false) {
+        if (isParseError(result)) {
           setImportConfirm(null);
           setError(result.error);
         } else {

@@ -113,7 +113,11 @@ const PASS_BOOL_COERCE = new Set([
   "awqSym",
 ]);
 
-const PASS_STRING_COERCE: Record<string, Set<string>> = {
+/**
+ * Allowed string values per pass field — single source of truth shared with
+ * chatActions.ts. An empty set marks a free-form string field.
+ */
+export const PASS_STRING_COERCE: Record<string, Set<string>> = {
   conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
   conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
   conversionInputTargetTypes: new Set(),

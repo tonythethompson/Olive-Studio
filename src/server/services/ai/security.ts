@@ -36,7 +36,7 @@ export function isIpLiteralHost(hostname: string): boolean {
 
 /** Normalize hostname and detect loopback (IPv4, IPv6, bracketed IPv6). */
 export function isLoopbackHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const host = hostname.toLowerCase().replace(/^\[|]$/g, "");
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
@@ -50,7 +50,7 @@ export function isKnownLocalOpenAiCompatUrl(parsed: URL): boolean {
 
 export function isPrivateOrLocalHostname(hostname: string): boolean {
   // Normalize bracketed IPv6 hostnames consistently with isLoopbackHostname
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const h = hostname.toLowerCase().replace(/^\[|]$/g, "");
   if (
     h === "localhost" ||
     h.endsWith(".localhost") ||

@@ -45,7 +45,7 @@ export function TitleBar() {
 
   const withWindow = useCallback(
     async (
-      fn: (win: Awaited<ReturnType<typeof import("@tauri-apps/api/window").getCurrentWindow>>) => void,
+      fn: (win: Awaited<ReturnType<typeof import("@tauri-apps/api/window").getCurrentWindow>>) => void | Promise<void>,
     ) => {
       try {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");

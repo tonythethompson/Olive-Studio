@@ -31,8 +31,8 @@ import {
 /**
  * Configures recipe selection, model sources, and shared cache and infrastructure settings.
  *
- * @param state - Optional UI state override.
- * @param setState - Optional handler for updating UI state.
+ * @param propState - Optional UI state override (`state`).
+ * @param propSetState - Optional handler for updating UI state (`setState`).
  */
 export function InputEnvironmentPanel({
   state: propState,

@@ -34,9 +34,6 @@ export function setRecipesBranch(ref: string | null): void {
   }
 }
 
-/** @deprecated Use getRecipesBranch() for dynamic resolution. */
-export const OLIVE_RECIPES_BRANCH = OLIVE_RECIPES_BRANCH_DEFAULT;
-
 export interface RecipeCatalogItem {
   name: string;
   architecture: string;
@@ -751,11 +748,10 @@ export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUi
   if (hfName) {
     incomingState.modelSource = "huggingface";
     incomingState.hfModelId = hfName;
-    const dataset =
+    incomingState.hfDataset =
       (typeof icfg.dataset === "string" && icfg.dataset) ||
       (typeof hfConfig?.dataset === "string" && hfConfig.dataset) ||
       "";
-    incomingState.hfDataset = dataset;
     const task =
       (typeof icfg.task === "string" && icfg.task) ||
       (typeof hfConfig?.task === "string" && hfConfig.task) ||

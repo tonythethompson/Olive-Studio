@@ -153,7 +153,7 @@ export function isCredentialBearingCacheUrl(value: string): boolean {
     /AccountKey\s*=/i.test(v) ||
     /SharedAccessSignature\s*=/i.test(v) ||
     /BlobEndpoint\s*=/i.test(v) ||
-    /^https?:\/\/[^\s]+[?&]sig=/i.test(v)
+    /^https?:\/\/\S+[?&]sig=/i.test(v)
   );
 }
 

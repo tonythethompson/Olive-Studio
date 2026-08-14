@@ -16,7 +16,7 @@ export type ArenaEndpointPolicyOpts = {
 };
 
 export function stripBrackets(hostname: string): string {
-  return hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return hostname.replace(/^\[|]$/g, "").toLowerCase();
 }
 
 /** Narrow loopback host names for Arena OLIVE_ALLOW_LOOPBACK_HTTP. */

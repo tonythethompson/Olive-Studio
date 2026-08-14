@@ -5,5 +5,20 @@ version: "1.0"
 linter: qodana-js
 profile:
   name: qodana.recommended
+exclude:
+  # Type-position React.* namespace refs only (jsx: react-jsx) — no runtime UMD access.
+  - name: TypeScriptUMDGlobal
+    paths:
+      - src/components
+  # Throwing in async fetch helpers and catching at the caller is the project's standard error pattern.
+  - name: ExceptionCaughtLocallyJS
+  # Suggests the @/ alias, but server/scripts code deliberately uses relative imports with
+  # explicit .ts extensions (allowImportingTsExtensions) and no alias resolution at runtime.
+  - name: ES6PreferShortImport
+    paths:
+      - src/server
+      - server.ts
+      - scripts
+      - vite.config.ts
 include:
   - name: CheckDependencyLicenses

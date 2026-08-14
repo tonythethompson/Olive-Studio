@@ -277,7 +277,7 @@ function markdownToPrintHtml(markdown: string): string {
     }
 
     if (isSeparator) {
-      continue; // skip separator rows
+      // skip separator rows
     } else if (isTableRow) {
       if (!inTable) {
         out.push("<table>");

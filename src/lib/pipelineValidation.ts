@@ -2,7 +2,7 @@ import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
 import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod, hasOnnxGraphProducer } from "@/lib/oliveRecipeBuilder";
-import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
+import { isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
 import { assessQnnRecipeReadiness, isQnnIhvProvider, type QnnReadinessIssue } from "@/lib/qnnReadiness";
 import { isKnownPass, getPassSchema } from "@/lib/schemaEngine";
 import { pickOpenVinoTargetFromDevices } from "@/lib/openvinoDeps";
@@ -10,8 +10,31 @@ import {
   isExportTargetProvider,
   isLegacyExportProvider,
   isPlatformLocalProvider,
-  PEFT_UNSUPPORTED_PROVIDERS,
 } from "@/lib/providerRuntimeKind";
+import {
+  AUTO_COERCE_RULES,
+  coercePassFields,
+  isConversionFormatAllowed,
+  isPeftAllowed,
+  isPeftMethodAllowed,
+  isQuantMethodAllowed,
+  isStructuredPruningAllowed,
+  mergeUiState,
+  type CrossPassCoercion,
+} from "@/lib/pipelineStateCommit";
+
+// Re-export the shared commit-path helpers so existing consumers of this
+// module keep working; the implementations live in pipelineStateCommit.ts.
+export {
+  coercePassFields,
+  isConversionFormatAllowed,
+  isPeftAllowed,
+  isPeftMethodAllowed,
+  isQuantMethodAllowed,
+  isStructuredPruningAllowed,
+  mergeUiState,
+  type UiStatePatch,
+} from "@/lib/pipelineStateCommit";
 
 export type PipelineValidationOptions = {
   hardwareProbe?: HardwareProbeResult | null;
@@ -52,50 +75,6 @@ export interface HardwareConflict {
   autofix: () => Partial<UIState["passes"]>;
 }
 
-const GPU_PROVIDERS: IHVProvider[] = [
-  "CUDAExecutionProvider",
-  "NvTensorRTRTXExecutionProvider",
-  "TensorrtExecutionProvider",
-  "ROCMExecutionProvider",
-  "WebGpuExecutionProvider",
-];
-const TENSOR_CORE_PROVIDERS: IHVProvider[] = [
-  "CUDAExecutionProvider",
-  "NvTensorRTRTXExecutionProvider",
-  "TensorrtExecutionProvider",
-];
-
-/**
- * Determines whether a quantization method is supported by an execution provider.
- *
- * @param method - The quantization method to check
- * @param provider - The execution provider to check
- * @returns `true` if the method is supported by the provider, `false` otherwise
- */
-
-export function isQuantMethodAllowed(
-  method: UIState["passes"]["quantMethod"],
-  provider: IHVProvider,
-): boolean {
-  if (method === "awq") {
-    return GPU_PROVIDERS.includes(provider);
-  }
-  if (method === "gptq") {
-    return GPU_PROVIDERS.includes(provider);
-  }
-  if (method === "qat") {
-    return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
-  }
-  if (method === "hqq" || method === "rtn" || method === "kquant") {
-    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization only support CPU/CUDA.
-    return provider === "CPUExecutionProvider" || provider === "CUDAExecutionProvider";
-  }
-  if (method === "spinquant" || method === "quarot") {
-    return GPU_PROVIDERS.includes(provider);
-  }
-  return true;
-}
-
 /** Why a quant method toggle would not stick after commit (beyond EP hardware rules). */
 export function getQuantMethodActivationBlock(
   method: Extract<UIState["passes"]["quantMethod"], "awq" | "gptq" | "qat" | "hqq" | "spinquant" | "quarot">,
@@ -111,31 +90,6 @@ export function getQuantMethodActivationBlock(
     };
   }
   return null;
-}
-
-export function isConversionFormatAllowed(
-  format: UIState["passes"]["conversionFormat"],
-  provider: IHVProvider,
-): boolean {
-  if (format === "openvino") {
-    return provider === "OpenVINOExecutionProvider";
-  }
-  return true;
-}
-
-export function isStructuredPruningAllowed(provider: IHVProvider): boolean {
-  return TENSOR_CORE_PROVIDERS.includes(provider);
-}
-
-export function isPeftAllowed(provider: IHVProvider): boolean {
-  return !PEFT_UNSUPPORTED_PROVIDERS.includes(provider);
-}
-
-export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
-  if (method === "qlora") {
-    return GPU_PROVIDERS.includes(provider);
-  }
-  return true;
 }
 
 export function getProviderConflicts(providerId: IHVProvider, passes: UIState["passes"]): HardwareConflict[] {
@@ -365,6 +319,19 @@ interface CrossPassRule {
   actionLabel: string;
 }
 
+/**
+ * Resolves a shared coercion rule (pipelineStateCommit.AUTO_COERCE_RULES) by
+ * id so the `autoCoerce: true` entries below reuse the exact `applies`/`fix`
+ * logic that runs on every state commit — coercion and validation cannot drift.
+ */
+function autoCoercion(id: string): CrossPassCoercion {
+  const rule = AUTO_COERCE_RULES.find((candidate) => candidate.id === id);
+  if (!rule) {
+    throw new Error(`Unknown auto-coercion rule: ${id}`);
+  }
+  return rule;
+}
+
 const CROSS_PASS_RULES: CrossPassRule[] = [
   {
     id: "onnx-pipeline-missing-conversion",
@@ -380,10 +347,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Enable ONNX conversion",
   },
   {
-    id: "peft-lora-quant",
-    applies: (passes) =>
-      passes.peft && passes.quantization && passes.quantPrecision !== "fp16" && passes.peftMethod === "lora",
-    fix: { peftMethod: "qlora" },
+    ...autoCoercion("peft-lora-quant"),
     autoCoerce: true,
     severity: "critical",
     title: "LoRA Adapters active with base Quantization",
@@ -394,9 +358,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Enable QLoRA Mode",
   },
   {
-    id: "pruning-int4-collapse",
-    applies: (passes) => passes.pruning && passes.quantization && passes.quantPrecision === "int4",
-    fix: { quantPrecision: "int8" },
+    ...autoCoercion("pruning-int4-collapse"),
     autoCoerce: true,
     severity: "warning",
     title: "INT4 & Sparsity Double Compress",
@@ -407,9 +369,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Increase Quant to INT8",
   },
   {
-    id: "openvino-onnx-transforms-clash",
-    applies: (passes) => passes.conversion && passes.conversionFormat === "openvino" && passes.onnxTransforms,
-    fix: { onnxTransforms: false },
+    ...autoCoercion("openvino-onnx-transforms-clash"),
     autoCoerce: true,
     severity: "warning",
     title: "Redundant Transforms with OpenVINO IR",
@@ -420,9 +380,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Deactivate ONNX Transforms",
   },
   {
-    id: "splitting-qat-conflict",
-    applies: (passes) => passes.splitting && passes.quantization && passes.quantMethod === "qat",
-    fix: { splitting: false },
+    ...autoCoercion("splitting-qat-conflict"),
     autoCoerce: true,
     severity: "critical",
     title: "Splitting + QAT Incompatibility",
@@ -461,9 +419,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Switch conversion to ONNX",
   },
   {
-    id: "qairt-discrepancy-incompatible",
-    applies: (passes) => passes.onnxDiscrepancyCheck && passes.qairtPipeline,
-    fix: { onnxDiscrepancyCheck: false },
+    ...autoCoercion("qairt-discrepancy-incompatible"),
     autoCoerce: true,
     severity: "critical",
     title: "OnnxDiscrepancyCheck incompatible with QairtPipeline",
@@ -488,12 +444,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Enable ONNX conversion",
   },
   {
-    id: "qairt-pipeline-requires-qnn",
-    applies: (passes, provider) =>
-      passes.qairtPipeline &&
-      provider !== "QNNExecutionProvider" &&
-      (provider as string) !== "QnnAbiExecutionProvider",
-    fix: { qairtPipeline: false },
+    ...autoCoercion("qairt-pipeline-requires-qnn"),
     autoCoerce: true,
     severity: "critical",
     title: "QairtPipeline requires QNN execution provider",
@@ -504,12 +455,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Disable QairtPipeline",
   },
   {
-    id: "simplified-layernorm-requires-qnn",
-    applies: (passes, provider) =>
-      passes.simplifiedLayerNormToRMSNorm &&
-      provider !== "QNNExecutionProvider" &&
-      (provider as string) !== "QnnAbiExecutionProvider",
-    fix: { simplifiedLayerNormToRMSNorm: false },
+    ...autoCoercion("simplified-layernorm-requires-qnn"),
     autoCoerce: true,
     severity: "critical",
     title: "SimplifiedLayerNormToRMSNorm requires QNN",
@@ -520,11 +466,7 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     actionLabel: "Disable SimplifiedLayerNormToRMSNorm",
   },
   {
-    id: "mobius-builder-incompatible-qnn",
-    applies: (passes, provider) =>
-      passes.mobiusBuilder &&
-      (provider === "QNNExecutionProvider" || (provider as string) === "QnnAbiExecutionProvider"),
-    fix: { mobiusBuilder: false },
+    ...autoCoercion("mobius-builder-incompatible-qnn"),
     autoCoerce: true,
     severity: "critical",
     title: "MobiusBuilder incompatible with QNN",
@@ -754,7 +696,7 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
   }
 
   // 0.13.0: trust_remote_code default flipped. Inform user when it's disabled for HF models.
-  if (passes.trustRemoteCode === false && state.modelSource === "huggingface" && hasSelectedModel(state)) {
+  if (passes.trustRemoteCode !== true && state.modelSource === "huggingface" && hasSelectedModel(state)) {
     issues.push({
       id: "trust-remote-code-advisory",
       severity: "info",
@@ -1011,68 +953,7 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
   return next;
 }
 
-/** Partial UIState merge patch; nested `passes` keys are shallow-merged at runtime. */
-export type UiStatePatch = Partial<Omit<UIState, "passes">> & { passes?: Partial<UIState["passes"]> };
-
-export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
-  // Replace (do not deep-merge) when the key is present so recipe loads can
-  // clear stale MCP overrides with `passRecipeOverrides: {}`. Callers that need
-  // incremental accumulation (MCP Apply Fix) must merge onto current overrides
-  // before setState.
-  const passRecipeOverrides =
-    patch.passRecipeOverrides !== undefined ? patch.passRecipeOverrides : state.passRecipeOverrides;
-
-  return {
-    ...state,
-    ...patch,
-    passes: patch.passes ? { ...state.passes, ...patch.passes } : state.passes,
-    passRecipeOverrides,
-  };
-}
-
 /** Strip pass/EP combinations that cannot run — applied on every state commit. */
-export function coercePassFields(passes: UIState["passes"], provider: IHVProvider): UIState["passes"] {
-  const next: UIState["passes"] = { ...passes };
-
-  if (next.conversion && !isConversionFormatAllowed(next.conversionFormat, provider)) {
-    next.conversionFormat = "onnx";
-  }
-
-  if (next.quantization && !isQuantMethodAllowed(next.quantMethod, provider)) {
-    next.quantMethod = "ptq";
-  }
-
-  if (next.pruning && next.pruningType === "structured" && !isStructuredPruningAllowed(provider)) {
-    next.pruningType = "unstructured";
-  }
-
-  if (next.peft && !isPeftAllowed(provider)) {
-    next.peft = false;
-  }
-
-  if (next.peft && !isPeftMethodAllowed(next.peftMethod, provider)) {
-    next.peftMethod = "lora";
-  }
-
-  if (next.trustRemoteCode === undefined) {
-    next.trustRemoteCode = false;
-  }
-
-  if (isReplacementExportPipeline(next)) {
-    Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
-  }
-
-  // Cross-pass coercions come from the shared CROSS_PASS_RULES table so they
-  // cannot drift from the issues getCrossPassIssues surfaces.
-  for (const rule of CROSS_PASS_RULES) {
-    if (rule.autoCoerce && rule.applies(next, provider)) {
-      Object.assign(next, rule.fix);
-    }
-  }
-
-  return next;
-}
-
 export function sanitizePipelineState(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||

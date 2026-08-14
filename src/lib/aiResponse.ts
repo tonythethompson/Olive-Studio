@@ -42,6 +42,31 @@ export function parseJsonFromAiResponse(text: string): unknown {
 }
 
 /**
+ * Skips over a JSON string body starting at the character right after the
+ * opening quote, handling backslash escapes.
+ *
+ * @param text - The text containing the JSON string
+ * @param from - Index of the first character inside the string (after the opening quote)
+ * @returns The index of the closing quote, or `-1` when the string is unterminated
+ */
+export function scanJsonStringEnd(text: string, from: number): number {
+  let escape = false;
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i]!;
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') return i;
+  }
+  return -1;
+}
+
+/**
  * Extracts the first balanced JSON object or array from the text.
  *
  * @param text - The text to search
@@ -67,24 +92,12 @@ function extractBalancedJson(text: string, startAt = 0): string | null {
   }
 
   let depth = 0;
-  let inString = false;
-  let escape = false;
   for (let i = start; i < text.length; i++) {
     const ch = text[i]!;
-    if (inString) {
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch === "\\") {
-        escape = true;
-        continue;
-      }
-      if (ch === '"') inString = false;
-      continue;
-    }
     if (ch === '"') {
-      inString = true;
+      const end = scanJsonStringEnd(text, i + 1);
+      if (end < 0) break;
+      i = end;
       continue;
     }
     if (ch === open) depth += 1;
@@ -134,10 +147,10 @@ export function softRepairJson(text: string): string {
   // Trailing commas before } or ]
   s = s.replace(/,\s*([\]}])/g, "$1");
   // Missing commas between } {, ] [, } [, ] {
-  s = s.replace(/\}\s*\{/g, "},{");
-  s = s.replace(/\]\s*\[/g, "],[");
-  s = s.replace(/\}\s*\[/g, "},[");
-  s = s.replace(/\]\s*\{/g, "],{");
+  s = s.replace(/}\s*{/g, "},{");
+  s = s.replace(/]\s*\[/g, "],[");
+  s = s.replace(/}\s*\[/g, "},[");
+  s = s.replace(/]\s*{/g, "],{");
   // Missing commas between "…" and "…" when they look like adjacent string values
   // (array elements or object values). Avoid touching inside already-valid JSON
   // by only fixing newline/whitespace separated pairs without a comma.

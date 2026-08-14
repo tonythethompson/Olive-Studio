@@ -116,7 +116,7 @@ export function logsIndicateFailure(logs: string[]): boolean {
       /\bTraceback \(most recent call last\):/i.test(line) ||
       /\bKeyError:\s*/i.test(line) ||
       /\bException:\s*/i.test(line) ||
-      /\[ERROR\]/i.test(line) ||
+      /\[ERROR]/i.test(line) ||
       /\bFAILED\b/.test(line) ||
       /No output model produced/i.test(line),
   );

@@ -53,7 +53,7 @@ export function mountChatRoutes(router: Router): void {
       }
 
       let workspace: AiWorkspaceContext | null = null;
-      let workspaceBlock: string | null = null;
+      let workspaceBlock: string | null;
       try {
         if (workspaceContext && typeof workspaceContext === "object") {
           workspace = workspaceContext as AiWorkspaceContext;

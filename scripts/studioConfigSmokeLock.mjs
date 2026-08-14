@@ -83,7 +83,6 @@ function publishLockFile(lockPath, body, deps) {
     try {
       try {
         link(tempPath, lockPath);
-        return;
       } catch (e) {
         const code = errorCode(e);
         if (code === "EEXIST") throw e;

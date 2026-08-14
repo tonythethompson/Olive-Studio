@@ -143,7 +143,7 @@ async function lookupAllWithSignal(
   signal?: AbortSignal,
 ): Promise<Array<{ address: string; family: number }>> {
   if (signal?.aborted) throw abortError();
-  const lookup = dns.lookup(host, { all: true, verbatim: true });
+  const lookup = dns.lookup(host, { all: true, order: "verbatim" });
   if (!signal) return lookup;
 
   return new Promise((resolve, reject) => {

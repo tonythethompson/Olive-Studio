@@ -1,4 +1,5 @@
 import { UIState } from "@/types";
+import { parsePresetEnvelope } from "@/lib/presetEnvelope";
 
 const STORAGE_KEY = "olive-custom-quant-presets";
 
@@ -85,22 +86,9 @@ export function importPresetsJSON(
 ):
   | { ok: true; presets: CustomQuantPreset[]; importedPresets: CustomQuantPreset[]; collisions: string[] }
   | { ok: false; error: string } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return { ok: false, error: "Invalid JSON — could not parse file." };
-  }
-
-  // Accept both { version, presets } envelope and bare array for flexibility
-  const raw: unknown =
-    parsed && typeof parsed === "object" && "presets" in (parsed as Record<string, unknown>)
-      ? (parsed as { presets: unknown }).presets
-      : parsed;
-
-  if (!Array.isArray(raw)) {
-    return { ok: false, error: "File does not contain a preset array." };
-  }
+  const envelope = parsePresetEnvelope(json);
+  if (!envelope.ok) return { ok: false, error: envelope.error };
+  const raw = envelope.raw;
 
   const validated: CustomQuantPreset[] = [];
   for (const item of raw) {
@@ -108,22 +96,41 @@ export function importPresetsJSON(
       typeof item === "object" &&
       item !== null &&
       typeof (item as CustomQuantPreset).label === "string" &&
-      typeof (item as CustomQuantPreset).fields === "object"
+      typeof (item as CustomQuantPreset).fields === "object" &&
+      (item as CustomQuantPreset).fields !== null
     ) {
       // Filter to known quantization field keys to prevent storing invalid data
       const rawFields = (item as CustomQuantPreset).fields as Record<string, unknown>;
       const safeFields: Record<string, unknown> = {};
       for (const key of KNOWN_QUANT_KEYS) {
-        if (key in rawFields) safeFields[key] = rawFields[key];
+        if (key in rawFields) {
+          const value = rawFields[key];
+          // Validate specific fields
+          if (key === "quantPrecision") {
+            if (value !== "int4" && value !== "int8" && value !== "fp16") continue;
+          } else if (key === "qatQuantPrecision") {
+            if (value !== "int4" && value !== "int8") continue;
+          } else if (key === "qatCalibrateSteps") {
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+          } else if (key === "gptqBlockSize" || key === "gptqGroupSize" || key === "awqGroupSize") {
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+          } else if (key === "awqDampPercent") {
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+          }
+          safeFields[key] = value;
+        }
       }
       validated.push({
-        ...item,
+        label: (item as CustomQuantPreset).label,
+        description: typeof (item as { description?: unknown }).description === "string"
+          ? (item as { description: string }).description
+          : "",
         fields: safeFields as Partial<UIState["passes"]>,
         createdAt:
           typeof (item as CustomQuantPreset).createdAt === "number"
             ? (item as CustomQuantPreset).createdAt
             : Date.now(),
-      } as CustomQuantPreset);
+      });
     }
   }
 

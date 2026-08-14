@@ -4,7 +4,7 @@
  */
 import type { IHVProvider, ModelSource, UIState } from "@/types";
 import { parseJsonFromAiResponse } from "@/lib/aiResponse";
-import { coercePassValue } from "@/lib/auditAutofix";
+import { coercePassValue, PASS_STRING_COERCE } from "@/lib/auditAutofix";
 
 const IHV_PROVIDERS = new Set<string>([
   "CPUExecutionProvider",
@@ -21,21 +21,6 @@ const IHV_PROVIDERS = new Set<string>([
 const CUDA_VERSIONS = new Set(["auto", "cpu", "cu118", "cu121", "cu124", "cu126", "cu128", "cu130", "cu132"]);
 const MODEL_SOURCES = new Set(["huggingface", "local", "azure"]);
 const MEMORY_OFFLOAD = new Set(["gpu_only", "auto"]);
-
-const PASS_STRING_ENUMS: Record<string, Set<string>> = {
-  conversionSourceFormat: new Set(["pytorch", "tensorflow", "jax"]),
-  conversionFormat: new Set(["onnx", "openvino", "qnn", "tensorrt"]),
-  conversionInputTargetTypes: new Set(), // free string (dtype list)
-  quantMethod: new Set(["ptq", "awq", "qat", "gptq", "hqq", "rtn", "kquant", "spinquant", "quarot"]),
-  quantPrecision: new Set(["int4", "int8", "fp16"]),
-  quantPreset: new Set(), // free string
-  pruningType: new Set(["structured", "unstructured"]),
-  pruningMethod: new Set(["magnitude", "sparsegpt", "wanda"]),
-  pruningCriteria: new Set(["l1_norm", "l2_norm"]),
-  peftMethod: new Set(["lora", "qlora"]),
-  qatQuantPrecision: new Set(["int4", "int8"]),
-  qatCalibrateMethod: new Set(["minmax", "percentile", "entropy"]),
-};
 
 export type ChatActionPatch = {
   ihvProvider?: IHVProvider;
@@ -159,10 +144,18 @@ function normalizeLooseQuantPrecision(value: string): "int4" | "int8" | "fp16" |
   return null;
 }
 
+/** Shared quant-method allow-list; an empty set would mark a free-form field. */
+const QUANT_METHOD_VALUES: ReadonlySet<string> = (() => {
+  const values = PASS_STRING_COERCE.quantMethod;
+  if (!values || values.size === 0) {
+    throw new Error("PASS_STRING_COERCE.quantMethod must be a non-empty allow-list");
+  }
+  return values;
+})();
+
 function normalizeLooseQuantMethod(value: string): UIState["passes"]["quantMethod"] | null {
   const v = value.trim().toLowerCase();
-  const allowed = PASS_STRING_ENUMS.quantMethod!;
-  return allowed.has(v) ? (v as UIState["passes"]["quantMethod"]) : null;
+  return QUANT_METHOD_VALUES.has(v) ? (v as UIState["passes"]["quantMethod"]) : null;
 }
 
 const QUANT_AFFIRMATIVE_TOKENS = new Set([
@@ -173,7 +166,7 @@ const QUANT_AFFIRMATIVE_TOKENS = new Set([
   "enabled",
   "int4",
   "int8",
-  ...PASS_STRING_ENUMS.quantMethod!,
+  ...QUANT_METHOD_VALUES,
 ]);
 
 function tokenizeLooseValue(value: string): string[] {
@@ -190,9 +183,8 @@ function hasAffirmativeQuantToken(value: string): boolean {
 
 /** Extract a quant method from any token in a multi-word value like "apply awq". */
 function extractLooseQuantMethodFromValue(value: string): UIState["passes"]["quantMethod"] | null {
-  const allowed = PASS_STRING_ENUMS.quantMethod!;
   for (const token of tokenizeLooseValue(value)) {
-    if (allowed.has(token)) return token as UIState["passes"]["quantMethod"];
+    if (QUANT_METHOD_VALUES.has(token)) return token as UIState["passes"]["quantMethod"];
   }
   return null;
 }

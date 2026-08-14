@@ -13,7 +13,7 @@ import {
 } from "../services/olive/state.ts";
 import { pushLog, stopGpuMetricsTimer, MAX_JOB_LOG_LINES } from "../services/olive/gpu.ts";
 import { detachVenvListener } from "../services/venv/index.ts";
-import type { OliveRecipe, AgentAccessPolicy } from "../types.ts";
+import type { OliveRecipe, OliveJob, AgentAccessPolicy } from "../types.ts";
 import { oliveRunRateLimit } from "../middleware/rateLimit.ts";
 import { isParseBodyError, parseBody } from "../middleware/bodyGuard.ts";
 import { studioLocalOnly } from "../middleware/localOnly.ts";
@@ -91,16 +91,44 @@ function isMcpOriginJob(job: { source?: string }): boolean {
   return job.source === "mcp";
 }
 
+type RecipeParseResult = { ok: true; recipe: OliveRecipe } | { ok: false; error: string };
+
+/** Extract the recipe from a parsed body — either a `recipeJson` string or a `recipe` object. */
+function parseRecipePayload(parsed: { recipeJson?: string; recipe?: unknown }): RecipeParseResult {
+  try {
+    if (typeof parsed.recipeJson === "string") {
+      const decoded = JSON.parse(parsed.recipeJson) as unknown;
+      if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+        return { ok: false, error: "Invalid recipe JSON shape" };
+      }
+      return { ok: true, recipe: decoded as OliveRecipe };
+    }
+    if (parsed.recipe && typeof parsed.recipe === "object" && !Array.isArray(parsed.recipe)) {
+      return { ok: true, recipe: parsed.recipe as OliveRecipe };
+    }
+    return { ok: false, error: "Missing recipe or recipeJson" };
+  } catch {
+    return { ok: false, error: "Invalid recipe JSON" };
+  }
+}
+
 type JobHttpSurface = "ui" | "agent";
 
-function handleOliveStatus(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
+/** Resolve the :jobId param to a registry entry, or respond 404 when the job is unknown or hidden for this surface. */
+function resolveSurfaceJob(req: Request, res: Response, surface: JobHttpSurface): OliveJob | undefined {
   const jobIdParam = req.params.jobId;
   const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
   const job = jobId ? jobRegistry.get(jobId) : undefined;
   if (!job || (surface === "ui" && isMcpOriginJob(job))) {
     res.status(404).json({ error: "Job not found" });
-    return;
+    return undefined;
   }
+  return job;
+}
+
+function handleOliveStatus(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
+  const job = resolveSurfaceJob(req, res, surface);
+  if (!job) return;
   res.json({
     id: job.id,
     status: job.status,
@@ -169,13 +197,8 @@ function handleOliveCancel(req: Request, res: Response, surface: JobHttpSurface 
 }
 
 function handleOliveStream(req: Request, res: Response, surface: JobHttpSurface = "ui"): void {
-  const jobIdParam = req.params.jobId;
-  const jobId = Array.isArray(jobIdParam) ? jobIdParam[0] : jobIdParam;
-  const job = jobId ? jobRegistry.get(jobId) : undefined;
-  if (!job || (surface === "ui" && isMcpOriginJob(job))) {
-    res.status(404).json({ error: "Job not found" });
-    return;
-  }
+  const job = resolveSurfaceJob(req, res, surface);
+  if (!job) return;
 
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream");
@@ -412,18 +435,9 @@ export function mountOliveRoutes(router: Router): void {
     );
     if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
 
-    let recipe: OliveRecipe;
-    try {
-      if (typeof body.parsed.recipeJson === "string") {
-        recipe = JSON.parse(body.parsed.recipeJson) as OliveRecipe;
-      } else if (body.parsed.recipe && typeof body.parsed.recipe === "object") {
-        recipe = body.parsed.recipe as OliveRecipe;
-      } else {
-        return res.status(400).json({ ok: false, error: "Missing recipe or recipeJson" });
-      }
-    } catch {
-      return res.status(400).json({ ok: false, error: "Invalid recipe JSON" });
-    }
+    const recipeParsed = parseRecipePayload(body.parsed);
+    if (!recipeParsed.ok) return res.status(400).json({ ok: false, error: recipeParsed.error });
+    const recipe = recipeParsed.recipe;
 
     const pre = preflightOliveRecipe(recipe, body.parsed.cudaVersion ?? "auto");
     return res.json({
@@ -469,18 +483,9 @@ export function mountOliveRoutes(router: Router): void {
     });
     if (isParseBodyError(body)) return res.status(400).json({ ok: false, error: body.error });
 
-    let recipe: OliveRecipe;
-    try {
-      if (typeof body.parsed.recipeJson === "string") {
-        recipe = JSON.parse(body.parsed.recipeJson) as OliveRecipe;
-      } else if (body.parsed.recipe && typeof body.parsed.recipe === "object") {
-        recipe = body.parsed.recipe as OliveRecipe;
-      } else {
-        return res.status(400).json({ ok: false, error: "Missing recipe or recipeJson" });
-      }
-    } catch {
-      return res.status(400).json({ ok: false, error: "Invalid recipe JSON" });
-    }
+    const recipeParsed = parseRecipePayload(body.parsed);
+    if (!recipeParsed.ok) return res.status(400).json({ ok: false, error: recipeParsed.error });
+    const recipe = recipeParsed.recipe;
 
     const result = await startOliveJob({
       recipe,

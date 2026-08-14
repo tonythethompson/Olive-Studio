@@ -52,8 +52,7 @@ export function isUnresolvedDynamicDim(dim: unknown): boolean {
   if (typeof dim === "string") {
     const trimmed = dim.trim();
     if (!trimmed) return true;
-    if (/^\d+$/.test(trimmed)) return false;
-    return true;
+    return !/^\d+$/.test(trimmed);
   }
   if (typeof dim === "number") {
     return !Number.isFinite(dim) || dim <= 0;

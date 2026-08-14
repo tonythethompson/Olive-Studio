@@ -14,8 +14,7 @@ import { isPathPythonCommand, resolveAllowedPythonFile, type PathPythonCommand }
 function resolveProbeScript(): string {
   const cwdPath = path.join(process.cwd(), "scripts", "probe-python-version.mjs");
   if (fs.existsSync(cwdPath)) return cwdPath;
-  const modulePath = fileURLToPath(new URL("../../../../scripts/probe-python-version.mjs", import.meta.url));
-  return modulePath;
+  return fileURLToPath(new URL("../../../../scripts/probe-python-version.mjs", import.meta.url));
 }
 
 const PROBE_SCRIPT = resolveProbeScript();

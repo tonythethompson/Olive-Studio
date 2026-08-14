@@ -208,8 +208,7 @@ export function computeQnnCompatibleHardware(input: {
   // Windows x64 "preparation" mode is for cross-compile / plugin AOT only — not
   // a local accelerator. Those users can still select QNN as a recipe target via
   // the platformLocal / alwaysSelectable path.
-  if (hostMode === "preparation") return false;
-  return true;
+  return hostMode !== "preparation";
 }
 
 export function mapOrtProvidersToIhv(providers: string[]): IHVProvider[] {

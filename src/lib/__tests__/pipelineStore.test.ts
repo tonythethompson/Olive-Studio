@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { usePipelineStore, createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import { applyMigrations } from "@/lib/passMigration";
-import { commitUiStateUpdate, coercePassFields } from "@/lib/pipelineStateCommit";
+import {
+  commitUiStateUpdateShallow as commitUiStateUpdate,
+  coercePassFields,
+} from "@/lib/pipelineStateCommit";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState } from "@/types";

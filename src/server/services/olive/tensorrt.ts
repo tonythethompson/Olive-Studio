@@ -76,7 +76,9 @@ function extractTrtFailDetail(text: string): string | undefined {
 /**
  * Ensures the pinned ONNX Runtime GPU package is installed for TensorRT execution.
  *
+ * @param python - Path to the Python interpreter whose environment is checked
  * @param onLine - Receives installation and status messages.
+ * @param env - Environment passed to the probe and pip invocations
  */
 async function ensureOnnxRuntimeGpu(
   python: string,

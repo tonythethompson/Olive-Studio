@@ -8,6 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a byte count into a human-readable string (e.g. "1.5 GB").
  * Handles edge cases: 0, negative, and non-finite values.
+ * @param bytes The byte count to format.
  * @param decimals Optional fixed decimal places; defaults to 0 for B/KB and 1 for MB+.
  */
 export function formatBytes(bytes: number, decimals?: number): string {

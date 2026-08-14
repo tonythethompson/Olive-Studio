@@ -8,6 +8,7 @@ export type ProviderErrorKind = "invalid_model_json";
  *
  * @param msg - The error message to classify and display.
  * @param onGoSettings - Called when the user selects the Settings link for provider configuration.
+ * @param kind - Optional structured error kind supplied by the response parser.
  * @returns The rendered error block.
  */
 export function ProviderErrorBlock({

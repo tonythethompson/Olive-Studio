@@ -92,6 +92,7 @@ export class CatalogPinError extends Error {
  *
  * @param branch - The branch to resolve (defaults to `getRecipesBranch()`).
  * @param repo - The GitHub repository (defaults to `OLIVE_RECIPES_REPO`).
+ * @param token - Optional GitHub token for higher rate limits (server-side only).
  * @returns The 40-character lowercase hex commit SHA string.
  * @throws {CatalogPinError} If the request fails (network, auth, or branch not found).
  */
@@ -203,6 +204,7 @@ export async function resolveHeadSha(
  * @param sha - The 40-character hex commit SHA to fetch at.
  * @param branch - The branch name (recorded in metadata).
  * @param repo - The GitHub repository (defaults to `OLIVE_RECIPES_REPO`).
+ * @param token - Optional GitHub token for higher rate limits (server-side only).
  * @returns Array of catalog entries pinned to the given SHA.
  * @throws {CatalogPinError} If the SHA is invalid or the fetch fails.
  */
@@ -334,7 +336,7 @@ export async function fetchCatalogAtSha(
   // Convert tree entries into CatalogEntry records.
   // Content is deferred: load via `fetchCatalogEntryContent` so the request
   // is addressed at `pinned.commitSha`, not the live branch tip.
-  const entries: CatalogEntry[] = recipeFiles.map(
+  return recipeFiles.map(
     (item: Record<string, unknown>) => {
       const path = String(item.path);
       const parts = path.split("/");
@@ -353,8 +355,6 @@ export async function fetchCatalogAtSha(
       };
     },
   );
-
-  return entries;
 }
 
 /**

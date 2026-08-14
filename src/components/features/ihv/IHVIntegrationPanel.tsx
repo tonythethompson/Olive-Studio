@@ -52,8 +52,8 @@ const providers = PROVIDER_CATALOG;
  * Displays local hardware capabilities, provider compatibility, installation options, and
  * provider-specific settings while allowing supported optimization passes to be enabled or disabled.
  *
- * @param state - Optional pipeline state to display and modify.
- * @param setState - Optional updater for applying pipeline state changes.
+ * @param propState - Optional pipeline state to display and modify (`state`).
+ * @param propSetState - Optional updater for applying pipeline state changes (`setState`).
  */
 export function IHVIntegrationPanel({
   state: propState,

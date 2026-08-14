@@ -104,7 +104,7 @@ export async function tokenizePromptWithTransformers(
 
     const raw = encoded?.input_ids;
     if (!raw) return null;
-    const data = (typeof raw === "object" && raw !== null && "data" in raw
+    const data = (typeof raw === "object" && "data" in raw
       ? (raw as { data: ArrayLike<number> }).data
       : (raw as ArrayLike<number>)) as ArrayLike<number>;
 

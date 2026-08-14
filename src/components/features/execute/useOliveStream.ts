@@ -11,7 +11,7 @@ interface UseOliveStreamOptions {
   hardwareProbe: HardwareProbeResult | null;
   setState: (s: Partial<UIState>) => void;
   onRunStateChange?: (running: boolean) => void;
-  isUnmountedRef: React.MutableRefObject<boolean>;
+  isUnmountedRef: React.RefObject<boolean>;
   setMcpFixApplied: (value: string) => void;
 }
 
@@ -20,14 +20,14 @@ export interface UseOliveStreamReturn {
   isRunning: boolean;
   executionLogs: string[];
   setExecutionLogs: Dispatch<SetStateAction<string[]>>;
-  executionLogsRef: React.MutableRefObject<string[]>;
+  executionLogsRef: React.RefObject<string[]>;
   executionStatus: "idle" | "running" | "completed" | "failed" | "cancelled";
   executionExitCode: number | null;
   gpuMetrics: GpuMetrics | null;
   runRecipeJson: string | null;
   handleExecuteLive: () => Promise<void>;
   handleCancelJob: () => Promise<void>;
-  runRecipeJsonRef: React.MutableRefObject<string | null>;
+  runRecipeJsonRef: React.RefObject<string | null>;
 }
 
 type TerminalStatus = "completed" | "failed" | "cancelled";
@@ -118,7 +118,8 @@ export function useOliveStream({
       if (state.passes.onnxTransforms) activePassesNames.push("ORT Transforms");
       if (activePassesNames.length === 0) activePassesNames.push("Default Baseline Export");
 
-      saveJobHistory({
+      // History persistence is best-effort; never let an IndexedDB failure become an unhandled rejection.
+      void saveJobHistory({
         id: jobId,
         jobId,
         timestamp: new Date().toISOString(),
@@ -131,7 +132,7 @@ export function useOliveStream({
         passCount: activePassesNames.length,
         passNames: activePassesNames,
         recipeJson: runRecipeJsonRef.current ?? buildRecipeJsonFromState(state),
-      });
+      }).catch(() => {});
     },
     [state, isUnmountedRef],
   );
@@ -403,7 +404,7 @@ export function useOliveStream({
 
         evtSource.addEventListener("done", (e: MessageEvent) => {
           if (!isCurrentRun(generation)) return;
-          let exitCode: number | null = null;
+          let exitCode: number | null;
           let serverStatus: string | undefined;
           try {
             const payload = JSON.parse(e.data) as { exitCode?: number | null; status?: string };

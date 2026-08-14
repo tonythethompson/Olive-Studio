@@ -39,7 +39,6 @@ vi.mock("@/lib/oliveRecipeHub", () => ({
   getCatalogDeviceFromRecipe: () => "cpu",
   getRecipesBranch: () => "main",
   setRecipesBranch: vi.fn(),
-  OLIVE_RECIPES_BRANCH: "main",
   OLIVE_RECIPES_BRANCH_DEFAULT: "main",
   OLIVE_RECIPES_REPO: "microsoft/olive-recipes",
 }));
