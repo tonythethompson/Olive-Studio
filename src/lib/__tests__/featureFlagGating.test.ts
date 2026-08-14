@@ -122,6 +122,27 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(result.adapters[0].alpha).toBe(16);
     });
 
+    it("rejects single adapter with explicitly invalid rank instead of defaulting", () => {
+      const adapters = [{ path: "/weights/a", rank: 0, alpha: 16 }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/rank must be a positive integer/i);
+    });
+
+    it("rejects single adapter with explicitly invalid alpha instead of defaulting", () => {
+      const adapters = [{ path: "/weights/a", rank: 8, alpha: -1 }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/alpha must be a positive finite number/i);
+    });
+
+    it("rejects single adapter with explicitly invalid targetModules instead of dropping them", () => {
+      const adapters = [{ path: "/weights/a", targetModules: [""] }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/targetModules must be an array of non-empty strings/i);
+    });
+
     it("rejects single adapter with missing path", () => {
       const adapters = [{ name: "no-path", rank: 8, alpha: 16 }];
       const result = gateMultiLoraAdapters(adapters, 24);
@@ -185,6 +206,13 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(result.adapters).toEqual([
         { name: "style", path: "/adapters/style", rank: 8, alpha: 16 },
       ]);
+    });
+
+    it("rejects explicitly invalid rank when flag is enabled instead of defaulting", () => {
+      const adapters = [{ path: "/adapters/style", rank: 1.5, alpha: 16 }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/rank must be a positive integer/i);
     });
 
     it("normalizes target_modules snake_case from MCP payloads", () => {
