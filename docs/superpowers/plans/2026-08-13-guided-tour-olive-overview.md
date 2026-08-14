@@ -19,7 +19,7 @@
 - Do not revert pipeline state when the tour ends or is skipped.
 - Never call `replaceState` for the sample if `hasSelectedModel(state)` is already true.
 - Auto-start only when `window.innerWidth >= WIDE_SHELL_MIN_WIDTH_PX` (900) and `!tourSeen`. Auto-start never resizes.
-- **Take the tour** may grow the window toward 900px when `screen.availWidth >= 900`. App floor becomes phone width (`DESKTOP_MIN_WIDTH_PX` = 320, Tauri 320×568) via [PR 301](https://github.com/tonythethompson/Olive-Studio/pull/301), not this branch. Until 301 is merged, this tree still gates at 600. Always import the live constants. Do not start the tour if the window is still under 900 after a resize attempt.
+- **Take the tour** may grow the window toward 900px when `screen.availWidth >= 900`. App floor is phone width from merged [PR 301](https://github.com/tonythethompson/Olive-Studio/pull/301): `DESKTOP_MIN_WIDTH_PX` = 320, Tauri `minWidth` 320 / `minHeight` 568. Import those constants. Do not start the tour if the window is still under 900 after a resize attempt. Do not put the 600px gate back.
 - If `isPipelineOliveRunning()` is true, do not start the tour and do not mutate pipeline state.
 - `mcp` stays pinned `<2`. Do not change that pin.
 - Tests for this work must not hit the network.
@@ -33,12 +33,25 @@
 | `src/lib/tourViewport.ts` | `ensureDesktopTourViewport()`: grow toward 900px on Take the tour |
 | `src/lib/tour.test.ts` | Unit tests for steps, demo apply, keyboard flags, copy, viewport helper |
 | `src/lib/stores/preferencesStore.ts` | Drop `welcomeDismissed` / `dismissWelcome`; keep `tourSeen` and MCP fields |
-| `src/App.tsx` | Remove welcome modal; auto-start on `!tourSeen` + width >= 900; Take the tour may resize |
+| `src/App.tsx` | Remove welcome modal; keep PR 301 header compact / `useLayoutEffect` / grid tracks; auto-start on `!tourSeen` + width >= 900; Take the tour may resize |
 | `src/components/WelcomeModal.tsx` | Delete |
 | `src/components/WelcomeModal.test.tsx` | Delete |
-| `src/components/features/input/InputRecipeRail.tsx` | `data-tour="model-source"` plus sample Apply button |
+| `src/components/features/input/InputRecipeRail.tsx` | `data-tour="model-source"` plus sample Apply; keep PR 301 `grid-cols-1 sm:grid-cols-3` tabs |
 | `src/components/features/ihv/ProviderCardGrid.tsx` | `data-tour="hardware-providers"` on the local-accelerator grid |
-| `src/components/features/execute/recipe-graph/RecipeGraphView.tsx` | `data-tour="recipe-graph"` around the graph |
+| `src/components/features/execute/recipe-graph/RecipeGraphView.tsx` | `data-tour="recipe-graph"` on the PR 301 GraphCanvas overflow wrapper |
+
+## Prerequisite: merge `main` (PR 301)
+
+Before Task 1, merge `origin/main` into `feat/welcome-screen`. PR 301 is already on `main` (`f5a9754e`). That commit is what you want: `DESKTOP_MIN_WIDTH_PX = 320`, Tauri 320×568, header compact on first paint, recipe tabs `grid-cols-1 sm:grid-cols-3`, graph scroll scoped to the canvas wrapper.
+
+Resolve conflicts the same way as the earlier Settings merge: keep both sides. Do not drop 301 header/`useLayoutEffect`/grid-track work when touching `App.tsx`. Do not restore `overflow-x-auto` on the whole `RecipeGraphView` workspace.
+
+```bash
+git fetch origin main
+git merge origin/main
+```
+
+If `App.tsx`, `InputRecipeRail.tsx`, or `RecipeGraphView.tsx` conflict, take `main`'s layout and re-apply this branch's welcome/tour wiring on top.
 
 ---
 
@@ -647,7 +660,15 @@ Do not use an em dash in that helper text. "No download required to inspect the 
 
 In `ProviderCardGrid.tsx`, on the `div.grid` that maps `detectedLocal`, add `data-tour="hardware-providers"`.
 
-In `RecipeGraphView.tsx`, wrap `GraphCanvas` (or its immediate parent) with `<div data-tour="recipe-graph">`. Do not break existing layout classes; put `data-tour` on an existing wrapper if one already wraps only the canvas.
+In `RecipeGraphView.tsx` (post-301), `GraphCanvas` already sits in:
+
+```tsx
+<div className="flex-1 min-h-0 overflow-auto">
+  <GraphCanvas ... />
+</div>
+```
+
+Add `data-tour="recipe-graph"` to that wrapper. Do not put `overflow-x-auto` back on the outer `flex flex-col h-full min-h-[340px]` workspace.
 
 - [ ] **Step 3: Smoke-check selectors**
 
@@ -679,7 +700,7 @@ git commit -m "feat: add tour anchors and a sample recipe apply control"
 - Test: `src/lib/tourViewport.test.ts` and a preferences assertion in `src/lib/tour.test.ts`
 
 **Interfaces:**
-- Consumes: `startGuidedTour` (nullable) from Task 4; `WIDE_SHELL_MIN_WIDTH_PX` (900) and `DESKTOP_MIN_WIDTH_PX` from `src/components/DesktopMinimumViewport.tsx` (320 after PR 301; 600 on this branch today); `isPipelineOliveRunning` from `src/lib/pipelineNavigation.ts`
+- Consumes: `startGuidedTour` (nullable) from Task 4; `WIDE_SHELL_MIN_WIDTH_PX` (900) and `DESKTOP_MIN_WIDTH_PX` (320) from `src/components/DesktopMinimumViewport.tsx` after the main merge; `isPipelineOliveRunning` from `src/lib/pipelineNavigation.ts`
 - Produces: `export async function ensureDesktopTourViewport(): Promise<boolean>` (true iff `innerWidth >= 900` after optional grow). No `WelcomeModal`. Auto-start iff `!tourSeen` and current width >= 900. Settings `onTakeTour` calls `ensureDesktopTourViewport()` then `startGuidedTour`.
 
 - [ ] **Step 1: Extend the preference test**
@@ -778,7 +799,12 @@ useEffect(() => {
 5. Delete `<WelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />`.
 6. Keep `<SettingsMenu onTakeTour={() => startTour({ allowResize: true })} />`.
 
-Use `WIDE_SHELL_MIN_WIDTH_PX` instead of the literal `900` in `App.tsx` (import it next to `DesktopMinimumViewport`).
+Use `WIDE_SHELL_MIN_WIDTH_PX` instead of the literal `900` in `App.tsx`. After the 301 merge, `App.tsx` already imports `WIDE_SHELL_MIN_WIDTH_PX` for `headerCompact`. Extend that import. Keep:
+
+- `headerCompact` initialized from `window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX`
+- `useLayoutEffect` for the header cluster measure (do not revert to `useEffect`)
+- header `grid-cols` tracks from main
+- `matchMedia` guard inside `DesktopMinimumViewport` (do not remove it)
 
 - [ ] **Step 5: Delete the modal files**
 
@@ -861,7 +887,8 @@ Skip this commit if the tree is already clean.
 | waitForElement after unlock | 3 |
 | No em/en dashes | 3, 7 |
 | Auto-start `!tourSeen` + width >= 900 (no resize) | 6 |
-| Take the tour grows a phone-narrow window when availWidth >= 900 | 6 |
+| Take the tour grows a phone-narrow (320) window when availWidth >= 900 | 6 |
+| Merge PR 301 layout (header, rail tabs, graph overflow, 320 gate) | Prerequisite |
 | No start while Olive running | 4, 6 |
 | Settings replay same steps | 6 (existing `onTakeTour`) |
 | No network / no Olive run | 1, 2 |

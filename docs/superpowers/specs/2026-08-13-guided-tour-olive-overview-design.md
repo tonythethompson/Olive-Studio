@@ -43,7 +43,14 @@ The app may be as narrow as phone width (`DESKTOP_MIN_WIDTH_PX`, about 320). The
 
 Do not fullscreen. Do not move the window off-screen. Do not persist the new size as a preference beyond what the OS or Tauri already remember.
 
-[#301](https://github.com/tonythethompson/Olive-Studio/pull/301) (`devin/narrow-phone-width`) is the change that sets `DESKTOP_MIN_WIDTH_PX` to 320 and Tauri `minWidth` / `minHeight` to 320 / 568. This tour branch does not own that. After 301 lands, merge or rebase onto it and keep reading the live constants. Until then this tree still has a 600px gate. The tour still targets `WIDE_SHELL_MIN_WIDTH_PX` (900) either way.
+[#301](https://github.com/tonythethompson/Olive-Studio/pull/301) is merged on `main` (`f5a9754e`). Live constants:
+
+- `DESKTOP_MIN_WIDTH_PX` = 320
+- `WIDE_SHELL_MIN_WIDTH_PX` = 900
+- Tauri `minWidth` / `minHeight` = 320 / 568
+- Gate copy is "Viewport too narrow"
+
+Merge or rebase this tour branch onto that `main` before implementing. The tour still targets 900. Do not reintroduce a 600px gate.
 
 ### Removed
 
