@@ -81,6 +81,10 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function readOptionalRecipeTargetModules(
   item: Record<string, unknown>,
 ): string[] | undefined {
@@ -121,35 +125,44 @@ type RecipeAdaptersParseResult =
   | { ok: true; adapters?: UIState["multiLoraAdapters"] }
   | { ok: false; reason: string };
 
+type RecipeOptionalNumberResult =
+  | { ok: true; value?: number }
+  | { ok: false; reason: string };
+
+/** Absent rank is omitted. Present-but-invalid rank is rejected. */
+function parseRecipeAdapterRank(item: Record<string, unknown>): RecipeOptionalNumberResult {
+  if (!("rank" in item)) return { ok: true, value: undefined };
+  const value = item.rank;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer" };
+}
+
+/** Absent alpha is omitted. Present-but-invalid alpha is rejected. */
+function parseRecipeAdapterAlpha(item: Record<string, unknown>): RecipeOptionalNumberResult {
+  if (!("alpha" in item)) return { ok: true, value: undefined };
+  const value = item.alpha;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number" };
+}
+
 /**
  * Parse one recipe `adapters[]` entry into UIState MultiLoRA shape.
  * Absent rank/alpha/targetModules stay omitted (builder defaults). Present-but-invalid
  * values are rejected so import cannot silently rewrite adapter parameters.
  */
 function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterParseResult {
-  const path =
-    typeof item.path === "string" && item.path.length > 0 ? item.path : undefined;
+  const path = readNonEmptyString(item.path);
   if (!path) return { ok: false, reason: "path must be a non-empty string" };
 
-  const name =
-    typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
-
-  let rank: number | undefined;
-  if ("rank" in item) {
-    if (!(typeof item.rank === "number" && Number.isInteger(item.rank) && item.rank > 0)) {
-      return { ok: false, reason: "rank must be a positive integer" };
-    }
-    rank = item.rank;
-  }
-
-  let alpha: number | undefined;
-  if ("alpha" in item) {
-    if (!(typeof item.alpha === "number" && Number.isFinite(item.alpha) && item.alpha > 0)) {
-      return { ok: false, reason: "alpha must be a positive finite number" };
-    }
-    alpha = item.alpha;
-  }
-
+  const name = readNonEmptyString(item.name);
+  const rankResult = parseRecipeAdapterRank(item);
+  if (!rankResult.ok) return rankResult;
+  const alphaResult = parseRecipeAdapterAlpha(item);
+  if (!alphaResult.ok) return alphaResult;
   const targetModulesResult = parseRecipeAdapterTargetModules(item);
   if (!targetModulesResult.ok) return targetModulesResult;
 
@@ -158,8 +171,8 @@ function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterPa
     adapter: {
       path,
       ...(name ? { name } : {}),
-      ...(rank !== undefined ? { rank } : {}),
-      ...(alpha !== undefined ? { alpha } : {}),
+      ...(rankResult.value !== undefined ? { rank: rankResult.value } : {}),
+      ...(alphaResult.value !== undefined ? { alpha: alphaResult.value } : {}),
       ...(targetModulesResult.modules ? { targetModules: targetModulesResult.modules } : {}),
     },
   };
@@ -168,10 +181,7 @@ function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterPa
 function legacyAdapterPathFromInput(
   inputConfig: Record<string, unknown>,
 ): UIState["multiLoraAdapters"] | undefined {
-  const adapterPath =
-    typeof inputConfig.adapter_path === "string" && inputConfig.adapter_path.length > 0
-      ? inputConfig.adapter_path
-      : undefined;
+  const adapterPath = readNonEmptyString(inputConfig.adapter_path);
   return adapterPath ? [{ path: adapterPath }] : undefined;
 }
 
