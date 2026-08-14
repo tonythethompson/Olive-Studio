@@ -63,7 +63,7 @@ export function useDialogFocusTrap(open: boolean, onClose: () => void) {
           event.preventDefault();
           last.focus();
         }
-      } else if (active === last) {
+      } else if (active === last || !dialogRef.current?.contains(active)) {
         event.preventDefault();
         first.focus();
       }
