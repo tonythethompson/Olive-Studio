@@ -22,10 +22,11 @@ describe("SettingsMenu", () => {
   });
 
   it("invokes onOpenLicense and closes the menu when MIT License is clicked", async () => {
+    const user = userEvent.setup();
     const onOpenLicense = vi.fn();
     render(<SettingsMenu onOpenLicense={onOpenLicense} />);
-    await userEvent.click(screen.getByLabelText("Settings"));
-    await userEvent.click(screen.getByText("MIT License"));
+    await user.click(screen.getByLabelText("Settings"));
+    await user.click(screen.getByText("MIT License"));
     expect(onOpenLicense).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
   });

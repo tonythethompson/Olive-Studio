@@ -7,6 +7,7 @@ import { hasSelectedModel } from "@/lib/pipelineValidation";
 import { createDefaultPipelineState, usePipelineStore } from "@/lib/stores/pipelineStore";
 
 let tourModelUnsub: (() => void) | undefined;
+let tourActive = false;
 
 /**
  * Loads the bundled sample recipe when the workspace has no model selected.
@@ -137,11 +138,12 @@ function stepId(step: DriveStep | undefined): string | undefined {
  * Starts the guided tour and handles completion or dismissal.
  *
  * @param onSettled - Callback invoked once when the tour ends or is skipped
- * @returns The tour instance, or null when an Olive job is running
+ * @returns The tour instance, or null when an Olive job is running or a tour is already active
  */
 export function startGuidedTour(onSettled: () => void) {
-  if (isPipelineOliveRunning()) return null;
+  if (isPipelineOliveRunning() || tourActive) return null;
 
+  tourActive = true;
   const driverObj = driver({
     showProgress: true,
     progressText: "{{current}} of {{total}}",
@@ -176,6 +178,7 @@ export function startGuidedTour(onSettled: () => void) {
     onDestroyStarted: () => {
       tourModelUnsub?.();
       tourModelUnsub = undefined;
+      tourActive = false;
       onSettled();
       driverObj.destroy();
     },

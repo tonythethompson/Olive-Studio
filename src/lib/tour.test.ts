@@ -115,6 +115,8 @@ describe("TOUR_STEPS", () => {
 
 describe("startGuidedTour", () => {
   beforeEach(() => {
+    const prev = mocks.driverFactory.mock.calls.at(-1)?.[0] as { onDestroyStarted?: () => void } | undefined;
+    prev?.onDestroyStarted?.();
     vi.clearAllMocks();
     mocks.getActiveStep.mockReturnValue({ data: { id: "overview" } });
     usePipelineStore.getState().resetState();
@@ -170,6 +172,22 @@ describe("startGuidedTour", () => {
     config.onDestroyStarted();
     expect(onSettled).toHaveBeenCalledTimes(1);
     expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null and does not start a second tour while one is active", () => {
+    const first = startGuidedTour(() => {});
+    expect(first).not.toBeNull();
+    expect(startGuidedTour(() => {})).toBeNull();
+    expect(mocks.driverFactory).toHaveBeenCalledTimes(1);
+    expect(mocks.drive).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a new tour after the previous one settles", () => {
+    startGuidedTour(() => {});
+    const config = mocks.driverFactory.mock.calls[0][0] as { onDestroyStarted: () => void };
+    config.onDestroyStarted();
+    expect(startGuidedTour(() => {})).not.toBeNull();
+    expect(mocks.driverFactory).toHaveBeenCalledTimes(2);
   });
 });
 

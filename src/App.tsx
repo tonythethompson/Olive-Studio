@@ -212,29 +212,46 @@ function Dashboard() {
     setTriggerAiAudit(true);
   };
 
+  const tourSeen = usePreferencesStore((s) => s.tourSeen);
+  const tourStartingRef = useRef(false);
+
   // Lazy-load driver.js so the tour (and its CSS) stays out of the main bundle.
   const startTour = useCallback((opts?: { allowResize?: boolean }) => {
-    if (isPipelineOliveRunning()) return;
+    if (isPipelineOliveRunning() || tourStartingRef.current) return;
+    tourStartingRef.current = true;
     void (async () => {
-      if (opts?.allowResize) {
-        const { ensureDesktopTourViewport } = await import("@/lib/tourViewport");
-        const ready = await ensureDesktopTourViewport();
-        if (!ready) return;
-      } else if (window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX) {
-        return;
+      let started = false;
+      try {
+        if (opts?.allowResize) {
+          const { ensureDesktopTourViewport } = await import("@/lib/tourViewport");
+          const ready = await ensureDesktopTourViewport();
+          if (!ready) return;
+        } else if (window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX) {
+          return;
+        }
+        const { startGuidedTour } = await import("@/lib/tour");
+        const instance = startGuidedTour(() => {
+          tourStartingRef.current = false;
+          usePreferencesStore.getState().markTourSeen();
+        });
+        started = Boolean(instance);
+      } catch {
+        started = false;
+      } finally {
+        if (!started) tourStartingRef.current = false;
       }
-      const { startGuidedTour } = await import("@/lib/tour");
-      startGuidedTour(() => usePreferencesStore.getState().markTourSeen());
     })();
   }, []);
 
   // Auto-offer once until the tour has been seen (finished or skipped).
   // Replay from Settings → Take the tour. Auto-start never resizes.
+  // Subscribe to tourSeen so persist rehydration or an in-progress tour
+  // cancels the pending auto-offer timer.
   useEffect(() => {
-    if (usePreferencesStore.getState().tourSeen) return;
+    if (tourSeen) return;
     const timer = window.setTimeout(() => startTour(), 600);
     return () => window.clearTimeout(timer);
-  }, [startTour]);
+  }, [startTour, tourSeen]);
 
   const scrollToSection = useCallback(
     (id: ActiveView) => {
