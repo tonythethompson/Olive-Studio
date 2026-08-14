@@ -5,7 +5,7 @@ version: "1.0"
 linter: qodana-js
 profile:
   name: qodana.recommended
-disable:
+exclude:
   # Type-position React.* namespace refs only (jsx: react-jsx) — no runtime UMD access.
   - name: TypeScriptUMDGlobal
     paths:
