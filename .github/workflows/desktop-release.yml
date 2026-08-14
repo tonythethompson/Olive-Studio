@@ -100,3 +100,43 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.tauri_target }}
+
+      - name: Verify Linux artifacts (AppImage + DEB)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          BUNDLE_DIR="src-tauri/target/x86_64-unknown-linux-gnu/release/bundle"
+          echo "Checking for Linux artifacts..."
+          find "$BUNDLE_DIR" -type f \( -name "*.AppImage" -o -name "*.deb" \) -exec ls -lh {} \;
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "ERROR: Bundle directory not found at $BUNDLE_DIR"
+            exit 1
+          fi
+          APPIMAGE_COUNT=$(find "$BUNDLE_DIR" -name "*.AppImage" | wc -l)
+          DEB_COUNT=$(find "$BUNDLE_DIR" -name "*.deb" | wc -l)
+          echo "Found $APPIMAGE_COUNT AppImage(s) and $DEB_COUNT DEB package(s)"
+          if [ "$APPIMAGE_COUNT" -eq 0 ] || [ "$DEB_COUNT" -eq 0 ]; then
+            echo "WARNING: Expected both AppImage and DEB packages"
+          fi
+
+      - name: Build MSIX (Microsoft Store)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          ./scripts/build-msix.ps1 `
+            -ReleaseDir "src-tauri/target/${{ matrix.tauri_target }}/release" `
+            -Version $version `
+            -OutFile "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_$version.msix"
+
+      - name: Upload MSIX to release
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          gh release upload "${{ github.ref_name }}" \
+            "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_${VERSION}.msix" \
+            --repo "${{ github.repository }}" \
+            --clobber
