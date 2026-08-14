@@ -2,12 +2,12 @@
 
 ## Identity
 
-Olive Studio is a local-first desktop web app (React 19 + Express + Vite 8) that provides a guided UI for Microsoft Olive model optimization. It wraps `olive-ai` CLI in a three-step pipeline: model source → hardware target → recipe & run.
+Olive Studio is a desktop web app (React 19 + Express + Vite 8) that provides a guided UI for Microsoft Olive model optimization. It wraps `olive-ai` CLI around three conceptual stages — model source → hardware target → recipe & run — presented as four UI pipeline views (see "UI pipeline steps" below).
 
 - **Repo**: https://github.com/tonythethompson/olive-studio
-- **License**: AGPL-3.0-or-later
+- **License**: MIT
 - **Package manager**: pnpm (enforced via preinstall guard — `npm install` is blocked)
-- **Node**: >=18
+- **Node**: >=22.16
 - **Language**: TypeScript (strict)
 
 ## Architecture
@@ -15,7 +15,7 @@ Olive Studio is a local-first desktop web app (React 19 + Express + Vite 8) that
 | Layer | Stack |
 |-------|-------|
 | UI | React 19, Tailwind CSS 4, Radix UI, Motion, Recharts, Lucide icons |
-| State | Single Zustand store (`src/lib/stores/pipelineStore.ts` → `usePipelineStore`) |
+| State | Zustand stores: `src/lib/stores/pipelineStore.ts` (`usePipelineStore`, main pipeline state) + `src/lib/stores/preferencesStore.ts` (`usePreferencesStore`, persisted UI preferences) |
 | Server | Express 4, SSE log streaming, Vite dev middleware |
 | Build | Vite 8 (client) + esbuild (server bundle → `dist/server.cjs`) |
 | AI | Optional: Gemini, OpenAI, Anthropic, Mistral (user-provided keys) |

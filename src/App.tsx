@@ -140,10 +140,12 @@ function Dashboard() {
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
-  // First run only: once dismissed via "Don't show again", this never re-opens.
-  const [welcomeOpen, setWelcomeOpen] = useState(
-    () => !usePreferencesStore.getState().welcomeDismissed,
-  );
+  // First run only: once dismissed via "Don't show again" (persisted) or
+  // closed this session, this never re-opens. Subscribed via the hook rather
+  // than getState() so the persisted value is honored after rehydration.
+  const welcomeDismissed = usePreferencesStore((s) => s.welcomeDismissed);
+  const [welcomeClosed, setWelcomeClosed] = useState(false);
+  const welcomeOpen = !welcomeDismissed && !welcomeClosed;
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportData, setReportData] = useState<{
     error: Error;
@@ -625,7 +627,7 @@ function Dashboard() {
           </div>
         </div>
 
-        <WelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />
+        <WelcomeModal open={welcomeOpen} onClose={() => setWelcomeClosed(true)} />
 
         <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />
 
