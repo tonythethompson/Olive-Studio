@@ -103,12 +103,17 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   }, []);
 
   useEffect(() => {
+    let emphasizeTimer: number | undefined;
     const handleEmphasize = () => {
+      if (emphasizeTimer !== undefined) window.clearTimeout(emphasizeTimer);
       setEmphasized(true);
-      window.setTimeout(() => setEmphasized(false), 1200);
+      emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
     };
     window.addEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
-    return () => window.removeEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
+    return () => {
+      window.removeEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
+      if (emphasizeTimer !== undefined) window.clearTimeout(emphasizeTimer);
+    };
   }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);

@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 
 interface PipelineSectionGateProps {
   locked: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }
 

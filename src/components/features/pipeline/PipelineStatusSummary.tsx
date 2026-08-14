@@ -112,7 +112,6 @@ export function PipelineStatusSummary({
     onResolveIssues,
     onReviewRun
   );
-  const statusClickHandler = validation.isBlocked ? onResolveIssues : actionHandler;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-950 border-b border-slate-800">
@@ -138,17 +137,23 @@ export function PipelineStatusSummary({
               {validation.statusLabel && (
                 <>
                   {" · "}
-                  <button
-                    type="button"
-                    onClick={statusClickHandler}
-                    className={cn(
-                      "ml-1 inline-flex items-center gap-1 font-medium hover:underline",
-                      STATUS_LABEL_CLASS[statusTone]
-                    )}
-                    aria-label={validation.isBlocked ? "Jump to blocking issues" : undefined}
-                  >
-                    {validation.statusLabel}
-                  </button>
+                  {statusTone === "success" ? (
+                    <span className={cn("ml-1 inline-flex items-center gap-1 font-medium", STATUS_LABEL_CLASS.success)}>
+                      {validation.statusLabel}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={statusTone === "error" ? onResolveIssues : actionHandler}
+                      className={cn(
+                        "ml-1 inline-flex items-center gap-1 font-medium hover:underline",
+                        STATUS_LABEL_CLASS[statusTone]
+                      )}
+                      aria-label={statusTone === "error" ? "Jump to blocking issues" : "Review validation warnings"}
+                    >
+                      {validation.statusLabel}
+                    </button>
+                  )}
                 </>
               )}
             </p>
