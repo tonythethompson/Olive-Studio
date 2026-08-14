@@ -112,7 +112,7 @@ function formatElapsed(ms: number): string {
 /**
  * Generate the HH:MM:SS timestamp string for the current time.
  */
-function currentTimestamp(): string {
+export function currentTimestamp(): string {
   const now = new Date();
   const h = String(now.getHours()).padStart(2, "0");
   const m = String(now.getMinutes()).padStart(2, "0");
@@ -123,7 +123,7 @@ function currentTimestamp(): string {
 /**
  * Generate a unique entry ID using a combination of timestamp and random suffix.
  */
-function generateEntryId(): string {
+export function generateEntryId(): string {
   return `terminal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 

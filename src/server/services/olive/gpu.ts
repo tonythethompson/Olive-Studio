@@ -1,19 +1,17 @@
 import type { GpuMetrics } from "../../../lib/gpuMetrics.ts";
+import {
+  JOB_LOG_TRIM_WATERMARK,
+  MAX_JOB_LOG_LINES,
+} from "../../../lib/oliveJobLogLimits.ts";
 import type { OliveJob } from "../../types.ts";
 import { execFileAsync } from "../shared/exec.ts";
 
-/**
- * Retained log lines per job. Long Olive runs can emit thousands of lines;
- * unbounded growth wastes memory and the SSE replay floods reconnects.
- */
-export const MAX_JOB_LOG_LINES = 1_000;
-/** Trim watermark — batched splices instead of one per line at capacity. */
-const LOG_TRIM_WATERMARK = MAX_JOB_LOG_LINES + 250;
+export { MAX_JOB_LOG_LINES, JOB_LOG_TRIM_WATERMARK };
 
 /** Records a job log line and notifies its active subscribers. */
 export function pushLog(job: OliveJob, line: string): void {
   job.logs.push(line);
-  if (job.logs.length > LOG_TRIM_WATERMARK) {
+  if (job.logs.length > JOB_LOG_TRIM_WATERMARK) {
     job.logs.splice(0, job.logs.length - MAX_JOB_LOG_LINES);
     job.logsTruncated = true;
   }

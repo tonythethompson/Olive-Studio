@@ -124,6 +124,7 @@ vi.mock("@/components/features/playground/WebGpuBenchmarkPanel", () => ({
 // Mock job history store
 vi.mock("@/lib/jobHistoryStore", () => ({
   saveJobHistory: vi.fn(),
+  getJobHistory: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock GPU metrics
@@ -252,8 +253,10 @@ describe("ExecutionWorkspace", () => {
     const menu = screen.getByRole("menu");
     expect(menu).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /run history/i })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /export report/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /export for owr/i })).toBeTruthy();
+    // "Export Report" moved to the dedicated ExportReportMenu (flag-gated,
+    // completed-record filtering) — no longer duplicated in the More menu.
+    expect(screen.queryByRole("menuitem", { name: /export report/i })).toBeNull();
 
     expect(screen.queryByRole("menuitem", { name: /browser test/i })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: /benchmark/i })).toBeNull();
