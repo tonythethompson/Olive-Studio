@@ -98,6 +98,21 @@ function readOptionalRecipeTargetModules(
   return rawModules;
 }
 
+/**
+ * Absent targetModules/target_modules is fine. If either key is present, the
+ * value must be an array of non-empty strings (or we reject).
+ */
+function parseRecipeAdapterTargetModules(
+  item: Record<string, unknown>,
+): { ok: true; modules?: string[] } | { ok: false; reason: string } {
+  const hasTargetModulesKey = "targetModules" in item || "target_modules" in item;
+  const targetModules = readOptionalRecipeTargetModules(item);
+  if (hasTargetModulesKey && targetModules === undefined) {
+    return { ok: false, reason: "targetModules must be an array of non-empty strings" };
+  }
+  return { ok: true, modules: targetModules };
+}
+
 type RecipeAdapterParseResult =
   | { ok: true; adapter: NonNullable<UIState["multiLoraAdapters"]>[number] | null }
   | { ok: false; reason: string };
@@ -108,8 +123,8 @@ type RecipeAdaptersParseResult =
 
 /**
  * Parse one recipe `adapters[]` entry into UIState MultiLoRA shape.
- * Absent rank/alpha stay omitted (builder defaults). Present-but-invalid values
- * are rejected so import cannot silently rewrite adapter parameters.
+ * Absent rank/alpha/targetModules stay omitted (builder defaults). Present-but-invalid
+ * values are rejected so import cannot silently rewrite adapter parameters.
  */
 function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterParseResult {
   const path =
@@ -135,7 +150,8 @@ function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterPa
     alpha = item.alpha;
   }
 
-  const targetModules = readOptionalRecipeTargetModules(item);
+  const targetModulesResult = parseRecipeAdapterTargetModules(item);
+  if (!targetModulesResult.ok) return targetModulesResult;
 
   return {
     ok: true,
@@ -144,7 +160,7 @@ function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterPa
       ...(name ? { name } : {}),
       ...(rank !== undefined ? { rank } : {}),
       ...(alpha !== undefined ? { alpha } : {}),
-      ...(targetModules ? { targetModules } : {}),
+      ...(targetModulesResult.modules ? { targetModules: targetModulesResult.modules } : {}),
     },
   };
 }
@@ -698,7 +714,7 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
  * @param parsed - The parsed Olive recipe.
  * @param options - Options controlling whether mapped passes replace or merge with existing passes.
  * @returns The UI state values derived from the recipe.
- * @throws {Error} When recipe adapters include present-but-invalid rank or alpha.
+ * @throws {Error} When recipe adapters include present-but-invalid rank, alpha, or targetModules.
  */
 export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUiStateOptions): Partial<UIState> {
   const recipe = isRecord(parsed) ? parsed : undefined;

@@ -447,5 +447,64 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
         /alpha must be a positive finite number/i,
       );
     });
+
+    it("rejects invalid target_modules on import instead of dropping them", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const emptyEntry = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "bad-modules", path: "/adapters/bad-modules", target_modules: [""] },
+        ],
+        passes: { peft: { type: "LoRA", config: {} } },
+        engine: {},
+      };
+      expect(() => deriveUiStateFromOliveRecipe(emptyEntry, { replacePasses: true })).toThrow(
+        /targetModules must be an array of non-empty strings/i,
+      );
+
+      const mixedTypes = {
+        ...emptyEntry,
+        adapters: [
+          { name: "mixed", path: "/adapters/mixed", targetModules: ["q_proj", 1] },
+        ],
+      };
+      expect(() => deriveUiStateFromOliveRecipe(mixedTypes, { replacePasses: true })).toThrow(
+        /targetModules must be an array of non-empty strings/i,
+      );
+
+      const notArray = {
+        ...emptyEntry,
+        adapters: [
+          { name: "scalar", path: "/adapters/scalar", target_modules: "q_proj" },
+        ],
+      };
+      expect(() => deriveUiStateFromOliveRecipe(notArray, { replacePasses: true })).toThrow(
+        /targetModules must be an array of non-empty strings/i,
+      );
+    });
+
+    it("preserves valid target_modules from snake_case import payloads", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "style", path: "/adapters/style", target_modules: ["q_proj", "v_proj"] },
+        ],
+        passes: { peft: { type: "LoRA", config: {} } },
+        engine: {},
+      };
+      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+      expect(imported.multiLoraAdapters).toEqual([
+        { name: "style", path: "/adapters/style", targetModules: ["q_proj", "v_proj"] },
+      ]);
+    });
   });
 });
