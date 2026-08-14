@@ -282,13 +282,20 @@ function Dashboard() {
     // No short safety cutoff: a slow chunk load would otherwise drop Resolve Issues silently.
     const observer = new MutationObserver(() => {
       if (tryExpandAndScroll()) {
+        window.clearTimeout(timeoutId);
         observer.disconnect();
         complete();
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
+    const timeoutId = window.setTimeout(() => {
+      observer.disconnect();
+      complete();
+    }, 15000);
+
     return () => {
+      window.clearTimeout(timeoutId);
       observer.disconnect();
     };
   }, [pendingResolveIssues, activeView]);
