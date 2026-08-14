@@ -24,6 +24,7 @@ import {
   isStudioHfTaskSpeechFix,
 } from "@/lib/logFailurePatterns";
 import { useOliveStream } from "./useOliveStream";
+import { currentTimestamp, generateEntryId } from "@/lib/activityLog";
 import { navigatePipeline } from "@/lib/pipelineNavigation";
 import { usePlaygroundStore } from "@/lib/stores/playgroundStore";
 import { DiagnosisHistory, type DiagnosisEntry } from "./DiagnosisHistory";
@@ -722,23 +723,27 @@ export function ExecutionWorkspace({
 
   const handleAgentStreamError = useCallback(
     (errorMsg: string) => {
+      // totalSteps: 0 — completeAgent() takes Math.max() against its own
+      // stepCountRef, which counts only entries with stepRef set. Passing
+      // agentEntries.length here would overcount (every log/metrics/error
+      // entry, not just steps) and win the max.
       completeAgent({
         status: "failure",
-        totalSteps: agentEntries.length,
+        totalSteps: 0,
         elapsedMs: agentStartedAt ? Date.now() - new Date(agentStartedAt).getTime() : 0,
         errorDescription: errorMsg,
       });
     },
-    [completeAgent, agentEntries.length, agentStartedAt],
+    [completeAgent, agentStartedAt],
   );
 
   const handleAgentStreamComplete = useCallback((streamStatus: "completed" | "failed" | "cancelled") => {
     completeAgent({
       status: streamStatus === "completed" ? "success" : streamStatus === "failed" ? "failure" : "cancelled",
-      totalSteps: agentEntries.length,
+      totalSteps: 0,
       elapsedMs: agentStartedAt ? Date.now() - new Date(agentStartedAt).getTime() : 0,
     });
-  }, [completeAgent, agentEntries.length, agentStartedAt]);
+  }, [completeAgent, agentStartedAt]);
 
   useAgentStream({
     enabled: agentRunning,
@@ -824,7 +829,18 @@ export function ExecutionWorkspace({
               agentRunning={agentRunning}
               onStart={handleStartAgent}
               onStop={async () => {
-                await stopAgent();
+                const stopped = await stopAgent();
+                if (!stopped) {
+                  // stopAgent() intentionally leaves agentRunning true on a
+                  // failed cancel (so Stop can be retried) — surface the
+                  // failure in the log instead of silently doing nothing.
+                  appendAgentEntry({
+                    id: generateEntryId(),
+                    kind: "error",
+                    timestamp: currentTimestamp(),
+                    text: "Failed to cancel agent — Stop again to retry.",
+                  });
+                }
               }}
               outcome={agentOutcome}
             />
