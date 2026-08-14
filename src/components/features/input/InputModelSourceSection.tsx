@@ -67,11 +67,15 @@ export function InputModelSourceSection({
   onConfigTextChange,
 }: InputModelSourceSectionProps) {
   const isSourceCollapsed = !sourceConfigExpanded && !recipeRailCollapsed;
-  // Latch derived during render: once the source section has ever been shown
-  // it stays mounted so its tabs / token / upload state survives collapse.
-  const [keepSourceMounted] = useState(
+  // Promote during render: the initializer only runs on mount. If we start
+  // collapsed, the first expand must latch so LocalFileUpload (and its File
+  // object map) stays mounted after Hide.
+  const [keepSourceMounted, setKeepSourceMounted] = useState(
     () => sourceConfigExpanded || recipeRailCollapsed,
   );
+  if ((sourceConfigExpanded || recipeRailCollapsed) && !keepSourceMounted) {
+    setKeepSourceMounted(true);
+  }
   const shouldKeepSourceMounted = keepSourceMounted || sourceConfigExpanded || recipeRailCollapsed;
 
   return (
