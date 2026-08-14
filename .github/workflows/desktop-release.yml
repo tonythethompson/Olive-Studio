@@ -77,6 +77,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Bundle Node runtime (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/node-runtime
+          install -m 0755 "$(command -v node)" src-tauri/node-runtime/node
+          src-tauri/node-runtime/node --version
+
+      - name: Bundle Node runtime (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/node-runtime | Out-Null
+          Copy-Item (Get-Command node).Source src-tauri/node-runtime/node.exe -Force
+          & src-tauri/node-runtime/node.exe --version
+
       - name: Install macOS universal target
         if: matrix.platform == 'macos-latest'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -100,3 +116,45 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.tauri_target }}
+
+      - name: Verify Linux artifacts (AppImage + DEB)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          BUNDLE_DIR="src-tauri/target/x86_64-unknown-linux-gnu/release/bundle"
+          echo "Checking for Linux artifacts..."
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "ERROR: Bundle directory not found at $BUNDLE_DIR"
+            exit 1
+          fi
+          find "$BUNDLE_DIR" -type f \( -name "*.AppImage" -o -name "*.deb" \) -exec ls -lh {} \;
+          APPIMAGE_COUNT=$(find "$BUNDLE_DIR" -name "*.AppImage" | wc -l)
+          DEB_COUNT=$(find "$BUNDLE_DIR" -name "*.deb" | wc -l)
+          echo "Found $APPIMAGE_COUNT AppImage(s) and $DEB_COUNT DEB package(s)"
+          if [ "$APPIMAGE_COUNT" -eq 0 ] || [ "$DEB_COUNT" -eq 0 ]; then
+            echo "ERROR: Expected both AppImage and DEB packages"
+            exit 1
+          fi
+
+      - name: Build MSIX (Microsoft Store)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          ./scripts/build-msix.ps1 `
+            -ReleaseDir "src-tauri/target/${{ matrix.tauri_target }}/release" `
+            -Version $version `
+            -OutFile "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_$version.msix"
+
+      - name: Upload MSIX to release
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          gh release upload "$RELEASE_TAG" \
+            "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_${VERSION}.msix" \
+            --repo "${{ github.repository }}" \
+            --clobber

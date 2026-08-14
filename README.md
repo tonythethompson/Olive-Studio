@@ -68,6 +68,17 @@ pnpm build
 pnpm start
 ```
 
+### Ubuntu desktop packages
+
+Official Linux releases include a Node 22 runtime for the Tauri sidecar; a system Node installation is not required to launch the DEB or AppImage. Ubuntu 22.04+ needs the desktop runtime libraries:
+
+```bash
+sudo apt update
+sudo apt install -y libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 xdg-utils
+```
+
+Install a DEB with `sudo apt install ./Olive-Studio_*.deb`, or make an AppImage executable with `chmod +x Olive-Studio_*.AppImage` and run it. Building from source still requires Node 22+, pnpm, Python, and Rust. For NVIDIA CUDA or AMD ROCm recipes, install the vendor driver/runtime first; CPU recipes work without GPU tooling.
+
 ---
 
 ## Features

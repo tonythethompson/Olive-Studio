@@ -55,6 +55,29 @@ fn server_entry(root: &Path) -> PathBuf {
   root.join("dist").join("server.cjs")
 }
 
+/// Release workflows place a Node 22 runtime in this resource path (Linux/Windows).
+/// Development builds and locally-built packages can still use the Node binary
+/// on PATH. macOS builds currently require a system Node installation.
+fn node_executable(root: &Path) -> PathBuf {
+  #[cfg(target_os = "linux")]
+  {
+    let bundled = root.join("node-runtime").join("node");
+    if bundled.is_file() {
+      return bundled;
+    }
+  }
+
+  #[cfg(target_os = "windows")]
+  {
+    let bundled = root.join("node-runtime").join("node.exe");
+    if bundled.is_file() {
+      return bundled;
+    }
+  }
+
+  PathBuf::from("node")
+}
+
 /// Picks an ephemeral loopback port and spawns the Node server on it.
 /// Returns both the child process and the assigned port.
 fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
@@ -74,7 +97,8 @@ fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
     .port();
   drop(listener);
 
-  let mut cmd = Command::new("node");
+  let node = node_executable(root);
+  let mut cmd = Command::new(&node);
   cmd
     .arg(&entry)
     .current_dir(root)
@@ -94,7 +118,8 @@ fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
 
   let child = cmd.spawn().map_err(|e| {
     format!(
-      "Failed to start Node server: {e}\nIs Node.js 22+ installed and on PATH?"
+      "Failed to start Node server with {}: {e}\nInstall Node.js 22+ or use a packaged build that includes the bundled runtime.",
+      node.display()
     )
   })?;
 
