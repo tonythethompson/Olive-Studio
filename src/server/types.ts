@@ -190,6 +190,11 @@ export interface StudioConfig {
   agentAccess?: AgentAccessPolicy;
   /** MCP server retrieval settings (persisted across restarts). */
   mcpSettings?: McpSettings;
+  /** Result of the last background first-launch MCP venv setup attempt (packaged desktop builds). */
+  mcpAutoSetup?: {
+    lastAttemptAt: string;
+    lastResult: "ok" | "python-missing" | "failed";
+  };
 }
 
 export interface McpSettings {

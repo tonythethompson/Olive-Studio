@@ -123,8 +123,21 @@ if (-not $SkipVerify) {
     if (-not (Test-Path $pythonVenv)) {
         $pythonVenv = Join-Path $VenvDir "bin\python"
     }
-    $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>&1
-    if ($testOutput -match "OK") {
+    # A benign Python warning on stderr (e.g. a pydantic deprecation notice) can
+    # get promoted to a terminating PowerShell error under
+    # $ErrorActionPreference = "Stop" -- especially when this script's own
+    # stdio is piped rather than an interactive console (e.g. spawned from
+    # Node for postinstall). Redirecting stderr alone doesn't prevent that
+    # promotion, so relax EAP just for this native call.
+    $prevEap = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>$null
+        $testExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if ($testExit -eq 0 -and $testOutput -match "OK") {
         Write-Host "      Server module imports successfully." -ForegroundColor Green
     } else {
         Write-Host "      WARNING: Server import check returned unexpected output:" -ForegroundColor Yellow

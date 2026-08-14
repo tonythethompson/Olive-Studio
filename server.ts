@@ -11,6 +11,7 @@ import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai/index.ts";
 import { mountMcpRoutes, performKbSync } from "./src/server/routes/mcp.ts";
+import { ensureMcpSetupInBackground } from "./src/server/services/mcp/ensureMcpSetup.ts";
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
 import { mountArenaRoutes } from "./src/server/routes/arena.ts";
@@ -320,6 +321,12 @@ async function startServer() {
         }
       } catch (err: unknown) {
         console.warn("[kb] startup sync failed:", err instanceof Error ? err.message : err);
+      }
+      // Fire-and-forget: sets up the bundled MCP server venv on first launch of
+      // a packaged desktop build (or a fresh checkout that skipped postinstall).
+      // Never blocks readiness or startup.
+      if (shouldServeProductionStatic()) {
+        ensureMcpSetupInBackground();
       }
       resolve();
     });
