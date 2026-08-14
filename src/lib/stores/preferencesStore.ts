@@ -3,13 +3,18 @@ import { persist } from "zustand/middleware";
 
 export type ThemePreference = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
+export type McpRetrievalMode = "auto" | "keyword" | "semantic";
 
 interface PreferencesState {
   themePreference: ThemePreference;
+  mcpRetrievalMode: McpRetrievalMode;
+  mcpPreloadEmbeddings: boolean;
 }
 
 interface PreferencesActions {
   setThemePreference: (pref: ThemePreference) => void;
+  setMcpRetrievalMode: (mode: McpRetrievalMode) => void;
+  setMcpPreloadEmbeddings: (enabled: boolean) => void;
 }
 
 type PreferencesStore = PreferencesState & PreferencesActions;
@@ -20,7 +25,11 @@ export const usePreferencesStore = create<PreferencesStore>()(
   persist(
     (set) => ({
       themePreference: "system",
+      mcpRetrievalMode: "auto",
+      mcpPreloadEmbeddings: false,
       setThemePreference: (pref) => set({ themePreference: pref }),
+      setMcpRetrievalMode: (mode) => set({ mcpRetrievalMode: mode }),
+      setMcpPreloadEmbeddings: (enabled) => set({ mcpPreloadEmbeddings: enabled }),
     }),
     { name: STORAGE_KEY },
   ),

@@ -1,7 +1,7 @@
 {
   "stem": "ts_olive",
   "kind": "entries",
-  "model": "all-MiniLM-L6-v2",
+  "model": "BAAI/bge-small-en-v1.5",
   "dim": 384,
   "count": 36,
   "content_hash": "bdea6364e803addd4bec02eeb28f4e52315227ed4eda459c87f791f63b144b70",

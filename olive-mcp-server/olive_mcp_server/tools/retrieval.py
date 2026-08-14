@@ -27,7 +27,7 @@ DEFAULT_SEMANTIC_BUDGET_MS = 8000
 BudgetOutcome = Literal["ok", "timeout", "busy"]
 
 # Single shared pool for budgeted semantic work so concurrent auto-mode
-# timeouts cannot stack many MiniLM loads (one per abandoned ThreadPoolExecutor).
+# timeouts cannot stack many embedding-model loads (one per abandoned ThreadPoolExecutor).
 _SEMANTIC_BUDGET_POOL = concurrent.futures.ThreadPoolExecutor(
     max_workers=1,
     thread_name_prefix="olive-mcp-semantic-budget",
@@ -35,7 +35,7 @@ _SEMANTIC_BUDGET_POOL = concurrent.futures.ThreadPoolExecutor(
 
 # Single-flight: at most one budgeted callable is tracked. Timed-out work may
 # still be running; further callers get an immediate keyword-fallback signal
-# instead of queueing another MiniLM load behind it.
+# instead of queueing another embedding-model load behind it.
 _INFLIGHT_LOCK = threading.Lock()
 _INFLIGHT_FUTURE: concurrent.futures.Future[Any] | None = None
 

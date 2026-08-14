@@ -13,7 +13,7 @@ import {
   isKbSyncInProgress,
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
-import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR } from "../services/mcp/client.ts";
+import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR, reconnectMcpClient } from "../services/mcp/client.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.ts";
 import {
@@ -24,6 +24,7 @@ import {
 import {
   kbStatusRateLimit,
   kbSyncRateLimit,
+  mcpSettingsRateLimit,
   studioRecipeRateLimit,
   mcpToolRateLimit,
 } from "../middleware/rateLimit.ts";
@@ -31,6 +32,18 @@ import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { readStudioConfig, writeStudioConfig } from "../config.ts";
 import type { KbStatusCache } from "../types.ts";
 import { denyUnless } from "../services/olive/agentAccess.ts";
+
+/** Serialize MCP settings RMW + reconnect so overlapping POSTs cannot restore stale config. */
+let mcpSettingsWriteChain: Promise<void> = Promise.resolve();
+
+function enqueueMcpSettingsWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mcpSettingsWriteChain.then(fn, fn);
+  mcpSettingsWriteChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 
 /**
  * Strict loopback gate for the MCP tool proxy (including write-capable tools
@@ -372,5 +385,70 @@ export function mountMcpRoutes(router: Router): void {
     } finally {
       setKbSyncInProgress(false);
     }
+  });
+
+  // ─── MCP Settings (update env vars + restart server) ───────────────────
+  router.post("/mcp/settings", studioLocalOnly, mcpSettingsRateLimit, async (req, res) => {
+    if (process.env.OLIVE_MCP_URL) {
+      return res.status(400).json({ error: "Retrieval settings cannot be changed when running against a remote MCP server." });
+    }
+
+    const body = parseBody<{
+      retrievalMode?: "auto" | "keyword" | "semantic";
+      preloadEmbeddings?: boolean;
+    }>(req.body, {
+      retrievalMode: { type: "string", required: false },
+      preloadEmbeddings: { type: "boolean", required: false },
+    });
+    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
+
+    const parsed = body.parsed;
+    const validModes = ["auto", "keyword", "semantic"];
+    if (parsed.retrievalMode && !validModes.includes(parsed.retrievalMode)) {
+      return res.status(400).json({ error: `retrievalMode must be one of: ${validModes.join(", ")}` });
+    }
+
+    try {
+      const mcpSettings = await enqueueMcpSettingsWrite(async () => {
+        const current = readStudioConfig();
+        const previousMcpSettings = current.mcpSettings;
+        const next = {
+          ...previousMcpSettings,
+          ...(parsed.retrievalMode !== undefined && { retrievalMode: parsed.retrievalMode }),
+          ...(parsed.preloadEmbeddings !== undefined && { preloadEmbeddings: parsed.preloadEmbeddings }),
+        };
+        writeStudioConfig({ mcpSettings: next });
+        try {
+          await reconnectMcpClient();
+          return next;
+        } catch (err) {
+          // Revert config on disk if reconnect failed so failed settings are not persisted
+          writeStudioConfig({ mcpSettings: previousMcpSettings });
+          // Await restore so the next settings write cannot share this reconnect
+          // (and so we do not release the write queue while MCP is mid-rollback).
+          try {
+            await reconnectMcpClient();
+          } catch (rollbackErr) {
+            console.warn(
+              "[mcp] failed to restore previous MCP process after settings rollback:",
+              rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+            );
+          }
+          throw err;
+        }
+      });
+      return res.json({ ok: true, mcpSettings });
+    } catch {
+      return res.status(500).json({ ok: false, error: "Failed to restart MCP server with new settings" });
+    }
+  });
+
+  // ─── MCP Settings (read current) ───────────────────────────────────────
+  router.get("/mcp/settings", kbStatusRateLimit, (_req, res) => {
+    const { mcpSettings } = readStudioConfig();
+    return res.json({
+      mcpSettings: mcpSettings ?? {},
+      isRemote: Boolean(process.env.OLIVE_MCP_URL),
+    });
   });
 }
