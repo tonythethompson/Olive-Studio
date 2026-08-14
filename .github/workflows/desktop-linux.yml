@@ -1,0 +1,87 @@
+name: Linux Desktop Package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-linux.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/desktop-linux.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle Node runtime
+        shell: bash
+        run: |
+          mkdir -p src-tauri/node-runtime
+          install -m 0755 "$(command -v node)" src-tauri/node-runtime/node
+          src-tauri/node-runtime/node --version
+
+      - name: Build DEB and AppImage
+        run: pnpm exec tauri build --bundles deb,appimage --config src-tauri/tauri.ci.conf.json
+
+      - name: Verify packaged Node runtime and server smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          DEB="$(find "$BUNDLE_DIR/deb" -name '*.deb' -print -quit)"
+          APPIMAGE="$(find "$BUNDLE_DIR/appimage" -name '*.AppImage' -print -quit)"
+          test -n "$DEB"
+          test -n "$APPIMAGE"
+          dpkg-deb -c "$DEB" | grep -Eq 'resources/node-runtime/node$'
+          APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract >/dev/null
+          NODE="$(find squashfs-root -type f -path '*resources/node-runtime/node' -print -quit)"
+          test -x "$NODE"
+          "$NODE" --version
+          PORT=31415 "$NODE" "$PWD/dist/server.mjs" &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for _ in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:31415/api/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "Bundled Node runtime did not start the production server"
+          exit 1

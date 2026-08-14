@@ -70,7 +70,8 @@
       "../olive-mcp-server/olive_mcp_server": "olive-mcp-server/olive_mcp_server",
       "../olive-mcp-server/schemas": "olive-mcp-server/schemas",
       "../olive-mcp-server/run.py": "olive-mcp-server/run.py",
-      "../olive-mcp-server/pyproject.toml": "olive-mcp-server/pyproject.toml"
+      "../olive-mcp-server/pyproject.toml": "olive-mcp-server/pyproject.toml",
+      "node-runtime": "node-runtime"
     },
     "windows": {
       "certificateThumbprint": null,
@@ -112,7 +113,8 @@
       "deb": {
         "depends": [
           "libwebkit2gtk-4.1-0",
-          "libgtk-3-0"
+          "libgtk-3-0",
+          "libayatana-appindicator3-1"
         ],
         "section": "utils",
         "priority": "optional"
