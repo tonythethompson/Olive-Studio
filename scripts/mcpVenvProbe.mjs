@@ -105,21 +105,29 @@ function uvManagedPythons() {
  * Finds a system Python in the supported range (3.13/3.12 preferred):
  * versioned PATH commands, the Windows `py` launcher, then uv-managed
  * installs (which are usually not on PATH).
+ *
+ * Returns the exact argv to spawn (`py` keeps its version flag). Callers
+ * that only need a boolean can use `findSystemPython()`.
  */
-export function findSystemPython() {
+export function findSystemPythonSpec() {
   const versioned = ["python3.13", "python3.12", "python3.11", "python3.10"];
   const candidates =
     process.platform === "win32" ? ["python", ...versioned, "python3"] : [...versioned, "python3", "python"];
   for (const cmd of candidates) {
-    if (inSupportedRange(pythonMinor(cmd))) return cmd;
+    if (inSupportedRange(pythonMinor(cmd))) return { cmd, args: [] };
   }
   if (process.platform === "win32") {
     for (const flag of ["-3.13", "-3.12", "-3.11", "-3.10"]) {
-      if (inSupportedRange(pythonMinor("py", [flag]))) return "py";
+      if (inSupportedRange(pythonMinor("py", [flag]))) return { cmd: "py", args: [flag] };
     }
   }
   for (const bin of uvManagedPythons()) {
-    if (inSupportedRange(pythonMinor(bin))) return bin;
+    if (inSupportedRange(pythonMinor(bin))) return { cmd: bin, args: [] };
   }
   return null;
+}
+
+/** First supported interpreter command, or null. Prefer `findSystemPythonSpec()` to spawn. */
+export function findSystemPython() {
+  return findSystemPythonSpec()?.cmd ?? null;
 }

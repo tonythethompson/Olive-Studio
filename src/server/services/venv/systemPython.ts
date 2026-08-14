@@ -104,7 +104,7 @@ export function parsePythonExeLines(text: string): string[] {
     if (/^[A-Za-z]:[\\/].+\.exe$/i.test(trimmed) || /(^|[/\\])python(\d+(\.\d+)*)?(\.exe)?$/i.test(trimmed)) {
       if (trimmed.includes("/") || trimmed.includes("\\")) hits.push(trimmed);
     }
-    const win = trimmed.matchAll(/([A-Za-z]:\\[^\s*"']+python(?:\d+(?:\.\d+)*)?\.exe)/gi);
+    const win = trimmed.matchAll(/([A-Za-z]:\\[^:*?"<>|\r\n]*?python(?:\d+(?:\.\d+)*)?\.exe)/gi);
     for (const m of win) hits.push(m[1]!);
     const posix = trimmed.matchAll(/((?:\/[\w.+-]+)+\/python(?:\d+(?:\.\d+)*)?)/g);
     for (const m of posix) hits.push(m[1]!);

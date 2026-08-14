@@ -19,6 +19,11 @@ describe("parsePythonExeLines", () => {
       "C:\\Users\\me\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
     ]);
   });
+
+  it("reads py -0p / manager paths that contain spaces", () => {
+    const text = " -3.12-64        C:\\Program Files\\Python312\\python.exe *";
+    expect(parsePythonExeLines(text)).toEqual(["C:\\Program Files\\Python312\\python.exe"]);
+  });
 });
 
 describe("collectPreferredPythonFileCandidates", () => {

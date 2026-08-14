@@ -163,8 +163,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
+      buf += decoder.decode(value, { stream: !done });
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";
       for (const line of lines) {

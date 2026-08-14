@@ -32,20 +32,76 @@ echo "=== Olive MCP Server Setup ==="
 echo ""
 
 echo "[1/5] Checking Python..."
+PYTHON_MIN_MINOR=10
+PYTHON_MAX_MINOR=13
 PYTHON_CMD=""
-for cmd in python3 python; do
-  if command -v "$cmd" >/dev/null 2>&1; then
+PYTHON_PREFIX_ARGS=()
+
+supported_python() {
+  local cmd="$1"
+  shift
+  local ver
+  if [[ $# -gt 0 ]]; then
+    ver="$("$cmd" "$@" --version 2>&1 || true)"
+  else
     ver="$("$cmd" --version 2>&1 || true)"
-    if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
-      minor="${BASH_REMATCH[1]}"
-      if [[ "$minor" -ge 10 ]]; then
-        PYTHON_CMD="$cmd"
-        echo "      Found: $ver"
-        break
-      fi
+  fi
+  if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
+    local minor="${BASH_REMATCH[1]}"
+    if [[ "$minor" -ge "$PYTHON_MIN_MINOR" && "$minor" -le "$PYTHON_MAX_MINOR" ]]; then
+      return 0
     fi
   fi
-done
+  return 1
+}
+
+create_venv() {
+  if [[ ${#PYTHON_PREFIX_ARGS[@]} -gt 0 ]]; then
+    "$PYTHON_CMD" "${PYTHON_PREFIX_ARGS[@]}" -m venv "$VENV_DIR"
+  else
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+  fi
+}
+
+if [[ -n "${OLIVE_STUDIO_PYTHON:-}" ]]; then
+  if [[ -n "${OLIVE_STUDIO_PYTHON_ARGS:-}" ]]; then
+    while IFS= read -r arg || [[ -n "$arg" ]]; do
+      [[ -n "$arg" ]] && PYTHON_PREFIX_ARGS+=("$arg")
+    done <<< "$OLIVE_STUDIO_PYTHON_ARGS"
+  fi
+  if supported_python "$OLIVE_STUDIO_PYTHON" "${PYTHON_PREFIX_ARGS[@]+"${PYTHON_PREFIX_ARGS[@]}"}"; then
+    PYTHON_CMD="$OLIVE_STUDIO_PYTHON"
+    if [[ ${#PYTHON_PREFIX_ARGS[@]} -gt 0 ]]; then
+      echo "      Found: $("$PYTHON_CMD" "${PYTHON_PREFIX_ARGS[@]}" --version 2>&1 || true)"
+    else
+      echo "      Found: $("$PYTHON_CMD" --version 2>&1 || true)"
+    fi
+  else
+    PYTHON_PREFIX_ARGS=()
+  fi
+fi
+
+if [[ -z "$PYTHON_CMD" ]]; then
+  for cmd in python3.13 python3.12 python3.11 python3.10 python3 python; do
+    if command -v "$cmd" >/dev/null 2>&1 && supported_python "$cmd"; then
+      PYTHON_CMD="$cmd"
+      echo "      Found: $("$cmd" --version 2>&1 || true)"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$PYTHON_CMD" ]] && command -v py >/dev/null 2>&1; then
+  for flag in -3.13 -3.12 -3.11 -3.10; do
+    if supported_python py "$flag"; then
+      PYTHON_CMD="py"
+      PYTHON_PREFIX_ARGS=("$flag")
+      echo "      Found: $(py "$flag" --version 2>&1 || true)"
+      break
+    fi
+  done
+fi
+
 if [[ -z "$PYTHON_CMD" ]]; then
   echo "      ERROR: Python 3.10–3.13 (3.12 recommended) not found on PATH." >&2
   echo "      Debian/Ubuntu: sudo apt install -y python3 python3-venv python3-pip" >&2
@@ -69,8 +125,9 @@ if [[ -d "$VENV_DIR" ]]; then
   else
     ver="$("$existing_py" --version 2>&1 || true)"
     if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
-      if [[ "${BASH_REMATCH[1]}" -lt 10 ]]; then
-        echo "      Existing venv is $ver (< 3.10); recreating..."
+      existing_minor="${BASH_REMATCH[1]}"
+      if [[ "$existing_minor" -lt "$PYTHON_MIN_MINOR" || "$existing_minor" -gt "$PYTHON_MAX_MINOR" ]]; then
+        echo "      Existing venv is $ver (need 3.10–3.13); recreating..."
         recreate=1
       fi
     else
@@ -80,14 +137,14 @@ if [[ -d "$VENV_DIR" ]]; then
   if [[ "$recreate" -eq 1 ]]; then
     rm -rf "$VENV_DIR"
     echo "      Creating venv at: $VENV_DIR"
-    "$PYTHON_CMD" -m venv "$VENV_DIR"
+    create_venv
     echo "      Created."
   else
     echo "      Venv already exists at: $VENV_DIR"
   fi
 else
   echo "      Creating venv at: $VENV_DIR"
-  "$PYTHON_CMD" -m venv "$VENV_DIR"
+  create_venv
   echo "      Created."
 fi
 

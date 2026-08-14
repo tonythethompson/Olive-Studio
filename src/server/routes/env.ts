@@ -2,7 +2,7 @@
  * Environment / venv route handlers.
  * Python path, HuggingFace token, venv management.
  */
-import type { Request, Response, Router } from "express";
+import type { NextFunction, Request, Response, Router } from "express";
 
 import {
   getRuntimeEnvStatus,
@@ -21,7 +21,21 @@ import { ensureDirectMl } from "../services/olive/directml.ts";
 import { ensureQnn, runQnnHtpDiagnostic } from "../services/olive/qnn.ts";
 import { authActionRateLimit, fsWriteRateLimit, heavyCommandRateLimit } from "../middleware/rateLimit.ts";
 import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
+import { isTrustedStudioOrigin } from "../middleware/cors.ts";
+import { studioLocalOnly } from "../middleware/localOnly.ts";
 import { resolveAllowedPythonFile } from "../services/venv/pythonGuard.ts";
+
+/** Loopback + trusted-origin gate for OS package-manager installs. */
+function installPythonLocalOnly(req: Request, res: Response, next: NextFunction): void {
+  studioLocalOnly(req, res, () => {
+    const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+    if (!isTrustedStudioOrigin(origin)) {
+      res.status(403).json({ error: "This endpoint is only available from the Olive Studio origin" });
+      return;
+    }
+    next();
+  });
+}
 
 /** Serialize all stack installs that mutate the shared venv via pip. */
 let venvPipInstallChain: Promise<unknown> = Promise.resolve();
@@ -180,7 +194,7 @@ export function mountEnvRoutes(router: Router): void {
   });
 
   // Optional system Python install (winget / pymanager / brew). Linux returns a command.
-  router.post("/env/install-python", heavyCommandRateLimit, async (_req, res) => {
+  router.post("/env/install-python", installPythonLocalOnly, heavyCommandRateLimit, async (_req, res) => {
     await streamNdjsonInstall(res, installSystemPython);
   });
 
