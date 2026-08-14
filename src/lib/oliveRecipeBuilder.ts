@@ -4,6 +4,8 @@ import { openvinoTargetToOliveDevice } from "@/lib/openvinoDeps";
 import {
   isReplacementExportPipeline,
 } from "@/lib/replacementExportPipeline";
+import { isMultiLoraEnabled } from "@/lib/featureFlags";
+import { validateAdapters, type AdapterEntry } from "@/lib/multiLoraValidation";
 
 const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
@@ -790,9 +792,281 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
   }
 
   // Order: Convert → Optimize → Quantize (ONNX path), then MCP pass overrides
+  // Multi-LoRA adapter gating — when PEFT is active and adapters are configured
+  const multiLoraAdapters = state.multiLoraAdapters;
+  if (state.passes.peft && Array.isArray(multiLoraAdapters) && multiLoraAdapters.length > 0) {
+    const vram = typeof state.vramEstimateGb === "number" ? state.vramEstimateGb : Number.NaN;
+    const gateResult = gateMultiLoraAdapters(multiLoraAdapters, vram);
+    if (!gateResult.allowed) {
+      throw new Error(
+        `Multi-LoRA adapter configuration rejected: ${gateResult.reason ?? "invalid adapter configuration"}`,
+      );
+    }
+    if (gateResult.adapters.length > 0) {
+      if (isMultiLoraEnabled()) {
+        const extractPass = buildExtractAdaptersPass(gateResult.adapters);
+        if (extractPass) {
+          passes["extract_adapters"] = extractPass;
+        }
+        (recipe as Record<string, unknown>).adapters = gateResult.adapters.map((a) => ({
+          name: a.name,
+          path: a.path,
+          rank: a.rank,
+          alpha: a.alpha,
+          ...(a.targetModules ? { target_modules: a.targetModules } : {}),
+        }));
+      } else {
+        // Feature-off single-adapter configurations use Olive's legacy field.
+        inputConfig.adapter_path = gateResult.adapters[0].path;
+      }
+    }
+  }
+
   recipe.passes = finalizePasses(passes, state.passRecipeOverrides, torchQuantActive);
 
   memoState = state;
   memoRecipe = recipe;
   return recipe;
+}
+
+// ─── Multi-LoRA Adapter Gating ────────────────────────────────────────────────
+
+/**
+ * Result of adapter gating — either a validated adapters array (when the
+ * multiLora flag is enabled and adapters are valid) or a rejection reason.
+ */
+export interface AdapterGateResult {
+  /** Whether the adapters passed gating and can be emitted in the recipe. */
+  allowed: boolean;
+  /** Validated adapter entries (populated only when `allowed` is true). */
+  adapters: AdapterEntry[];
+  /** Human-readable reason when adapters are rejected. */
+  reason?: string;
+}
+
+/**
+ * Gates multi-adapter configurations based on the `multiLora` feature flag.
+ *
+ * - When the flag is **disabled** (default): rejects any configuration with
+ *   more than one adapter entry. Single-adapter configs are allowed through
+ *   in single-adapter mode (using only `adapter_path`).
+ * - When the flag is **enabled**: validates adapters using `validateAdapters`
+ *   and returns the validated entries for emission in Olive 0.13.0
+ *   `ExtractAdapters` pass format.
+ *
+ * @param adapters - Raw adapter entries from the recipe configuration
+ * @param vramGb - Available VRAM in gigabytes (for count limit enforcement)
+ * @returns Gating result with validated adapters or rejection reason
+ */
+/**
+ * Last path segment without regex (CodeQL: polynomial regex on uncontrolled paths).
+ * Accepts `/` and `\` separators; strips trailing separators.
+ */
+function basenameFromFsPath(path: string): string {
+  let end = path.length;
+  while (end > 0) {
+    const c = path.charCodeAt(end - 1);
+    if (c !== 47 /* / */ && c !== 92 /* \ */) break;
+    end -= 1;
+  }
+  if (end === 0) return "";
+  let start = end;
+  while (start > 0) {
+    const c = path.charCodeAt(start - 1);
+    if (c === 47 || c === 92) break;
+    start -= 1;
+  }
+  return path.slice(start, end);
+}
+
+function readOptionalTargetModules(obj: Record<string, unknown>): string[] | undefined {
+  const rawModules = Array.isArray(obj.targetModules)
+    ? obj.targetModules
+    : Array.isArray(obj.target_modules)
+      ? obj.target_modules
+      : undefined;
+  if (
+    !Array.isArray(rawModules) ||
+    !rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
+  ) {
+    return undefined;
+  }
+  return rawModules;
+}
+
+function resolveAdapterFallbackName(path: string, index: number): string {
+  return basenameFromFsPath(path) || (index === 0 ? "default" : `adapter-${index}`);
+}
+
+type NormalizeAdapterResult =
+  | { ok: true; adapter: AdapterEntry }
+  | { ok: false; reason: string };
+
+type ResolveFieldResult<T> = { ok: true; value: T } | { ok: false; reason: string };
+
+/** Missing rank defaults to 8; present-but-invalid rank is rejected. */
+function resolveAdapterRank(value: unknown): ResolveFieldResult<number> {
+  if (value === undefined) return { ok: true, value: 8 };
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer." };
+}
+
+/** Missing alpha defaults to 16; present-but-invalid alpha is rejected. */
+function resolveAdapterAlpha(value: unknown): ResolveFieldResult<number> {
+  if (value === undefined) return { ok: true, value: 16 };
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number." };
+}
+
+/**
+ * Absent targetModules/target_modules is fine. If either key is present, the
+ * value must be a non-empty-string array (or we reject).
+ */
+function resolveAdapterTargetModules(
+  obj: Record<string, unknown>,
+): ResolveFieldResult<string[] | undefined> {
+  const hasTargetModulesKey = "targetModules" in obj || "target_modules" in obj;
+  const targetModules = readOptionalTargetModules(obj);
+  if (hasTargetModulesKey && targetModules === undefined) {
+    return {
+      ok: false,
+      reason: "targetModules must be an array of non-empty strings.",
+    };
+  }
+  return { ok: true, value: targetModules };
+}
+
+/**
+ * Normalize a path-bearing adapter entry so MCP path-only payloads and
+ * flag-off single-adapter mode share the same name/rank/alpha defaults.
+ *
+ * Missing optional fields get defaults. Present-but-invalid rank/alpha/
+ * targetModules are rejected so callers cannot silently rewrite bad values.
+ */
+function normalizePathBearingAdapter(
+  entry: unknown,
+  index: number,
+): NormalizeAdapterResult {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return { ok: false, reason: "Adapter entry must be a non-null object." };
+  }
+  const obj = entry as Record<string, unknown>;
+  if (typeof obj.path !== "string" || obj.path.length === 0) {
+    return { ok: false, reason: "path must be a non-empty string." };
+  }
+
+  const targetModules = resolveAdapterTargetModules(obj);
+  if (!targetModules.ok) return targetModules;
+
+  const rank = resolveAdapterRank(obj.rank);
+  if (!rank.ok) return rank;
+
+  const alpha = resolveAdapterAlpha(obj.alpha);
+  if (!alpha.ok) return alpha;
+
+  const fallbackName = resolveAdapterFallbackName(obj.path, index);
+  return {
+    ok: true,
+    adapter: {
+      name:
+        typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
+      path: obj.path,
+      rank: rank.value,
+      alpha: alpha.value,
+      ...(targetModules.value ? { targetModules: targetModules.value } : {}),
+    },
+  };
+}
+
+export function gateMultiLoraAdapters(
+  adapters: unknown[],
+  vramGb: number,
+): AdapterGateResult {
+  // When flag is disabled, reject multi-adapter configs
+  if (!isMultiLoraEnabled()) {
+    if (adapters.length > 1) {
+      return {
+        allowed: false,
+        adapters: [],
+        reason:
+          "Multi-adapter configuration rejected: multiLora feature flag is disabled. " +
+          "Use single-adapter mode (adapter_path) or enable the multiLora flag.",
+      };
+    }
+    // Single adapter (or empty) is allowed even with flag off — treated as legacy single-adapter mode
+    if (adapters.length === 1) {
+      const normalized = normalizePathBearingAdapter(adapters[0], 0);
+      if (normalized.ok) {
+        return { allowed: true, adapters: [normalized.adapter], reason: undefined };
+      }
+      return {
+        allowed: false,
+        adapters: [],
+        reason: `Invalid single-adapter entry: ${normalized.reason}`,
+      };
+    }
+    // Empty array — nothing to gate
+    return { allowed: true, adapters: [], reason: undefined };
+  }
+
+  // Flag is enabled — normalize path-only MCP bridge entries, then validate.
+  // Path-only payloads are accepted by the bridge; apply the same defaults as
+  // flag-off mode so evaluate/build do not reject otherwise usable adapters.
+  const normalized: unknown[] = [];
+  for (let i = 0; i < adapters.length; i += 1) {
+    const withDefaults = normalizePathBearingAdapter(adapters[i], i);
+    if (!withDefaults.ok) {
+      // Missing path / non-object: let validateAdapters report the raw entry.
+      // Present-but-invalid rank/alpha/targetModules: reject here so defaults
+      // cannot mask the caller's bad values.
+      if (
+        withDefaults.reason.includes("rank") ||
+        withDefaults.reason.includes("alpha") ||
+        withDefaults.reason.includes("targetModules")
+      ) {
+        return {
+          allowed: false,
+          adapters: [],
+          reason: `Adapter at index ${i}: ${withDefaults.reason}`,
+        };
+      }
+      normalized.push(adapters[i]);
+      continue;
+    }
+    normalized.push(withDefaults.adapter);
+  }
+  const result = validateAdapters(normalized, vramGb);
+  if (result.valid) {
+    return { allowed: true, adapters: result.adapters, reason: undefined };
+  }
+
+  return {
+    allowed: false,
+    adapters: [],
+    reason: result.errors.map((e) => e.message).join("; "),
+  };
+}
+
+/**
+ * Builds the `ExtractAdapters` pass config from validated adapter entries.
+ * Only emitted when the `multiLora` feature flag is enabled and adapters are validated.
+ *
+ * @param adapters - Validated adapter entries
+ * @returns Olive 0.13.0 `ExtractAdapters` pass specification, or undefined if empty
+ */
+export function buildExtractAdaptersPass(adapters: AdapterEntry[]): Record<string, unknown> | undefined {
+  if (adapters.length === 0) return undefined;
+  // Olive ExtractAdapters unwraps adapters already embedded in ONNX.
+  // Multi-adapter switching is recipe-level `adapters[]`, not this pass config.
+  return {
+    type: "ExtractAdapters",
+    config: {
+      adapter_type: "lora",
+      make_inputs: true,
+    },
+  };
 }

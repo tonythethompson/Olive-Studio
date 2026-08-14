@@ -3,6 +3,8 @@ import { getPipelineValidation, applyIssueAutofix, hasSelectedModel, type Pipeli
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { useMcpDiagnostic } from "@/lib/hooks/useMcpDiagnostic";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
+import { OLIVE_EXPAND_VALIDATION, OLIVE_EMPHASIZE_VALIDATION, takePendingExpandValidation, takePendingEmphasizeValidation } from "@/lib/pipelineNavigation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState, type IHVProvider } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -91,12 +93,45 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [mcpParamWarnings, setMcpParamWarnings] = useState<McpParamWarning[]>([]);
   const [mcpParamLoading, setMcpParamLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [emphasized, setEmphasized] = useState(false);
   const [showCompatDetails, setShowCompatDetails] = useState(false);
+
+  useEffect(() => {
+    const handleExpand = () => {
+      takePendingExpandValidation();
+      setExpanded(true);
+    };
+    window.addEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
+    // Catch expand requests that fired before this listener registered
+    // (common when Resolve Issues races a lazy Execute mount).
+    if (takePendingExpandValidation()) setExpanded(true);
+    return () => window.removeEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
+  }, []);
+
+  useEffect(() => {
+    let emphasizeTimer: number | undefined;
+    const handleEmphasize = () => {
+      takePendingEmphasizeValidation();
+      if (emphasizeTimer !== undefined) window.clearTimeout(emphasizeTimer);
+      setEmphasized(true);
+      emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
+    };
+    window.addEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
+    if (takePendingEmphasizeValidation()) {
+      setEmphasized(true);
+      emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
+    }
+    return () => {
+      window.removeEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
+      if (emphasizeTimer !== undefined) window.clearTimeout(emphasizeTimer);
+    };
+  }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
   const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic, clearDiagnostic } = useMcpDiagnostic();
+  const { data: hardwareProbe } = useHardwareProbe();
 
-  const validation = getPipelineValidation(state);
+  const validation = getPipelineValidation(state, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null });
   // Pass-parameter advisories (quant method preferences, precision tips, etc.) are all
   // about tuning a model that doesn't exist yet — showing them next to "No model
   // selected" reads as a wall of unrelated noise around the one thing to actually fix.
@@ -337,8 +372,13 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
   return (
     <div
+      id="recipe-validation-panel"
       data-testid="recipe-validation-panel"
-      className="rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden"
+      className={`rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden transition-all duration-300 ease-out ${
+        emphasized
+          ? "ring-2 ring-sky-400 ring-offset-4 ring-offset-slate-950 bg-sky-400/15 border-sky-400 shadow-[0_0_24px_rgba(56,189,248,0.35)]"
+          : ""
+      }`}
     >
       {/* Header */}
       <div className="w-full flex items-center justify-between p-2 hover:bg-slate-800/50 transition-colors">
