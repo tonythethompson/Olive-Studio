@@ -83,21 +83,19 @@ export function ExportReportMenu({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
 
-  useEffect(() => {
-    if (isDisabled && open) setOpen(false);
-  }, [isDisabled, open]);
-
   // Hide entirely when the feature flag is disabled
   if (!flagEnabled) {
     return null;
   }
+
+  const menuOpen = open && !isDisabled;
 
   return (
     <div className="relative" ref={containerRef}>
       <button
         type="button"
         data-testid="export-report-trigger"
-        aria-expanded={open}
+        aria-expanded={menuOpen}
         aria-haspopup="menu"
         disabled={isDisabled}
         onClick={() => setOpen((prev) => !prev)}
@@ -112,7 +110,7 @@ export function ExportReportMenu({
         Export Report
       </button>
 
-      {open && (
+      {menuOpen && (
         <div
           role="menu"
           className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-slate-800 bg-slate-950 p-1 shadow-xl"

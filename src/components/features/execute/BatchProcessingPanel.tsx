@@ -767,9 +767,9 @@ export function BatchProcessingPanel({
     [hardwareProbe],
   );
 
-  const jobs = state.batchJobs || [];
+  const jobs = useMemo(() => state.batchJobs || [], [state.batchJobs]);
   const comparisonRecords = useMemo(
-    () => (jobs ?? []).filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord),
+    () => jobs.filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord),
     [jobs],
   );
 

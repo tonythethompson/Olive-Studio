@@ -35,7 +35,6 @@ import { AgentControls } from "./AgentControls";
 import { ActivityLog } from "./ActivityLog";
 import { AgentConfirmDialog } from "./AgentConfirmDialog";
 import { ExportReportMenu } from "./ExportReportMenu";
-import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
 import {
   Code,
   Play,
@@ -67,7 +66,7 @@ import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/execute/GpuMetricsBar";
 
-import { getJobHistory } from "@/lib/jobHistoryStore";
+import { getJobHistory, type JobHistoryRecord } from "@/lib/jobHistoryStore";
 import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/execute/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
