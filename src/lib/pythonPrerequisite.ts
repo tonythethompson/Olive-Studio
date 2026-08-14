@@ -13,12 +13,9 @@ export const PYTHON_DOWNLOAD_URL = "https://www.python.org/downloads/";
 export const PYTHON_DOWNLOAD_URL_WINDOWS = "https://www.python.org/downloads/windows/";
 export const PYTHON_DOWNLOAD_URL_MACOS = "https://www.python.org/downloads/macos/";
 
-export type PythonInstallGuidance = {
-  downloadUrl: string;
-  canAutoInstall: boolean;
-  autoInstallLabel: string | null;
-  command: string;
-};
+import type { PythonInstallGuidance } from "./apiClient.ts";
+
+export type { PythonInstallGuidance } from "./apiClient.ts";
 
 /** Preferred CPython minors for Olive, 3.12 first. */
 export const PREFERRED_PYTHON_MINORS = [12, 11, 13, 10] as const;
