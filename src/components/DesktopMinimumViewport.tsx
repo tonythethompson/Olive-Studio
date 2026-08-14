@@ -24,11 +24,12 @@ export function DesktopMinimumViewport({
   minWidthPx = DESKTOP_MIN_WIDTH_PX,
 }: DesktopMinimumViewportProps) {
   const [isNarrow, setIsNarrow] = useState(() => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined" || !window.matchMedia) return false;
     return window.matchMedia(`(max-width: ${minWidthPx - 1}px)`).matches;
   });
 
   useEffect(() => {
+    if (!window.matchMedia) return;
     const media = window.matchMedia(`(max-width: ${minWidthPx - 1}px)`);
     const sync = () => setIsNarrow(media.matches);
     sync();
