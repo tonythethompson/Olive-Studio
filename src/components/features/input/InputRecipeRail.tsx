@@ -129,7 +129,7 @@ export function InputRecipeRail(props: InputRecipeRailProps) {
           onValueChange={(v) => setActiveRecipeTab(v as "starter" | "github" | "editor")}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900 mb-4">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto rounded-lg p-1 bg-slate-950 border border-slate-900 mb-4">
             <TabsTrigger value="starter" className="text-[11px] sm:text-sm py-1.5 px-1.5 sm:px-2 rounded-md cursor-pointer">
               <Activity className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 text-electric-blue" /> Presets
             </TabsTrigger>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
 import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
@@ -14,7 +14,7 @@ import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
 import { AgentAccessControls } from "@/components/features/AgentAccessControls";
 import { TitleBar } from "@/components/TitleBar";
-import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
+import { DesktopMinimumViewport, WIDE_SHELL_MIN_WIDTH_PX } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
 import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
 import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
@@ -130,7 +130,10 @@ function Dashboard() {
   // resize independently at their own breakpoints.
   const headerLeftRef = useRef<HTMLDivElement>(null);
   const headerRightRef = useRef<HTMLDivElement>(null);
-  const [headerCompact, setHeaderCompact] = useState(false);
+  const [headerCompact, setHeaderCompact] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX;
+  });
   const HEADER_CLUSTER_FULL_WIDTH = 520;
 
   const [isOliveRunning, setIsOliveRunning] = useState(false);
@@ -146,7 +149,7 @@ function Dashboard() {
     frequencyInfo?: import("@/lib/errorFrequency").ErrorFrequencyInfo | null;
   } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const leftEl = headerLeftRef.current;
     const rightEl = headerRightRef.current;
     if (!leftEl || !rightEl) return;
@@ -431,13 +434,11 @@ function Dashboard() {
 
           <div className="flex-1 flex min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
-              <header className="min-h-12 grid grid-cols-[1fr_minmax(0,max-content)_1fr] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
+              <header className="min-h-12 grid grid-cols-[minmax(0,1fr)_minmax(0,max-content)_minmax(0,1fr)] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
                 {/*
                   Invisible mirror of the Assistant button. The two outer grid
-                  tracks are plain `1fr` (no minmax(0,...) override), so their
-                  floor is their content's own min-content width — CSS Grid
-                  can never compress a track below that, which is what makes
-                  this a hard barrier the center cluster cannot overlap.
+                  tracks use minmax(0,1fr), so they can compress to zero and
+                  the center cluster is measured with a real ResizeObserver.
                   Mirroring the same markup on the left keeps both floors
                   identical, which keeps the center cluster visually centered
                   instead of drifting toward the empty side.
