@@ -200,7 +200,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
             )}
           </div>
         ) : (
-          <p className="text-[11px] text-slate-500">Select a model to see a memory estimate.</p>
+          <p className="text-[11px] text-slate-500">—</p>
         )}
 
         <div className="border-t border-slate-800/90 pt-2.5 space-y-1.5">
@@ -305,7 +305,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
             size="sm"
           />
         ) : (
-          <p className="text-[11px] text-slate-500">Model: {modelShortName}</p>
+          <p className="text-[11px] text-slate-500">—</p>
         )}
         {hasModel && availableGb != null && estimate.usesGpu && (
           <p className="text-xs pl-0.5">
@@ -364,7 +364,7 @@ export const VramEstimateBanner = memo(function VramEstimateBanner({
           className="mt-3"
         />
       ) : (
-        <p className="text-xs text-slate-500 mt-3">Select a model to see a VRAM estimate.</p>
+        <p className="text-xs text-slate-500 mt-3">—</p>
       )}
 
       {hasModel && showRunWarning && (
