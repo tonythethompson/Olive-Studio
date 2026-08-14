@@ -9,7 +9,7 @@ import {
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
 import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
-import { Bot, X, MessageSquareCode, Settings2, Bug } from "lucide-react";
+import { Bot, X, MessageSquareCode, Settings2, Shield, Bug } from "lucide-react";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PipelineReview } from "./PipelineReview";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
@@ -20,6 +20,7 @@ import type { SidebarTab } from "./types";
 import { useAiChat } from "./useAiChat";
 import { useAiProviderSettings } from "./useAiProviderSettings";
 import { useLocalEngineSetup } from "./useLocalEngineSetup";
+import { AgentAccessControls } from "@/components/features/AgentAccessControls";
 
 export type { AnalysisResult, Suggestion } from "./types";
 
@@ -40,6 +41,7 @@ interface AssistantSidebarProps {
 const TABS = [
   { id: "assistant" as const, label: "Assistant", Icon: MessageSquareCode },
   { id: "settings" as const, label: "Settings", Icon: Settings2 },
+  { id: "agent" as const, label: "Agent", Icon: Shield },
 ];
 
 /**
@@ -282,7 +284,7 @@ export function AssistantSidebar({
             <div
               role="tablist"
               aria-label="Assistant panels"
-              className="grid grid-cols-2 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu"
+              className="grid grid-cols-3 bg-slate-950/90 p-1 border border-slate-850 rounded-lg transform-gpu"
             >
               {TABS.map(({ id, label, Icon }) => (
                 <button
@@ -360,6 +362,19 @@ export function AssistantSidebar({
               )}
             >
               <SettingsPanel providers={providers} local={local} isOpen={isOpen} />
+            </div>
+
+            {/* ── Agent ── */}
+            <div
+              role="tabpanel"
+              id="assistant-panel-agent"
+              aria-labelledby="assistant-tab-agent"
+              className={cn(
+                "absolute inset-0 p-4 overflow-y-auto",
+                activeTab === "agent" ? "block" : "hidden",
+              )}
+            >
+              <AgentAccessControls variant="panel" />
             </div>
           </div>
 

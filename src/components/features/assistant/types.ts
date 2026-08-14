@@ -20,4 +20,4 @@ export type {
 } from "@/lib/envCredentialUi";
 
 /** Which sidebar tab is currently visible. */
-export type SidebarTab = "assistant" | "settings";
+export type SidebarTab = "assistant" | "settings" | "agent";
