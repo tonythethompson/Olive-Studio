@@ -360,7 +360,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       data-testid="recipe-validation-panel"
       className={`rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden transition-all duration-300 ease-out ${
         emphasized
-          ? "ring-2 ring-electric-blue ring-offset-2 ring-offset-slate-950 bg-electric-blue/10 border-electric-blue/50"
+          ? "ring-2 ring-electric-blue ring-offset-4 ring-offset-slate-950 bg-electric-blue/20 border-electric-blue"
           : ""
       }`}
     >
