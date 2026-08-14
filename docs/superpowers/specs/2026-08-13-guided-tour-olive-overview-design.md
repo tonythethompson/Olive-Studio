@@ -13,7 +13,7 @@ First-run onboarding has two surfaces that do not work as a single story:
 
 ## Goal
 
-One guided tour is the entire welcome. It starts with what Olive is and why it is useful, then walks the real Model source, Hardware, and Recipe & run controls. If the workspace has no model, the tour loads a tiny CPU demo recipe and **leaves it loaded** after the tour. If a model is already selected, the tour never replaces it.
+One guided tour is the entire welcome. It starts with what Olive is and why it is useful, then walks the real Model source, Hardware, and Recipe & run controls. The preferred way to move forward is to do the real action in Studio (apply a recipe, pick a provider, click the recipe graph). Next and the arrow keys are a fallback. If the workspace has no model and they skip Model source without applying one, the tour loads a tiny CPU demo recipe so later panels unlock. That demo **stays loaded** after the tour. If a model is already selected, the tour never replaces it.
 
 ## Non-goals
 
@@ -40,23 +40,29 @@ Stale `welcomeDismissed` values already in `olive:preferences` are ignored. A us
 
 ### Step list
 
-| # | Title | Anchor | Notes |
-|---|--------|--------|--------|
-| 1 | What Olive is | none (centered popover) | What Olive is; why it exists (models too big/slow → smaller/faster on CPU, GPU, or NPU); one line that this app builds and runs that recipe. |
-| 2 | Your pipeline | `nav[aria-label="Pipeline"]` | Existing copy. |
-| 3 | Model source | `data-tour="model-source"` on the real recipe/model controls (catalog / apply area), not only `#input-heading` | Point at choosing a recipe or model. |
-| n/a | *(side effect)* | n/a | If `!hasSelectedModel(state)`, apply the bundled demo. If a model is already selected, no-op. |
-| 4 | Hardware | `data-tour="hardware-providers"` on the provider/pass controls | Only after the demo apply (or existing model) has flushed so `PipelineSectionGate` is unlocked. Fallback: `#ihv-heading` if the inner target is missing. |
-| 5 | Recipe & run | `data-tour="recipe-graph"` on the recipe graph | Same unlock/fallback rule (`#execute-heading`). |
-| 6 | Playground | `#playground-heading` | Existing copy. |
-| 7 | Assistant | `[data-tour="assistant"]` | Existing copy. |
-| 8 | Replay | `[data-tour="settings"]` | Existing copy. |
+| # | Title | Anchor | Advance by doing | Fallback (Next / Right arrow) |
+|---|--------|--------|------------------|-------------------------------|
+| 1 | What Olive is | none (centered popover) | None. Read, then Next or Right arrow. | Next / Right arrow. |
+| 2 | Your pipeline | `nav[aria-label="Pipeline"]` | Click a pipeline step in the nav. The click navigates as usual and the tour advances. | Next / Right arrow (no nav change required). |
+| 3 | Model source | `data-tour="model-source"` wrapping the real recipe list plus a sample Apply control | Click **Apply** on the sample recipe (bundled fixture, no network) or Apply on any other visible recipe. Native apply runs, then the tour advances once `hasSelectedModel` is true. | Next / Right arrow. If still no model, apply the bundled demo, then advance. |
+| 4 | Hardware | `data-tour="hardware-providers"` on the provider cards | Click a provider card. The selection commits as usual and the tour advances. Wait for the gate to unlock (`waitForElement`) after step 3. Fallback anchor: `#ihv-heading`. | Next / Right arrow. Keep the current provider. |
+| 5 | Recipe & run | `data-tour="recipe-graph"` on the recipe graph | Click the graph (or a pass node). Native inspector/selection runs and the tour advances. Fallback anchor: `#execute-heading`. | Next / Right arrow. |
+| 6 | Playground | `#playground-heading` | Optional: click the Playground nav item. | Next / Right arrow. |
+| 7 | Assistant | `[data-tour="assistant"]` | Click Open Assistant. The sidebar opens and the tour advances. | Next / Right arrow (sidebar stays closed). |
+| 8 | Replay | `[data-tour="settings"]` | Click Settings or Done. | Done / Right arrow ends the tour. |
 
-Driver.js `showProgress` continues to count only popover steps (1-8). The demo apply is not a user-facing step.
+Driver.js `showProgress` counts popover steps (1-8) only.
+
+### Interaction vs fallback
+
+- **Preferred:** the user performs the real Studio action on the highlighted control. `disableActiveInteraction` stays false. Use driver.js `advanceOnClick` on steps 2-7 (and a click listener on the sample Apply if the highlight is a larger region so only Apply, not search/filters, advances).
+- **Fallback:** Next and keyboard. Set `allowKeyboardControl: true`. Right arrow and Next share one `advanceFrom(step)` helper (same demo-inject rules). Left arrow and Back only go to the previous step. Escape still closes the tour.
+- Popover copy on interaction steps says what to click, then that Next or the arrow keys also work. No em dashes.
+- If a model is already selected on step 3, copy says it is already loaded. Clicking Apply is optional; Next / Right arrow must not call `replaceState`.
 
 ### Demo model
 
-- **When:** immediately after the user leaves step 3, and only if `hasSelectedModel` is false at that moment.
+- **When:** when leaving step 3 (click-to-advance after a successful Apply, or fallback Next / Right arrow), and only if `hasSelectedModel` is still false. A user who applied the sample or any other recipe has already selected a model, so the tour must not overwrite it.
 - **What:** a checked-in Olive recipe JSON at `src/data/tour-demo-recipe.json`. It must be a valid recipe for a tiny Hugging Face model targeting `CPUExecutionProvider`, with enough passes that the recipe graph is not an empty default.
 - **How:** `deriveUiStateFromOliveRecipe(fixture, { replacePasses: true })` then `replaceState` onto the current store so `hfModelId` is non-empty and `hasSelectedModel` becomes true. No network. No Olive process.
 - **After the tour:** leave that state in the persisted pipeline store. The user can keep using Hardware and Recipe & run.
@@ -66,7 +72,7 @@ Recommended fixture identity (implementation may substitute an equally tiny CPU 
 
 ### Copy constraints
 
-Step 1 must explain Olive the toolkit, not only Olive Studio chrome. Do not put engineering details in user-facing strings (viewport breakpoints, store keys, "dummy," "fixture"). If the tour injected a model, later steps may say a **sample recipe** is loaded so they can see the next panels, not that a test dummy was injected.
+Step 1 must explain Olive the toolkit, not only Olive Studio chrome. Do not put engineering details in user-facing strings (viewport breakpoints, store keys, "dummy," "fixture"). If the tour injected a model, later steps may say a **sample recipe** is loaded so they can see the next panels, not that a test dummy was injected. Interaction steps tell the user what to click, then that Next or the arrow keys also work.
 
 **No em dashes.** User-facing tour copy (titles, descriptions, buttons) must not use U+2014 (em dash, `—`) or U+2013 (en dash, `–`). Use a comma, colon, period, or parentheses instead. Remove any existing em/en dashes from tour popovers and from first-run strings this work replaces. Do not introduce them in new copy. Tests should reject `—` and `–` in `TOUR_STEPS` popover text.
 
@@ -81,7 +87,8 @@ App.tsx
 src/lib/tour.ts
   TOUR_STEPS (8 popovers)
   startGuidedTour(onSettled)
-  ensureTourDemoModel() : helper used from onNextClick after step 3
+  advanceFrom(step) : Next, Right arrow, and click-to-advance
+  ensureTourDemoModel() : only if leaving Model source with no model selected
 
 src/data/tour-demo-recipe.json
   static Olive recipe
@@ -95,9 +102,10 @@ src/lib/stores/pipelineStore.ts
 
 ### Data flow
 
-1. `startGuidedTour` builds a driver.js instance with `TOUR_STEPS`.
-2. `onNextClick` for the transition out of Model source: if `!hasSelectedModel(usePipelineStore.getState().state)`, apply the fixture via `replaceState`. Wait one animation frame (or `flushSync` if tests require it) so gated panels mount, then `moveNext()`.
-3. `onDestroyStarted` always calls `onSettled` once (`markTourSeen`). Demo state is not reverted here.
+1. `startGuidedTour` builds a driver.js instance with `TOUR_STEPS`, `allowKeyboardControl: true`, and `advanceOnClick` on interaction steps. `onNextClick` / keyboard Right both call `advanceFrom`.
+2. `advanceFrom` on Model source: if `!hasSelectedModel`, apply the fixture via `replaceState`. Wait for Hardware targets (`waitForElement` or one animation frame / `flushSync` if tests require it), then `moveNext()`.
+3. A successful Apply on the sample (or any recipe) makes `hasSelectedModel` true before `advanceFrom` runs, so the fixture is not applied.
+4. `onDestroyStarted` always calls `onSettled` once (`markTourSeen`). Demo or user-applied state is not reverted.
 
 `ensureTourDemoModel()` returns `{ applied: boolean }` so tests can assert the no-clobber path without mounting driver.js.
 
@@ -112,7 +120,7 @@ src/lib/stores/pipelineStore.ts
 
 ## Testing
 
-- **Unit (`tour.test.ts`):** step 1 has no `element` and a non-empty Olive overview; remaining anchors match the table; `ensureTourDemoModel` applies the fixture iff `hasSelectedModel` is false; applying twice / applying when `hfModelId` is already set does not overwrite that id; `startGuidedTour` still settles once on destroy.
+- **Unit (`tour.test.ts`):** step 1 has no `element` and a non-empty Olive overview; remaining anchors match the table; interaction steps set `advanceOnClick`; `allowKeyboardControl` is true; `advanceFrom` / `ensureTourDemoModel` applies the fixture iff `hasSelectedModel` is false; applying twice / applying when `hfModelId` is already set does not overwrite that id; `startGuidedTour` still settles once on destroy; popover text contains no `—` or `–`.
 - **Unit (preferences):** `welcomeDismissed` / `dismissWelcome` are gone; `tourSeen` still persists via `markTourSeen`.
 - **Component:** delete `WelcomeModal.test.tsx`. Add `data-tour` assertions on Model source / Hardware / Recipe graph if those files already have component tests; otherwise a shallow render in the tour test file is enough.
 - **No live Olive, no network in these tests.** Import the fixture as JSON.
@@ -132,6 +140,7 @@ src/lib/stores/pipelineStore.ts
 
 1. A clean first launch (no `tourSeen`) opens the tour on the Olive overview, not a separate modal and not “Your pipeline.”
 2. Settings replay includes that overview.
-3. Empty workspace: after Model source, Hardware and Recipe & run are unlocked and the tour highlights their real controls. The sample recipe is still there after Done/Skip.
-4. Workspace that already has a model: that model and recipe are unchanged through the whole tour.
-5. No WelcomeModal remains in the tree or tests.
+3. Empty workspace: applying the sample recipe (or any recipe) unlocks Hardware and Recipe & run and advances the tour. Skipping with Next or Right arrow loads the same sample and still unlocks those panels. The loaded recipe is still there after Done/Skip.
+4. Workspace that already has a model: that model and recipe are unchanged through the whole tour, including Next / arrow fallback on Model source.
+5. Clicking the highlighted control performs the real Studio action and advances. Right arrow and Next also advance. Left arrow goes back.
+6. No WelcomeModal remains in the tree or tests.
