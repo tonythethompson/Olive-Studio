@@ -10,42 +10,20 @@
  * either way, this only makes it available with zero manual steps when it can.
  */
 import { existsSync } from "fs";
-import { spawn, spawnSync } from "child_process";
+import { spawn } from "child_process";
 import path from "path";
 import { mcpServerDir } from "./paths.ts";
 import { readStudioConfig, writeStudioConfig } from "../../config.ts";
+// Plain ESM (not TS) so scripts/postinstall-mcp-setup.mjs can share it with zero build step.
+import { venvPython, venvIsWorking, findSystemPython } from "../../../../scripts/mcpVenvProbe.mjs";
 
 const RETRY_BACKOFF_MS = 60 * 60 * 1000;
 
 let attemptedThisProcess = false;
 
-function venvPython(mcpDir: string): string | null {
-  const winPy = path.join(mcpDir, ".venv", "Scripts", "python.exe");
-  const nixPy = path.join(mcpDir, ".venv", "bin", "python");
-  if (existsSync(winPy)) return winPy;
-  if (existsSync(nixPy)) return nixPy;
-  return null;
-}
-
-function venvIsWorking(python: string, mcpDir: string): boolean {
-  const r = spawnSync(python, ["-c", "import mcp"], {
-    env: { ...process.env, PYTHONPATH: mcpDir },
-  });
-  return r.status === 0;
-}
-
-function findSystemPython(): string | null {
-  const candidates = process.platform === "win32" ? ["python", "python3"] : ["python3", "python"];
-  for (const cmd of candidates) {
-    const r = spawnSync(cmd, ["--version"], { encoding: "utf8" });
-    if (r.status === 0) {
-      const match = /Python 3\.(\d+)/.exec(r.stdout || r.stderr || "");
-      if (match && Number(match[1]) >= 10) return cmd;
-    }
-  }
-  return null;
-}
-
+// `cmd` is always a fixed candidate ("python"/"python3") or a path this module
+// constructs under a known `.venv` dir -- never user input -- and spawn runs
+// without a shell, so there's no command-injection surface here.
 function run(cmd: string, args: string[], cwd: string): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd, stdio: "pipe" });

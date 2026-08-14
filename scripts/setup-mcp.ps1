@@ -130,10 +130,14 @@ if (-not $SkipVerify) {
     # Node for postinstall). Redirecting stderr alone doesn't prevent that
     # promotion, so relax EAP just for this native call.
     $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>$null
-    $ErrorActionPreference = $prevEap
-    if ($LASTEXITCODE -eq 0 -and $testOutput -match "OK") {
+    try {
+        $ErrorActionPreference = "Continue"
+        $testOutput = & $pythonVenv -c "from olive_mcp_server.mcp_server import _build_mcp; _build_mcp(); print('OK')" 2>$null
+        $testExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if ($testExit -eq 0 -and $testOutput -match "OK") {
         Write-Host "      Server module imports successfully." -ForegroundColor Green
     } else {
         Write-Host "      WARNING: Server import check returned unexpected output:" -ForegroundColor Yellow
