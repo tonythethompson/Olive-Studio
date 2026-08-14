@@ -142,7 +142,6 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(result.allowed).toBe(false);
       expect(result.reason).toMatch(/targetModules must be an array of non-empty strings/i);
     });
-
     it("rejects single adapter with missing path", () => {
       const adapters = [{ name: "no-path", rank: 8, alpha: 16 }];
       const result = gateMultiLoraAdapters(adapters, 24);
@@ -214,7 +213,6 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(result.allowed).toBe(false);
       expect(result.reason).toMatch(/rank must be a positive integer/i);
     });
-
     it("normalizes target_modules snake_case from MCP payloads", () => {
       const adapters = [{ path: "/a", target_modules: ["q_proj", "v_proj"] }];
       const result = gateMultiLoraAdapters(adapters, 24);

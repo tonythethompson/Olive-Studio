@@ -124,7 +124,7 @@ export function InputModelSourceSection({
         onValueChange={(v) => setState({ modelSource: v as UIState["modelSource"] })}
         className="w-full"
       >
-        <TabsList className="mb-6 !grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1.5">
+        <TabsList className="mb-6 !grid h-auto w-full grid-cols-1 sm:grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-950 p-1.5">
           <TabsTrigger value="huggingface" title="Hugging Face Hub" className="w-full rounded-lg px-2 py-2.5 text-xs sm:text-sm">
             <DownloadCloud className="mr-1.5 h-4 w-4 shrink-0" /><span className="truncate">Hugging Face</span>
           </TabsTrigger>

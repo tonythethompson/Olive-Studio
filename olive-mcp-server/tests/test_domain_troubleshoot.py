@@ -13,8 +13,12 @@ def setup_function():
 
 
 def test_hf_config_matches_studio_domain():
+    # Keyword mode: this suite exercises keyword-based domain matching, not
+    # semantic retrieval, and must not risk a real embedding-model load in
+    # the shared single-flight worker outliving the test.
     resp = troubleshoot_olive_error(
-        "TypeError: PyTorchModelHandler.__init__() got an unexpected keyword argument 'hf_config'"
+        "TypeError: PyTorchModelHandler.__init__() got an unexpected keyword argument 'hf_config'",
+        mode="keyword",
     )
     assert resp["matched_entry"] == "studio-pytorch-hf-config"
     assert resp["domain"] == "studio"

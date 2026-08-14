@@ -409,7 +409,8 @@ export function IHVIntegrationPanel({
                     : "border-amber-500/30 bg-amber-950/20 text-amber-400 hover:bg-amber-500/20"
                     }`}
                 >
-                  <Wand2 className="h-3 w-3" /> Auto-Fix Active Config Conflicts
+                  <Wand2 className="h-3 w-3 shrink-0" />
+                  <span className="min-w-0 break-words leading-tight">Auto-Fix Active Config Conflicts</span>
                 </button>
               </div>
             </div>
@@ -450,7 +451,7 @@ export function IHVIntegrationPanel({
                 </div>
 
                 {/* View Switch Segmented Control */}
-                <div className="flex items-center bg-slate-950 p-1 border border-slate-800 rounded-lg self-start shrink-0">
+                <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 border border-slate-800 rounded-lg self-start min-w-0">
                   <button
                     type="button"
                     onClick={() => setActiveTab("matrix")}
