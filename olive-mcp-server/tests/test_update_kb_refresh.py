@@ -1,0 +1,52 @@
+"""Determinism and failure tests for the KB refresh script."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+
+def _load_script():
+    path = Path(__file__).parents[1] / "scripts" / "update_kb.py"
+    spec = importlib.util.spec_from_file_location("update_kb_test_module", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_refresh_is_deterministic_and_preserves_candidates(monkeypatch, tmp_path):
+    update_kb = _load_script()
+    payloads = {
+        "docs": {"status": "ok", "pages": {"index": "# Docs\n\n- documented option."}},
+        "github": {
+            "status": "ok", "content": "# Open Issues\n\n- deprecated API.",
+            "source_timestamp": "2024-01-01T00:00:00Z",
+        },
+        "ort": {"status": "ok", "pages": {"CUDA": "## CUDA\n\n- use it."}},
+    }
+    monkeypatch.setattr(update_kb, "fetch_official_docs", lambda: payloads["docs"])
+    monkeypatch.setattr(update_kb, "fetch_github_issues", lambda: payloads["github"])
+    monkeypatch.setattr(update_kb, "fetch_onnx_runtime_docs", lambda: payloads["ort"])
+    update_kb.main(tmp_path)
+    first = {p.name: p.read_bytes() for p in tmp_path.glob("*.json")}
+    update_kb.main(tmp_path)
+    second = {p.name: p.read_bytes() for p in tmp_path.glob("*.json")}
+    assert first == second
+    candidates = json.loads((tmp_path / "candidate_quirks.json").read_text())
+    assert candidates and {"category", "title", "description", "source"} <= candidates[0].keys()
+    report = json.loads((tmp_path / "update_report.json").read_text())
+    assert report["deprecations"]
+
+
+def test_refresh_error_exits(tmp_path, monkeypatch):
+    update_kb = _load_script()
+    monkeypatch.setattr(update_kb, "fetch_official_docs", lambda: {"status": "error"})
+    monkeypatch.setattr(update_kb, "fetch_github_issues", lambda: {"status": "ok", "content": ""})
+    monkeypatch.setattr(update_kb, "fetch_onnx_runtime_docs", lambda: {"status": "ok", "pages": {}})
+    with pytest.raises(SystemExit) as exc:
+        update_kb.main(tmp_path)
+    assert exc.value.code == 1
+    assert json.loads((tmp_path / "update_report.json").read_text())["success"] is False

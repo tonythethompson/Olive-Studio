@@ -295,11 +295,17 @@ disables Apply Fix and shows guidance only. Thumbs feedback appears only when
 ## Fetchers and update mechanism
 
 Live fetchers use `requests` and `BeautifulSoup` to pull fresh guidance from
-external sources:
+external sources. Olive docs cover the core landing, getting-started, how-to,
+pass/configuration, options, CLI, quantization, IHV integration, and model
+compression pages; ONNX Runtime coverage includes CUDA, TensorRT, CoreML, QNN,
+OpenVINO, DirectML, and the overview (CPU is documented by the overview).
 
 - `fetchers/official_docs_fetcher.py` - <https://microsoft.github.io/Olive/>
 - `fetchers/github_scraper.py` - microsoft/Olive releases and issues
 - `fetchers/onnx_runtime_fetcher.py` - ONNX Runtime execution-provider docs
+
+Set `GITHUB_TOKEN` or `GH_TOKEN` when refreshing to increase GitHub API rate
+limits; unauthenticated refreshes remain supported.
 
 Update scripts:
 

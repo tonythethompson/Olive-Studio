@@ -258,9 +258,10 @@ def _merge_refresh_metadata(
     }
 
 
-def main() -> None:
+def main(kb_dir: Path | None = None) -> None:
     """Fetch external sources, parse them, and write freshness reports."""
-    kb_dir = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
+    if kb_dir is None:
+        kb_dir = Path(__file__).parent.parent / "olive_mcp_server" / "knowledge_base"
     kb_dir.mkdir(parents=True, exist_ok=True)
 
     generator_version = _generator_version()
@@ -306,6 +307,8 @@ def main() -> None:
     }
 
     changed_files: list[str] = []
+    metadata_path = kb_dir / REFRESH_METADATA_NAME
+    existing_meta = _load_refresh_metadata(metadata_path)
 
     update_report_path = kb_dir / "update_report.json"
     if _write_json_if_changed(update_report_path, report):
@@ -323,12 +326,13 @@ def main() -> None:
         "generator_version": generator_version,
         "source_timestamp": source_ts,
         "source_fingerprint": source_fingerprint,
-        "changed_files": list(changed_files),
+        "changed_files": list(
+            changed_files
+            or ((existing_meta.get("runs", {}).get(GENERATOR_NAME, {}) or {}).get("changed_files") or [])
+        ),
         "success": success,
     }
 
-    metadata_path = kb_dir / REFRESH_METADATA_NAME
-    existing_meta = _load_refresh_metadata(metadata_path)
     metadata = _merge_refresh_metadata(
         existing_meta,
         run_meta=run_meta,
