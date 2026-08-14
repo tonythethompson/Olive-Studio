@@ -66,27 +66,8 @@ export function IHVIntegrationPanel({
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
   const [passSearch, setPassSearch] = useState("");
-  // The matrix needs ~1000px to show every EP column without cramping; below that,
-  // default to cards. Once the user explicitly picks a view, stop auto-switching.
-  const hasMatchMedia = typeof window !== "undefined" && typeof window.matchMedia === "function";
-  const [activeTab, setActiveTabState] = useState<"matrix" | "cards">(() =>
-    hasMatchMedia && window.matchMedia("(max-width: 999px)").matches ? "cards" : "matrix",
-  );
-  const userPickedTabRef = useRef(false);
-  const setActiveTab = useCallback((tab: "matrix" | "cards") => {
-    userPickedTabRef.current = true;
-    setActiveTabState(tab);
-  }, []);
-  useEffect(() => {
-    if (!hasMatchMedia) return;
-    const media = window.matchMedia("(max-width: 999px)");
-    const sync = () => {
-      if (userPickedTabRef.current) return;
-      setActiveTabState(media.matches ? "cards" : "matrix");
-    };
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, [hasMatchMedia]);
+  // Cards reduce cognitive load and improve touch targets; make them the default.
+  const [activeTab, setActiveTab] = useState<"matrix" | "cards">("cards");
   const [selectedCategory, setSelectedCategory] = useState<
     "All" | "Conversion" | "Quantization" | "Compression" | "PEFT"
   >("All");

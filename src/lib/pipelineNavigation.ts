@@ -4,6 +4,7 @@ export type PipelineViewId = (typeof PIPELINE_VIEW_IDS)[number];
 
 export const OLIVE_PIPELINE_NAVIGATE = "olive-studio:navigate";
 export const OLIVE_PIPELINE_NAV_BLOCKED = "olive-studio:navigate-blocked";
+export const OLIVE_EXPAND_VALIDATION = "olive-studio:expand-validation";
 
 export const PIPELINE_NAV_BLOCKED_MESSAGE = "Unavailable while an Olive run is in progress";
 
@@ -85,3 +86,8 @@ export const navigatePipeline = (id: PipelineViewId) => {
   if (!attemptPipelineNavigate(id)) return;
   window.dispatchEvent(new CustomEvent(OLIVE_PIPELINE_NAVIGATE, { detail: id }));
 };
+
+/** Expand the recipe validation issue panel from a global status surface. */
+export function expandPipelineValidation(): void {
+  window.dispatchEvent(new CustomEvent(OLIVE_EXPAND_VALIDATION));
+}

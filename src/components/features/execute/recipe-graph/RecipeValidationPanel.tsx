@@ -3,6 +3,7 @@ import { getPipelineValidation, applyIssueAutofix, hasSelectedModel, type Pipeli
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { useMcpDiagnostic } from "@/lib/hooks/useMcpDiagnostic";
+import { OLIVE_EXPAND_VALIDATION } from "@/lib/pipelineNavigation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState, type IHVProvider } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -92,6 +93,12 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [mcpParamLoading, setMcpParamLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showCompatDetails, setShowCompatDetails] = useState(false);
+
+  useEffect(() => {
+    const handleExpand = () => setExpanded(true);
+    window.addEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
+    return () => window.removeEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
+  }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
   const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic, clearDiagnostic } = useMcpDiagnostic();
@@ -337,6 +344,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
 
   return (
     <div
+      id="recipe-validation-panel"
       data-testid="recipe-validation-panel"
       className="rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden"
     >
