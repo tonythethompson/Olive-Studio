@@ -195,7 +195,10 @@ type BridgeAdaptersParseResult =
   | { ok: false; reason: string };
 
 function parseBridgeAdapters(raw: unknown): BridgeAdaptersParseResult {
-  if (!Array.isArray(raw)) return { ok: true, adapters: undefined };
+  if (raw === undefined) return { ok: true, adapters: undefined };
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: "adapters must be an array" };
+  }
   const out: NonNullable<UIState["multiLoraAdapters"]> = [];
   for (const item of raw) {
     if (!isObjectRecord(item)) {
