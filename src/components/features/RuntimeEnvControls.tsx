@@ -212,7 +212,12 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
           onSavePython={() => void savePython()}
           onClearPython={() => void clearPython()}
           onInstallPython={() =>
-            void runNdjsonInstall("/api/env/install-python", "Installing Python…", "Python is ready.")
+            void runNdjsonInstall(
+              "/api/env/install-python",
+              "Installing Python…",
+              "Could not install Python.",
+              "Python is ready.",
+            )
           }
           onCopyCommand={(cmd) => void copyInstallCommand(cmd)}
           onEnsureVenv={() =>
