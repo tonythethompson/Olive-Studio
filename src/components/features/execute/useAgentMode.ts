@@ -209,15 +209,15 @@ export function useAgentMode(): UseAgentModeReturn {
     startTimeoutRef.current = setTimeout(() => {
       if (thisGen !== runGenerationRef.current) return;
       startTimeoutRef.current = null;
-      submitControllerRef.current?.abort();
 
       if (stopRequestedRef.current) {
-        stopRequestedRef.current = false;
-        runGenerationRef.current += 1;
-        applyCancelledOutcome();
-        resolvePendingStop(true);
+        // Mode-switch/stop is waiting on submit. Do not abort or resolve success:
+        // the server may already have registered the job, and we need its jobId
+        // to cancel. The in-flight submit path cancels once the response arrives.
         return;
       }
+
+      submitControllerRef.current?.abort();
 
       runGenerationRef.current += 1;
       const orphanId = jobIdRef.current;

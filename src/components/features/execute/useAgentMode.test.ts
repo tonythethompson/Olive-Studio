@@ -349,21 +349,19 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.errorDescription).toMatch(/timed out/i);
     }, 20_000);
 
-    it("resolves deferred stop on start timeout when submit is pending", async () => {
+    it("keeps deferred stop waiting past start timeout until submit can be cancelled", async () => {
       let resolveSubmit: (value: Response) => void = () => {};
       const submitPromise = new Promise<Response>((resolve) => {
         resolveSubmit = resolve;
       });
-      vi.stubGlobal(
-        "fetch",
-        vi.fn((url: string) => {
-          if (String(url).includes("/olive/jobs/submit")) return submitPromise;
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ status: "cancelled" }),
-          } as Response);
-        }),
-      );
+      const fetchMock = vi.fn((url: string) => {
+        if (String(url).includes("/olive/jobs/submit")) return submitPromise;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: "cancelled" }),
+        } as Response);
+      });
+      vi.stubGlobal("fetch", fetchMock);
 
       const { result } = renderHook(() => useAgentMode());
       act(() => {
@@ -382,11 +380,28 @@ describe("useAgentMode", () => {
       await act(async () => {
         vi.advanceTimersByTime(10_000);
       });
-      expect(await stopResult).toBe(true);
-      expect(stopSettled).toBe(true);
+      // Startup timer must not fake a successful cancel without a backend jobId.
+      expect(stopSettled).toBeUndefined();
+      expect(result.current.agentRunning).toBe(true);
 
+      await act(async () => {
+        resolveSubmit({
+          ok: true,
+          json: async () => ({ jobId: "job-after-timeout" }),
+        } as Response);
+        expect(await stopResult).toBe(true);
+      });
+
+      expect(stopSettled).toBe(true);
       expect(result.current.agentRunning).toBe(false);
       expect(result.current.outcome?.status).toBe("cancelled");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/olive/agent/cancel",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ jobId: "job-after-timeout" }),
+        }),
+      );
     });
 
     it("resolves deferred stop after pending submit is cancelled", async () => {
