@@ -5,23 +5,21 @@
 
 .DESCRIPTION
     Creates the venv, installs core + dev + semantic dependencies, verifies the
-    server starts cleanly, and rebuilds the semantic search indexes when stale
-    (set OLIVE_MCP_REBUILD_INDEX=1 to force a rebuild).
-
-    Requires Python >= 3.10 and < 3.14 (3.13 or 3.12 preferred). Python 3.14+
-    is not supported yet because some dependencies (torch / sentence-transformers)
-    do not ship 3.14 wheels.
+    server starts cleanly, and optionally rebuilds the semantic search indexes.
 
     Run from the repo root:
       .\scripts\setup-mcp.ps1
 
     Options:
+      -RebuildIndex   Rebuild semantic search embedding indexes after install.
       -SkipVerify     Skip the server startup verification step.
 
 .EXAMPLE
     .\scripts\setup-mcp.ps1
+    .\scripts\setup-mcp.ps1 -RebuildIndex
 #>
 param(
+    [switch]$RebuildIndex,
     [switch]$SkipVerify
 )
 
@@ -29,91 +27,32 @@ $ErrorActionPreference = "Stop"
 $McpDir = Join-Path $PSScriptRoot "..\olive-mcp-server"
 $McpDir = (Resolve-Path $McpDir).Path
 $VenvDir = Join-Path $McpDir ".venv"
-$MinMinor = 10
-$MaxMinor = 13
 
 Write-Host ""
 Write-Host "=== Olive MCP Server Setup ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Returns the minor version of a Python invocation (e.g. @("py", "-3.13")), or
-# $null when the command is missing or does not look like CPython 3.x.
-function Get-PythonMinor {
-    param([string[]]$Invocation)
+# ── Step 1: Check Python is available ──────────────────────────────────────────
+Write-Host "[1/5] Checking Python..." -ForegroundColor Yellow
+$pythonCmd = $null
+foreach ($cmd in @("python", "python3")) {
     try {
-        $exe = $Invocation[0]
-        $rest = @()
-        if ($Invocation.Count -gt 1) { $rest = $Invocation[1..($Invocation.Count - 1)] }
-        $ver = & $exe @rest --version 2>&1
-        if ($LASTEXITCODE -eq 0 -and $ver -match "Python 3\.(\d+)") {
-            return [int]$Matches[1]
+        $ver = & $cmd --version 2>&1
+        if ($ver -match "Python 3\.(\d+)") {
+            $minor = [int]$Matches[1]
+            if ($minor -ge 10) {
+                $pythonCmd = $cmd
+                Write-Host "      Found: $ver" -ForegroundColor Green
+                break
+            }
         }
     } catch {
-        Write-Debug "Python candidate '$($Invocation -join ' ')' check failed: $_"
-    }
-    return $null
-}
-
-# ── Step 1: Check Python is available ──────────────────────────────────────────
-Write-Host "[1/5] Checking Python (need 3.$MinMinor-3.$MaxMinor; 3.13/3.12 preferred)..." -ForegroundColor Yellow
-$pythonExe = $null
-$pythonArgs = @()
-$pythonCandidates = @(
-    ,@("python3.13")
-    ,@("python3.12")
-    ,@("python3.11")
-    ,@("python3.10")
-    ,@("python3")
-    ,@("python")
-    ,@("py", "-3.13")
-    ,@("py", "-3.12")
-    ,@("py", "-3.11")
-    ,@("py", "-3.10")
-)
-foreach ($candidate in $pythonCandidates) {
-    $minor = Get-PythonMinor -Invocation $candidate
-    if ($null -ne $minor -and $minor -ge $MinMinor -and $minor -le $MaxMinor) {
-        $pythonExe = $candidate[0]
-        if ($candidate.Count -gt 1) { $pythonArgs = $candidate[1..($candidate.Count - 1)] }
-        $foundVer = & $pythonExe @pythonArgs --version 2>&1
-        Write-Host "      Found: $foundVer" -ForegroundColor Green
-        break
+        Write-Debug "Python candidate '$cmd' check failed: $_"
     }
 }
-# Fall back to uv-managed interpreters, which are usually not on PATH.
-if (-not $pythonExe) {
-    $uvBases = @()
-    if ($env:LOCALAPPDATA) { $uvBases += Join-Path $env:LOCALAPPDATA "uv\python" }
-    if ($HOME) {
-        $uvBases += Join-Path $HOME ".local\share\uv\python"
-        $uvBases += Join-Path $HOME "Library/Application Support/uv/python"
-    }
-    foreach ($base in $uvBases) {
-        if (-not (Test-Path $base)) { continue }
-        foreach ($minor in @(13, 12, 11, 10)) {
-            $dirs = Get-ChildItem -Path $base -Directory -Filter "cpython-3.$minor.*" -ErrorAction SilentlyContinue |
-                Sort-Object -Property Name -Descending
-            foreach ($dir in $dirs) {
-                $bin = Join-Path $dir.FullName "python.exe"
-                if (-not (Test-Path $bin)) {
-                    $bin = Join-Path $dir.FullName (Join-Path "bin" "python3.$minor")
-                }
-                if (Test-Path $bin) {
-                    $pythonExe = $bin
-                    $foundVer = & $bin --version 2>&1
-                    Write-Host "      Found: $foundVer ($bin)" -ForegroundColor Green
-                    break
-                }
-            }
-            if ($pythonExe) { break }
-        }
-        if ($pythonExe) { break }
-    }
-}
-if (-not $pythonExe) {
-    Write-Host "      ERROR: No compatible Python found (need >= 3.$MinMinor, < 3.14)." -ForegroundColor Red
-    Write-Host "      Python 3.14+ is not supported yet (torch/sentence-transformers lack 3.14 wheels)." -ForegroundColor Red
-    Write-Host "      Install Python 3.13 or 3.12 and re-run this script." -ForegroundColor Red
+if (-not $pythonCmd) {
+    Write-Host "      ERROR: Python >= 3.10 not found on PATH." -ForegroundColor Red
+    Write-Host "      Install Python 3.10+ and ensure 'python' is on PATH." -ForegroundColor Red
     exit 1
 }
 
@@ -130,12 +69,8 @@ if (Test-Path $VenvDir) {
     } else {
         $ver = & $existingPy --version 2>&1
         if ($ver -match "Python 3\.(\d+)") {
-            $existingMinor = [int]$Matches[1]
-            if ($existingMinor -lt $MinMinor) {
-                Write-Host "      Existing venv is $ver (< 3.$MinMinor); recreating..." -ForegroundColor Yellow
-                $recreate = $true
-            } elseif ($existingMinor -gt $MaxMinor) {
-                Write-Host "      Existing venv is $ver (>= 3.14, unsupported); recreating..." -ForegroundColor Yellow
+            if ([int]$Matches[1] -lt 10) {
+                Write-Host "      Existing venv is $ver (< 3.10); recreating..." -ForegroundColor Yellow
                 $recreate = $true
             }
         } else {
@@ -145,7 +80,7 @@ if (Test-Path $VenvDir) {
     if ($recreate) {
         Remove-Item -Recurse -Force $VenvDir
         Write-Host "      Creating venv at: $VenvDir"
-        & $pythonExe @pythonArgs -m venv $VenvDir
+        & $pythonCmd -m venv $VenvDir
         if ($LASTEXITCODE -ne 0) {
             Write-Host "      ERROR: Failed to create venv." -ForegroundColor Red
             exit 1
@@ -156,7 +91,7 @@ if (Test-Path $VenvDir) {
     }
 } else {
     Write-Host "      Creating venv at: $VenvDir"
-    & $pythonExe @pythonArgs -m venv $VenvDir
+    & $pythonCmd -m venv $VenvDir
     if ($LASTEXITCODE -ne 0) {
         Write-Host "      ERROR: Failed to create venv." -ForegroundColor Red
         exit 1
@@ -213,28 +148,22 @@ if (-not $SkipVerify) {
     Write-Host "[4/5] Skipping verification (--SkipVerify)." -ForegroundColor DarkGray
 }
 
-# ── Step 5: Build semantic search indexes ──────────────────────────────────────
-Write-Host "[5/5] Building semantic search indexes (skipped when already up to date)..." -ForegroundColor Yellow
-Write-Host "      (embeds KB docs via sentence-transformers; a fresh build may take a few minutes)" -ForegroundColor DarkGray
-$pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
-if (-not (Test-Path $pythonVenv)) {
-    $pythonVenv = Join-Path $VenvDir "bin\python"
-}
-$indexScript = Join-Path $McpDir (Join-Path "scripts" "build_kb_index.py")
-# Same EAP relaxation as step 4: benign stderr warnings from native commands can
-# otherwise be promoted to terminating errors when this script's stdio is piped.
-$prevEap = $ErrorActionPreference
-try {
-    $ErrorActionPreference = "Continue"
-    & $pythonVenv $indexScript
-    $indexExit = $LASTEXITCODE
-} finally {
-    $ErrorActionPreference = $prevEap
-}
-if ($indexExit -eq 0) {
-    Write-Host "      Semantic search indexes are up to date." -ForegroundColor Green
+# ── Step 5: Optionally rebuild semantic indexes ────────────────────────────────
+if ($RebuildIndex) {
+    Write-Host "[5/5] Rebuilding semantic search indexes..." -ForegroundColor Yellow
+    $pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
+    if (-not (Test-Path $pythonVenv)) {
+        $pythonVenv = Join-Path $VenvDir "bin\python"
+    }
+    & $pythonVenv (Join-Path $McpDir "scripts\build_kb_index.py")
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "      WARNING: Index rebuild failed. Shipped indexes will be used." -ForegroundColor Yellow
+    } else {
+        Write-Host "      Indexes rebuilt successfully." -ForegroundColor Green
+    }
 } else {
-    Write-Host "      WARNING: Index build failed. Shipped indexes will be used." -ForegroundColor Yellow
+    Write-Host "[5/5] Skipping index rebuild (use -RebuildIndex to regenerate)." -ForegroundColor DarkGray
+    Write-Host "      Pre-built indexes ship with the repo and work out of the box." -ForegroundColor DarkGray
 }
 
 Write-Host ""

@@ -47,8 +47,8 @@ if (existingPython && venvIsWorking(existingPython, mcpDir)) {
 
 if (!findSystemPython()) {
   log(
-    "WARNING: No compatible Python found (need 3.10-3.13; 3.14+ is unsupported) — skipping MCP server setup. " +
-      "Install Python 3.13 or 3.12, then run: .\\scripts\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh) to enable it.",
+    "WARNING: Python >= 3.10 not found on PATH — skipping MCP server setup. " +
+      "Install Python, then run: .\\scripts\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh) to enable it.",
   );
   process.exit(0);
 }

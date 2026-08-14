@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # Set up the Olive MCP Server Python virtual environment with all dependencies.
 #
-# Requires Python >= 3.10 and < 3.14 (3.13 or 3.12 preferred). Python 3.14+ is
-# not supported yet because some dependencies (torch / sentence-transformers)
-# do not ship 3.14 wheels. The semantic search indexes are (re)built when
-# stale (set OLIVE_MCP_REBUILD_INDEX=1 to force a rebuild).
-#
 # Usage (from repo root):
 #   ./scripts/setup-mcp.sh
+#   ./scripts/setup-mcp.sh --rebuild-index
 #   ./scripts/setup-mcp.sh --skip-verify
 set -euo pipefail
 
@@ -15,15 +11,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MCP_DIR="$ROOT/olive-mcp-server"
 VENV_DIR="$MCP_DIR/.venv"
 
-MIN_MINOR=10
-MAX_MINOR=13
-
+REBUILD_INDEX=0
 SKIP_VERIFY=0
 for arg in "$@"; do
   case "$arg" in
+    --rebuild-index) REBUILD_INDEX=1 ;;
     --skip-verify) SKIP_VERIFY=1 ;;
     -h|--help)
-      echo "Usage: $0 [--skip-verify]"
+      echo "Usage: $0 [--rebuild-index] [--skip-verify]"
       exit 0
       ;;
     *)
@@ -36,46 +31,23 @@ echo ""
 echo "=== Olive MCP Server Setup ==="
 echo ""
 
-# Print the minor version of a CPython 3.x interpreter (empty on failure).
-python_minor() {
-  local ver
-  ver="$("$1" --version 2>&1 || true)"
-  if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
-    echo "${BASH_REMATCH[1]}"
-  fi
-}
-
-echo "[1/5] Checking Python (need 3.$MIN_MINOR-3.$MAX_MINOR; 3.13/3.12 preferred)..."
+echo "[1/5] Checking Python..."
 PYTHON_CMD=""
-for cmd in python3.13 python3.12 python3.11 python3.10 python3 python; do
+for cmd in python3 python; do
   if command -v "$cmd" >/dev/null 2>&1; then
-    minor="$(python_minor "$cmd")"
-    if [[ -n "$minor" ]] && (( minor >= MIN_MINOR && minor <= MAX_MINOR )); then
-      PYTHON_CMD="$cmd"
-      echo "      Found: $("$cmd" --version 2>&1)"
-      break
+    ver="$("$cmd" --version 2>&1 || true)"
+    if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
+      minor="${BASH_REMATCH[1]}"
+      if [[ "$minor" -ge 10 ]]; then
+        PYTHON_CMD="$cmd"
+        echo "      Found: $ver"
+        break
+      fi
     fi
   fi
 done
-# Fall back to uv-managed interpreters, which are usually not on PATH.
 if [[ -z "$PYTHON_CMD" ]]; then
-  for base in "$HOME/.local/share/uv/python" "$HOME/Library/Application Support/uv/python"; do
-    [[ -d "$base" ]] || continue
-    for minor in 13 12 11 10; do
-      for cand in "$base"/cpython-3."$minor".*/bin/python3."$minor"; do
-        if [[ -x "$cand" ]]; then
-          PYTHON_CMD="$cand"
-          echo "      Found: $("$cand" --version 2>&1) ($cand)"
-          break 3
-        fi
-      done
-    done
-  done
-fi
-if [[ -z "$PYTHON_CMD" ]]; then
-  echo "      ERROR: No compatible Python found (need >= 3.$MIN_MINOR, < 3.14)." >&2
-  echo "      Python 3.14+ is not supported yet (torch/sentence-transformers lack 3.14 wheels)." >&2
-  echo "      Install Python 3.13 or 3.12 and re-run this script." >&2
+  echo "      ERROR: Python >= 3.10 not found on PATH." >&2
   exit 1
 fi
 
@@ -91,14 +63,13 @@ if [[ -d "$VENV_DIR" ]]; then
   if [[ -z "$existing_py" ]]; then
     recreate=1
   else
-    minor="$(python_minor "$existing_py")"
-    if [[ -z "$minor" ]]; then
-      recreate=1
-    elif (( minor < MIN_MINOR )); then
-      echo "      Existing venv is $("$existing_py" --version 2>&1) (< 3.$MIN_MINOR); recreating..."
-      recreate=1
-    elif (( minor > MAX_MINOR )); then
-      echo "      Existing venv is $("$existing_py" --version 2>&1) (>= 3.14, unsupported); recreating..."
+    ver="$("$existing_py" --version 2>&1 || true)"
+    if [[ "$ver" =~ Python\ 3\.([0-9]+) ]]; then
+      if [[ "${BASH_REMATCH[1]}" -lt 10 ]]; then
+        echo "      Existing venv is $ver (< 3.10); recreating..."
+        recreate=1
+      fi
+    else
       recreate=1
     fi
   fi
@@ -149,12 +120,16 @@ else
   echo "[4/5] Skipping verification (--skip-verify)."
 fi
 
-echo "[5/5] Building semantic search indexes (skipped when already up to date)..."
-echo "      (embeds KB docs via sentence-transformers; a fresh build may take a few minutes)"
-if ! "$PY_VENV" "$MCP_DIR/scripts/build_kb_index.py"; then
-  echo "      WARNING: Index build failed. Shipped indexes will be used." >&2
+if [[ "$REBUILD_INDEX" -eq 1 ]]; then
+  echo "[5/5] Rebuilding semantic search indexes..."
+  if ! "$PY_VENV" "$MCP_DIR/scripts/build_kb_index.py"; then
+    echo "      WARNING: Index rebuild failed. Shipped indexes will be used."
+  else
+    echo "      Indexes rebuilt successfully."
+  fi
 else
-  echo "      Semantic search indexes are up to date."
+  echo "[5/5] Skipping index rebuild (use --rebuild-index to regenerate)."
+  echo "      Pre-built indexes ship with the repo and work out of the box."
 fi
 
 echo ""
