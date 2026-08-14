@@ -63,10 +63,10 @@ export function HardwareCompatibilityMatrix({
   return (
     <TooltipProvider delayDuration={150}>
       <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
-        {selectableProviders.length > visibleProviders.length && (
+        {selectableProviders.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-slate-800/80 bg-slate-900/40">
             <span className="text-xs text-slate-500 truncate">
-              Showing detected & selected providers
+              {showAllProviders ? "Showing all providers" : "Showing detected & selected providers"}
             </span>
             <button
               type="button"

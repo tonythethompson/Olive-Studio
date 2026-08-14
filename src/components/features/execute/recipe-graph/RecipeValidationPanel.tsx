@@ -3,6 +3,7 @@ import { getPipelineValidation, applyIssueAutofix, hasSelectedModel, type Pipeli
 import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { useMcpDiagnostic } from "@/lib/hooks/useMcpDiagnostic";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { OLIVE_EXPAND_VALIDATION } from "@/lib/pipelineNavigation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState, type IHVProvider } from "@/types";
@@ -102,8 +103,9 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [refreshKey, setRefreshKey] = useState(0);
   const forceRefreshRef = useRef(false);
   const { diagnostic: mcpDiagnostic, isDiagnosing: mcpDiagnosing, fetchDiagnostic, clearDiagnostic } = useMcpDiagnostic();
+  const { data: hardwareProbe } = useHardwareProbe();
 
-  const validation = getPipelineValidation(state);
+  const validation = getPipelineValidation(state, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null });
   // Pass-parameter advisories (quant method preferences, precision tips, etc.) are all
   // about tuning a model that doesn't exist yet — showing them next to "No model
   // selected" reads as a wall of unrelated noise around the one thing to actually fix.
