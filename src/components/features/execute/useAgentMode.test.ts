@@ -724,6 +724,161 @@ describe("useAgentMode", () => {
       expect(result.current.outcome).toBeUndefined();
     });
 
+    it("does not let a stale submit settle a newer session's stop waiter", async () => {
+      let resolveFirst: (value: Response) => void = () => {};
+      let resolveSecond: (value: Response) => void = () => {};
+      const firstSubmit = new Promise<Response>((resolve) => {
+        resolveFirst = resolve;
+      });
+      const secondSubmit = new Promise<Response>((resolve) => {
+        resolveSecond = resolve;
+      });
+      let submitCount = 0;
+      const fetchMock = vi.fn((url: string) => {
+        if (String(url).includes("/olive/jobs/submit")) {
+          submitCount += 1;
+          return submitCount === 1 ? firstSubmit : secondSubmit;
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: "cancelled" }),
+        } as Response);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { result } = renderHook(() => useAgentMode());
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(result.current.agentRunning).toBe(false);
+
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+      expect(result.current.agentRunning).toBe(true);
+
+      let stopSettled: boolean | undefined;
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent().then((ok) => {
+          stopSettled = ok;
+          return ok;
+        });
+      });
+
+      await act(async () => {
+        resolveFirst({
+          ok: true,
+          json: async () => ({ jobId: "stale-job" }),
+        } as Response);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(stopSettled).toBeUndefined();
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.outcome).toBeUndefined();
+
+      await act(async () => {
+        resolveSecond({
+          ok: true,
+          json: async () => ({ jobId: "new-job" }),
+        } as Response);
+        expect(await stopResult).toBe(true);
+      });
+
+      expect(stopSettled).toBe(true);
+      expect(result.current.agentRunning).toBe(false);
+      expect(result.current.outcome?.status).toBe("cancelled");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/olive/agent/cancel",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ jobId: "stale-job" }),
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/olive/agent/cancel",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ jobId: "new-job" }),
+        }),
+      );
+    });
+
+    it("keeps a newer submit in-flight after a stale submit finishes", async () => {
+      let resolveFirst: (value: Response) => void = () => {};
+      const firstSubmit = new Promise<Response>((resolve) => {
+        resolveFirst = resolve;
+      });
+      const secondSubmit = new Promise<Response>(() => {
+        /* never resolves */
+      });
+      let submitCount = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (String(url).includes("/olive/jobs/submit")) {
+            submitCount += 1;
+            return submitCount === 1 ? firstSubmit : secondSubmit;
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ status: "cancelled" }),
+          } as Response);
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+
+      act(() => {
+        void result.current.startAgent({ recipeJson: "{}" });
+      });
+
+      await act(async () => {
+        resolveFirst({
+          ok: true,
+          json: async () => ({ jobId: "stale-job" }),
+        } as Response);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      let stopSettled: boolean | undefined;
+      let stopResult: Promise<boolean> | undefined;
+      act(() => {
+        stopResult = result.current.stopAgent().then((ok) => {
+          stopSettled = ok;
+          return ok;
+        });
+      });
+
+      expect(stopSettled).toBeUndefined();
+      expect(result.current.agentRunning).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(stopSettled).toBeUndefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+        expect(await stopResult).toBe(false);
+      });
+
+      expect(result.current.outcome?.errorDescription).toMatch(/Timed out waiting to cancel/i);
+    });
+
     it("clears the start timeout if stop is called before 10s", () => {
       const { result } = renderHook(() => useAgentMode());
 

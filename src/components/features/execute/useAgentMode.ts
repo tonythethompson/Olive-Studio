@@ -134,16 +134,23 @@ export function useAgentMode(): UseAgentModeReturn {
   /** Bumped on start/stop/timeout/complete so a late POST cannot attach. */
   const runGenerationRef = useRef(0);
   const submitInFlightRef = useRef(false);
+  /** Generation that currently owns submitInFlightRef / a deferred stop waiter. */
+  const submitGenerationRef = useRef(0);
   const stopRequestedRef = useRef(false);
   const pendingStopWaiterRef = useRef<{
     promise: Promise<boolean>;
     resolve: (ok: boolean) => void;
+    submitGeneration: number;
   } | null>(null);
 
-  const resolvePendingStop = useCallback((ok: boolean) => {
+  const resolvePendingStop = useCallback((ok: boolean, submitGeneration?: number) => {
     const waiter = pendingStopWaiterRef.current;
+    if (!waiter) return;
+    if (submitGeneration !== undefined && waiter.submitGeneration !== submitGeneration) {
+      return;
+    }
     pendingStopWaiterRef.current = null;
-    waiter?.resolve(ok);
+    waiter.resolve(ok);
   }, []);
 
   // ─── Internal helpers ───────────────────────────────────────────────────────
@@ -286,6 +293,7 @@ export function useAgentMode(): UseAgentModeReturn {
     if (!opts?.recipeJson) return;
 
     submitInFlightRef.current = true;
+    submitGenerationRef.current = thisGen;
     try {
       const resp = await fetch("/api/olive/jobs/submit", {
         method: "POST",
@@ -304,7 +312,7 @@ export function useAgentMode(): UseAgentModeReturn {
           clearStopSubmitGrace();
           runGenerationRef.current += 1;
           applyCancelledOutcome();
-          resolvePendingStop(true);
+          resolvePendingStop(true, thisGen);
           return;
         }
         let cancelOk = false;
@@ -315,7 +323,7 @@ export function useAgentMode(): UseAgentModeReturn {
           cancelOk = false;
         }
         if (thisGen !== runGenerationRef.current) {
-          resolvePendingStop(false);
+          resolvePendingStop(false, thisGen);
           return;
         }
         if (cancelOk) {
@@ -324,7 +332,7 @@ export function useAgentMode(): UseAgentModeReturn {
           clearStopSubmitGrace();
           runGenerationRef.current += 1;
           applyCancelledOutcome();
-          resolvePendingStop(true);
+          resolvePendingStop(true, thisGen);
           return;
         }
         // Cancel failed: keep the job attached, but drop the startup timer so it
@@ -343,12 +351,12 @@ export function useAgentMode(): UseAgentModeReturn {
             : 0,
           errorDescription: "Failed to cancel agent job",
         });
-        resolvePendingStop(false);
+        resolvePendingStop(false, thisGen);
         return;
       }
       if (thisGen !== runGenerationRef.current) {
         if (!data.jobId) {
-          resolvePendingStop(true);
+          resolvePendingStop(true, thisGen);
           return;
         }
         let cancelOk = false;
@@ -357,7 +365,7 @@ export function useAgentMode(): UseAgentModeReturn {
         } catch {
           cancelOk = false;
         }
-        resolvePendingStop(cancelOk);
+        resolvePendingStop(cancelOk, thisGen);
         return;
       }
       if (!resp.ok || !data.jobId) {
@@ -368,7 +376,7 @@ export function useAgentMode(): UseAgentModeReturn {
       jobIdRef.current = data.jobId;
     } catch (err) {
       if (thisGen !== runGenerationRef.current) {
-        resolvePendingStop(false);
+        resolvePendingStop(false, thisGen);
         return;
       }
       stopRequestedRef.current = false;
@@ -384,9 +392,11 @@ export function useAgentMode(): UseAgentModeReturn {
           : 0,
         errorDescription: message,
       });
-      resolvePendingStop(true);
+      resolvePendingStop(true, thisGen);
     } finally {
-      submitInFlightRef.current = false;
+      if (submitGenerationRef.current === thisGen) {
+        submitInFlightRef.current = false;
+      }
       if (submitControllerRef.current === submitController) {
         submitControllerRef.current = null;
       }
@@ -420,7 +430,11 @@ export function useAgentMode(): UseAgentModeReturn {
           const promise = new Promise<boolean>((r) => {
             resolve = r;
           });
-          pendingStopWaiterRef.current = { promise, resolve };
+          pendingStopWaiterRef.current = {
+            promise,
+            resolve,
+            submitGeneration: submitGenerationRef.current,
+          };
         }
         // Start timeout already elapsed or was confirmed: the grace branch in
         // that timer cannot run, so bound the waiter here.
