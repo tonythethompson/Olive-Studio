@@ -19,7 +19,7 @@
 - Do not revert pipeline state when the tour ends or is skipped.
 - Never call `replaceState` for the sample if `hasSelectedModel(state)` is already true.
 - Auto-start only when `window.innerWidth >= WIDE_SHELL_MIN_WIDTH_PX` (900) and `!tourSeen`. Auto-start never resizes.
-- **Take the tour** may grow the window toward 900px when `screen.availWidth >= 900`. The app floor is phone width (`DESKTOP_MIN_WIDTH_PX`, ~320). Do not start the tour if the window is still under 900 after a resize attempt.
+- **Take the tour** may grow the window toward 900px when `screen.availWidth >= 900`. App floor becomes phone width (`DESKTOP_MIN_WIDTH_PX` = 320, Tauri 320×568) via [PR 301](https://github.com/tonythethompson/Olive-Studio/pull/301), not this branch. Until 301 is merged, this tree still gates at 600. Always import the live constants. Do not start the tour if the window is still under 900 after a resize attempt.
 - If `isPipelineOliveRunning()` is true, do not start the tour and do not mutate pipeline state.
 - `mcp` stays pinned `<2`. Do not change that pin.
 - Tests for this work must not hit the network.
@@ -679,7 +679,7 @@ git commit -m "feat: add tour anchors and a sample recipe apply control"
 - Test: `src/lib/tourViewport.test.ts` and a preferences assertion in `src/lib/tour.test.ts`
 
 **Interfaces:**
-- Consumes: `startGuidedTour` (nullable) from Task 4; `WIDE_SHELL_MIN_WIDTH_PX` (900) and `DESKTOP_MIN_WIDTH_PX` (~320 live constant) from `src/components/DesktopMinimumViewport.tsx`; `isPipelineOliveRunning` from `src/lib/pipelineNavigation.ts`
+- Consumes: `startGuidedTour` (nullable) from Task 4; `WIDE_SHELL_MIN_WIDTH_PX` (900) and `DESKTOP_MIN_WIDTH_PX` from `src/components/DesktopMinimumViewport.tsx` (320 after PR 301; 600 on this branch today); `isPipelineOliveRunning` from `src/lib/pipelineNavigation.ts`
 - Produces: `export async function ensureDesktopTourViewport(): Promise<boolean>` (true iff `innerWidth >= 900` after optional grow). No `WelcomeModal`. Auto-start iff `!tourSeen` and current width >= 900. Settings `onTakeTour` calls `ensureDesktopTourViewport()` then `startGuidedTour`.
 
 - [ ] **Step 1: Extend the preference test**

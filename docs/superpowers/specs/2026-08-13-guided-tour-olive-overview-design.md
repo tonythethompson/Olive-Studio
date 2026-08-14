@@ -41,7 +41,9 @@ The app may be as narrow as phone width (`DESKTOP_MIN_WIDTH_PX`, about 320). The
 3. If `availWidth >= 900`, grow to `min(max(900, innerWidth), availWidth)` by `min(max(innerHeight, 600), availHeight)`. Prefer Tauri `getCurrentWindow().setSize` (same API as `TitleBar.tsx`). In a browser tab, try `window.resizeTo` once. Most tabs ignore it. That is expected.
 4. After a successful resize, wait one animation frame so the wide shell paints, then start the tour. If `innerWidth` is still under 900, do not start.
 
-Do not fullscreen. Do not move the window off-screen. Do not persist the new size as a preference beyond what the OS or Tauri already remember. Read `DESKTOP_MIN_WIDTH_PX` and `WIDE_SHELL_MIN_WIDTH_PX` from `DesktopMinimumViewport.tsx` at implement time (this branch may still show 600 for the app floor; use the live constant, which is intended to be phone width ~320).
+Do not fullscreen. Do not move the window off-screen. Do not persist the new size as a preference beyond what the OS or Tauri already remember.
+
+[#301](https://github.com/tonythethompson/Olive-Studio/pull/301) (`devin/narrow-phone-width`) is the change that sets `DESKTOP_MIN_WIDTH_PX` to 320 and Tauri `minWidth` / `minHeight` to 320 / 568. This tour branch does not own that. After 301 lands, merge or rebase onto it and keep reading the live constants. Until then this tree still has a 600px gate. The tour still targets `WIDE_SHELL_MIN_WIDTH_PX` (900) either way.
 
 ### Removed
 
