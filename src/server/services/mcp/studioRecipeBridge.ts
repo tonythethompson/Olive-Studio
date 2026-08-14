@@ -159,7 +159,7 @@ function parseBridgeAlpha(item: Record<string, unknown>): BridgeOptionalNumberRe
 
 function parseSingleBridgeAdapter(item: Record<string, unknown>): BridgeAdapterParseResult {
   const adapterPath = clipString(item.path, 1024);
-  if (!adapterPath) return { ok: true, adapter: null };
+  if (!adapterPath) return { ok: false, reason: "path must be a non-empty string" };
   const name = clipString(item.name, 128);
   const rankResult = parseBridgeRank(item);
   if (!rankResult.ok) return rankResult;
