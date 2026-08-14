@@ -73,7 +73,8 @@ jobs:
           test -n "$APPIMAGE"
           dpkg-deb -c "$DEB" | grep -Eq 'resources/node-runtime/node$'
           APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --appimage-extract >/dev/null
-          NODE="$(find squashfs-root -type f -path '*resources/node-runtime/node' -print -quit)"
+          find squashfs-root -path '*/node-runtime/node' -print
+          NODE="$(find squashfs-root -path '*/node-runtime/node' -print -quit)"
           test -x "$NODE"
           "$NODE" --version
           PORT=31415 "$NODE" "$PWD/dist/server.mjs" &
