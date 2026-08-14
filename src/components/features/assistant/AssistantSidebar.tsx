@@ -396,7 +396,7 @@ export function AssistantSidebar({
               className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-electric-blue transition-colors cursor-pointer py-1.5 rounded hover:bg-slate-800/50"
             >
               <Bug className="h-3 w-3" />
-              Report an issue
+              Send feedback
             </button>
           </div>
 

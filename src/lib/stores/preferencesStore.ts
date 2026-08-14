@@ -7,12 +7,15 @@ export type McpRetrievalMode = "auto" | "keyword" | "semantic";
 
 interface PreferencesState {
   themePreference: ThemePreference;
+  /** True once the guided tour has run (finished or skipped). Gates the first-run auto-offer; replay from Settings is always available. */
+  tourSeen: boolean;
   mcpRetrievalMode: McpRetrievalMode;
   mcpPreloadEmbeddings: boolean;
 }
 
 interface PreferencesActions {
   setThemePreference: (pref: ThemePreference) => void;
+  markTourSeen: () => void;
   setMcpRetrievalMode: (mode: McpRetrievalMode) => void;
   setMcpPreloadEmbeddings: (enabled: boolean) => void;
 }
@@ -25,9 +28,11 @@ export const usePreferencesStore = create<PreferencesStore>()(
   persist(
     (set) => ({
       themePreference: "system",
+      tourSeen: false,
       mcpRetrievalMode: "auto",
       mcpPreloadEmbeddings: false,
       setThemePreference: (pref) => set({ themePreference: pref }),
+      markTourSeen: () => set({ tourSeen: true }),
       setMcpRetrievalMode: (mode) => set({ mcpRetrievalMode: mode }),
       setMcpPreloadEmbeddings: (enabled) => set({ mcpPreloadEmbeddings: enabled }),
     }),
