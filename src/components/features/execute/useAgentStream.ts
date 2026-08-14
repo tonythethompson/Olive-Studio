@@ -300,43 +300,54 @@ export function useAgentStream({
       const evtSource = new EventSource(`${AGENT_STREAM_ENDPOINT}/${encodeURIComponent(streamJobId)}`);
       eventSourceRef.current = evtSource;
 
+      /** Dedupe replayed/repeated events and track the replay prefix; returns whether to deliver. */
+      function shouldDeliverStreamEntry(
+        event: MessageEvent,
+        data: unknown,
+        entry: ActivityLogEntry,
+      ): boolean {
+        const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+        const eventId =
+          (typeof event.lastEventId === "string" && event.lastEventId) ||
+          (record && typeof record.id === "string" ? record.id : "");
+        const metricsEvent = isMetricsStreamEvent(event.type, data);
+
+        if (eventId) {
+          if (seenPayloadKeysRef.current.has(eventId)) return false;
+          addSeenPayloadKey(seenPayloadKeysRef.current, eventId);
+        } else if (replayingPrefixRef.current && !metricsEvent) {
+          // Prefix matching is log-only. Metrics between replayed logs must
+          // not terminate / desync the skip window.
+          const res = shouldSkipReplayEntry(
+            deliveredPrefixRef.current,
+            replayIndexRef.current,
+            entry,
+          );
+          replayIndexRef.current = res.nextIndex;
+          replayingPrefixRef.current = res.stillReplaying;
+          if (res.skip) return false;
+        }
+
+        if (!metricsEvent && !isTruncationNotice(entry.text)) {
+          pushDeliveredPrefix(deliveredPrefixRef.current, {
+            kind: entry.kind,
+            text: entry.text,
+          });
+        }
+        return true;
+      }
+
       const handleEntry = (event: MessageEvent) => {
         if (!isMountedRef.current) return;
 
         try {
           const data: unknown = JSON.parse(String(event.data));
           const entry = parseStreamPayload(data, event.type);
-          if (entry) {
-            const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-            const eventId =
-              (typeof event.lastEventId === "string" && event.lastEventId) ||
-              (record && typeof record.id === "string" ? record.id : "");
-            const metricsEvent = isMetricsStreamEvent(event.type, data);
-            if (eventId) {
-              if (seenPayloadKeysRef.current.has(eventId)) return;
-              addSeenPayloadKey(seenPayloadKeysRef.current, eventId);
-            } else if (replayingPrefixRef.current && !metricsEvent) {
-              // Prefix matching is log-only. Metrics between replayed logs must
-              // not terminate / desync the skip window.
-              const res = shouldSkipReplayEntry(
-                deliveredPrefixRef.current,
-                replayIndexRef.current,
-                entry,
-              );
-              replayIndexRef.current = res.nextIndex;
-              replayingPrefixRef.current = res.stillReplaying;
-              if (res.skip) return;
-            }
-            if (!metricsEvent && !isTruncationNotice(entry.text)) {
-              pushDeliveredPrefix(deliveredPrefixRef.current, {
-                kind: entry.kind,
-                text: entry.text,
-              });
-            }
-            // A parsed payload means the stream is actually delivering data.
-            retryCountRef.current = 0;
-            onEntryRef.current(entry);
-          }
+          if (!entry) return;
+          if (!shouldDeliverStreamEntry(event, data, entry)) return;
+          // A parsed, deliverable payload means the stream is actually delivering data.
+          retryCountRef.current = 0;
+          onEntryRef.current(entry);
         } catch {
           // Ignore malformed JSON payloads
         }
