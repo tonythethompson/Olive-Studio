@@ -141,7 +141,7 @@ function RuntimeVenvActions({
     <>
       <button
         type="button"
-        disabled={busy || venvReady}
+        disabled={busy || !status || venvReady}
         onClick={onEnsureVenv}
         className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-electric-blue/40 text-electric-blue hover:bg-electric-blue/10 disabled:opacity-40 font-sans text-xs"
         title="Create project .venv and install olive-ai now (while you configure the pipeline)"
