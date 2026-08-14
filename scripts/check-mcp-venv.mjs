@@ -20,7 +20,8 @@ if (!python) {
   process.exit(0);
 }
 
-const r = spawnSync(python, ["-c", "import mcp; print(mcp.__version__)"], {
+// `mcp` (pinned <2) has no __version__ attribute -- just check it imports.
+const r = spawnSync(python, ["-c", "import mcp"], {
   encoding: "utf8",
   env: { ...process.env, PYTHONPATH: mcpDir },
 });
