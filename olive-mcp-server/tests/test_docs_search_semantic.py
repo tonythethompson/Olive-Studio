@@ -530,25 +530,28 @@ def test_live_auto_budgets_even_when_model_is_warm(monkeypatch: pytest.MonkeyPat
     # the budgeted background work finishes deterministically and fast.
     monkeypatch.setattr(docs_search, "semantic_search", lambda *_a, **_k: [])
 
-    result = search_olive_documentation(
-        query="calibration",
-        top_k=3,
-        live=True,
-        mode="auto",
-    )
+    try:
+        result = search_olive_documentation(
+            query="calibration",
+            top_k=3,
+            live=True,
+            mode="auto",
+        )
 
-    assert result["retrieval"]["mode"] == "auto"
-    assert result["retrieval"]["effective"] == "keyword"
-    assert result["retrieval"]["degraded"] is True
-    assert live_index_calls["n"] == 1
-    assert any(r["source"].startswith("live:") for r in result["results"])
-
-    # The abandoned background worker (still executing slow_live_index() past
-    # the 50ms budget) must finish while the monkeypatches above are still in
-    # scope — otherwise pytest's monkeypatch teardown restores the real
-    # semantic_search() before the worker gets to it, racing a genuine
-    # embedding-model load against test teardown.
-    wait_inflight_semantic_clear()
+        assert result["retrieval"]["mode"] == "auto"
+        assert result["retrieval"]["effective"] == "keyword"
+        assert result["retrieval"]["degraded"] is True
+        assert live_index_calls["n"] == 1
+        assert any(r["source"].startswith("live:") for r in result["results"])
+    finally:
+        # The abandoned background worker (still executing slow_live_index()
+        # past the 50ms budget) must finish while the monkeypatches above are
+        # still in scope — otherwise pytest's monkeypatch teardown restores
+        # the real semantic_search() before the worker gets to it, racing a
+        # genuine embedding-model load against test teardown. Drain it here
+        # even if an assertion above failed, so a bug in this test can't also
+        # leak a stuck worker into whichever test runs next.
+        wait_inflight_semantic_clear()
 
     # After timeout, further live keyword search must avoid embeddings.
     def boom_if_keyword_hits_index(*_a, **_k):

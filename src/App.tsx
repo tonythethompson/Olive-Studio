@@ -442,11 +442,12 @@ function Dashboard() {
               <header className="min-h-12 grid grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_minmax(min-content,1fr)] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
                 {/*
                   Invisible mirror of the Assistant button. The two outer grid
-                  tracks use minmax(0,1fr), so they can compress to zero and
-                  the center cluster is measured with a real ResizeObserver.
-                  Mirroring the same markup on the left keeps both floors
-                  identical, which keeps the center cluster visually centered
-                  instead of drifting toward the empty side.
+                  tracks use minmax(min-content,1fr), so they hold at least
+                  their content's width while the center cluster is measured
+                  with a real ResizeObserver. Mirroring the same markup on the
+                  left keeps both floors identical, which keeps the center
+                  cluster visually centered instead of drifting toward the
+                  empty side.
                 */}
                 <div ref={headerLeftRef} className="justify-self-start flex items-center gap-2" aria-hidden="true">
                   <span className="invisible p-1.5">
