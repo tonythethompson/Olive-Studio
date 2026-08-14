@@ -11,7 +11,7 @@
  * @module ActionButton
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Wrench, Navigation, BookOpen, ExternalLink, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
@@ -105,9 +105,17 @@ export function ActionButton({
   setState: setStateProp,
 }: ActionButtonProps) {
   const [coercion, setCoercion] = useState<CoercionNotice | null>(null);
-  useEffect(() => {
+  const [actionIdentity, setActionIdentity] = useState(
+    () => [action.kind, action.label, action.payload] as const,
+  );
+  if (
+    actionIdentity[0] !== action.kind ||
+    actionIdentity[1] !== action.label ||
+    actionIdentity[2] !== action.payload
+  ) {
+    setActionIdentity([action.kind, action.label, action.payload]);
     setCoercion(null);
-  }, [action.kind, action.label, action.payload]);
+  }
   const store = usePipelineState();
   const state = stateProp ?? store.state;
   const setState = setStateProp ?? store.setState;
