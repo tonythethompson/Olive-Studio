@@ -16,8 +16,8 @@ Olive Studio is a desktop web app (React 19 + Express + Vite 8) that provides a 
 |-------|-------|
 | UI | React 19, Tailwind CSS 4, Radix UI, Motion, Recharts, Lucide icons |
 | State | Zustand stores: `src/lib/stores/pipelineStore.ts` (`usePipelineStore`, main pipeline state) + `src/lib/stores/preferencesStore.ts` (`usePreferencesStore`, persisted UI preferences) |
-| Server | Express 4, SSE log streaming, Vite dev middleware |
-| Build | Vite 8 (client) + esbuild (server bundle → `dist/server.cjs`) |
+| Server | Express 5, SSE log streaming, Vite dev middleware |
+| Build | Vite 8 (client) + esbuild (server bundle → `dist/server.mjs`) |
 | AI | Optional: Gemini, OpenAI, Anthropic, Mistral (user-provided keys) |
 | Optimization | Python 3.9+, `olive-ai` in project `.venv` |
 
@@ -55,7 +55,7 @@ Lazy-loaded AI assistant panel toggled from the top header.
 
 ```bash
 pnpm dev                    # Express + Vite dev → http://localhost:3000
-pnpm build                  # Vite + esbuild → dist/server.cjs
+pnpm build                  # Vite + esbuild → dist/server.mjs
 pnpm start                  # Serve production build
 pnpm test                   # Unit tests (src/lib/)
 pnpm test:watch             # Watch mode
