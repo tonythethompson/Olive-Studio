@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -8,17 +9,50 @@ import { IHVProvider, UIState } from "@/types";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 import { isProviderDetectedLocally, type HardwareProbeResult } from "@/lib/hardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
+import { cn } from "@/lib/utils";
 import {
   getCellCompatibility,
   type OptimizationPassValidation,
 } from "./hardwarePassCompatibility";
 import {
   Check,
-  CheckCircle,
-  AlertCircle,
-  AlertTriangle,
   Lock,
 } from "lucide-react";
+
+type CellCompatStatus = "supported" | "partial" | "unsupported" | "blocked";
+
+function getPassStatusButtonLabel(status: CellCompatStatus, isActive: boolean): string {
+  if (status === "unsupported") return "Unsupported";
+  if (status === "blocked") return "Blocked";
+  if (!isActive) return "Enable";
+  if (status === "partial") return "Fallback";
+  return "Active";
+}
+
+function PassStatusBadge({
+  status,
+  color,
+  isActive,
+  disabled,
+}: {
+  status: CellCompatStatus;
+  color: string;
+  isActive: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-7 min-w-[4.5rem] items-center justify-center rounded border px-2 text-[10.5px] font-mono font-medium transition-all",
+        color,
+        disabled && "opacity-60 cursor-not-allowed",
+        !disabled && !isActive && "hover:brightness-110 active:scale-95 cursor-pointer",
+      )}
+    >
+      {getPassStatusButtonLabel(status, isActive)}
+    </span>
+  );
+}
 
 interface HardwareCompatibilityMatrixProps {
   selectableProviders: typeof PROVIDER_CATALOG;
@@ -50,9 +84,44 @@ export function HardwareCompatibilityMatrix({
   detectedProviders,
   setState,
 }: HardwareCompatibilityMatrixProps) {
+  const [showAllProviders, setShowAllProviders] = useState(false);
+  const selectedProviderId = state.ihvProvider;
+
+  const detectedOrSelectedProviders = useMemo(
+    () =>
+      selectableProviders.filter(
+        (p) => p.id === selectedProviderId || isProviderDetectedLocally(p.id, hardwareProbe),
+      ),
+    [selectableProviders, selectedProviderId, hardwareProbe],
+  );
+  // Filtering is available when the detected/selected subset is non-empty and
+  // smaller than the full catalog. Gate the toolbar on that, not on the current
+  // visible length, so "Show all" does not unmount the "Show detected only" control.
+  const canFilterProviders =
+    detectedOrSelectedProviders.length > 0 &&
+    detectedOrSelectedProviders.length < selectableProviders.length;
+  const visibleProviders =
+    showAllProviders || detectedOrSelectedProviders.length === 0
+      ? selectableProviders
+      : detectedOrSelectedProviders;
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
+        {canFilterProviders && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-slate-800/80 bg-slate-900/40">
+            <span className="text-xs text-slate-500 truncate">
+              {showAllProviders ? "Showing all providers" : "Showing detected & selected providers"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAllProviders((v) => !v)}
+              className="text-xs font-medium text-electric-blue hover:text-electric-blue/80 transition-colors cursor-pointer shrink-0"
+            >
+              {showAllProviders ? "Show detected only" : "Show all providers"}
+            </button>
+          </div>
+        )}
         <div
           className="max-h-[560px] overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
           tabIndex={0}
@@ -68,7 +137,7 @@ export function HardwareCompatibilityMatrix({
                 </th>
 
                 {/* Hardware target columns */}
-                {selectableProviders.map((p) => {
+                {visibleProviders.map((p) => {
                   const isSelectedProvider = p.id === state.ihvProvider;
                   const HIcon = p.icon;
                   const detectedLocally = isProviderDetectedLocally(p.id, hardwareProbe);
@@ -186,7 +255,7 @@ export function HardwareCompatibilityMatrix({
                     </td>
 
                     {/* Column 2-6: Dynamic hardware cells */}
-                    {selectableProviders.map((p) => {
+                    {visibleProviders.map((p) => {
                       const isSelectedProvider = p.id === state.ihvProvider;
                       const comp = getCellCompatibility(v, p.id, state.passes);
                       const isCurrentlyActiveInCore = isSelectedProvider && isActiveOnSelected;
@@ -247,37 +316,12 @@ export function HardwareCompatibilityMatrix({
                                 }
                                 className="inline-flex w-full items-center justify-center p-1 disabled:opacity-100"
                               >
-                                {comp.status === "supported" ? (
-                                  isCurrentlyActiveInCore ? (
-                                    <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-mono font-medium">
-                                      <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />{" "}
-                                      Active
-                                    </div>
-                                  ) : (
-                                    <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-emerald-500/40 hover:bg-emerald-500/10 flex items-center justify-center text-slate-500 hover:text-emerald-400 hover:scale-110 active:scale-90 transition-all">
-                                      <Check className="h-3.5 w-3.5" />
-                                    </div>
-                                  )
-                                ) : comp.status === "partial" ? (
-                                  isCurrentlyActiveInCore ? (
-                                    <div className="flex h-6 items-center gap-1 p-1 px-3 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10.5px] font-mono font-medium">
-                                      <AlertCircle className="h-3.5 w-3.5 text-amber-400" />{" "}
-                                      Fallback
-                                    </div>
-                                  ) : (
-                                    <div className="h-6 w-6 rounded-full bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:bg-amber-500/10 flex items-center justify-center text-slate-500 hover:text-amber-400 hover:scale-110 active:scale-90 transition-all">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                                    </div>
-                                  )
-                                ) : comp.status === "blocked" ? (
-                                  <div className="h-6 w-6 rounded-full bg-amber-950/40 border border-amber-500/25 flex items-center justify-center text-amber-400/80">
-                                    <AlertTriangle className="h-3 w-3" />
-                                  </div>
-                                ) : (
-                                  <div className="h-6 w-6 rounded-full bg-slate-950 border border-slate-900/60 flex items-center justify-center text-slate-700/60">
-                                    <Lock className="h-3 w-3" />
-                                  </div>
-                                )}
+                                <PassStatusBadge
+                                  status={comp.status}
+                                  color={comp.color}
+                                  isActive={isCurrentlyActiveInCore}
+                                  disabled={cellDisabled}
+                                />
                               </button>
                               </div>
                             </TooltipTrigger>

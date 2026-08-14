@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
 import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
@@ -8,8 +8,8 @@ import { LicenseNotice } from "@/components/LicenseNotice";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
+import { getPipelineValidation, hasSelectedModel, type PipelineValidationResult } from "@/lib/pipelineValidation";
 import { usePreferencesStore } from "@/lib/stores/preferencesStore";
-import { hasSelectedModel } from "@/lib/pipelineValidation";
 import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
@@ -18,8 +18,11 @@ import { AgentAccessControls } from "@/components/features/AgentAccessControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId } from "@/lib/pipelineNavigation";
+import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
 import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
+import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
+import { PipelineStatusSummary } from "@/components/features/pipeline/PipelineStatusSummary";
+import { PipelineSectionGate } from "@/components/features/pipeline/PipelineSectionGate";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/execute/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -111,8 +114,15 @@ function Dashboard() {
   useThemeEffect();
 
   const { state: pipelineState } = usePipelineState();
+  const { data: hardwareProbe } = useHardwareProbe();
+  const modelSelected = useMemo(() => hasSelectedModel(pipelineState), [pipelineState]);
+  const validation: PipelineValidationResult = useMemo(
+    () => getPipelineValidation(pipelineState, { forLocalExecution: true, hardwareProbe: hardwareProbe ?? null }),
+    [pipelineState, hardwareProbe],
+  );
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
+  const [pendingResolveIssues, setPendingResolveIssues] = useState(false);
 
   // Header center cluster (KB sync / runtime / agent access) must never wrap
   // onto a second line. Measure the actual gap between the fixed left and
@@ -218,6 +228,71 @@ function Dashboard() {
     [isOliveRunning],
   );
 
+  const handleSelectModel = useCallback(() => scrollToSection("input"), [scrollToSection]);
+  const handleReviewRun = useCallback(() => scrollToSection("execute"), [scrollToSection]);
+  const handleResolveIssues = useCallback(() => {
+    const panel = document.getElementById("recipe-validation-panel");
+    const main = mainRef.current;
+    const isVisible = (() => {
+      if (!panel || !main) return false;
+      const mainRect = main.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const visibleHeight = Math.max(0, Math.min(panelRect.bottom, mainRect.bottom) - Math.max(panelRect.top, mainRect.top));
+      return visibleHeight > panelRect.height * 0.5;
+    })();
+
+    if (isVisible) {
+      expandPipelineValidation();
+      emphasizeValidationPanel();
+      return;
+    }
+
+    setPendingResolveIssues(true);
+    scrollToSection("execute");
+  }, [scrollToSection]);
+
+  useEffect(() => {
+    if (!pendingResolveIssues || activeView !== "execute") return;
+
+    let completed = false;
+
+    const complete = () => {
+      if (completed) return;
+      completed = true;
+      setPendingResolveIssues(false);
+    };
+
+    const tryExpandAndScroll = () => {
+      const panel = document.getElementById("recipe-validation-panel");
+      if (!panel) return false;
+      expandPipelineValidation();
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Keep this timer independent of effect cleanup: flipping pendingResolveIssues
+      // remounts the effect and would cancel the emphasize flash too early.
+      window.setTimeout(() => emphasizeValidationPanel(), 600);
+      return true;
+    };
+
+    if (tryExpandAndScroll()) {
+      complete();
+      return;
+    }
+
+    // Keep observing until the lazy Execute workspace mounts the panel.
+    // No short safety cutoff: a slow chunk load would otherwise drop Resolve Issues silently.
+    const observer = new MutationObserver(() => {
+      if (tryExpandAndScroll()) {
+        observer.disconnect();
+        complete();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [pendingResolveIssues, activeView]);
+
   useEffect(() => {
     const onNavigate = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
@@ -296,7 +371,6 @@ function Dashboard() {
               <div className="space-y-0.5">
                 {SECTIONS.map(({ id, step, label, icon: Icon }) => {
                   const isActive = activeView === id;
-                  const modelSelected = hasSelectedModel(pipelineState);
                   const isIncomplete = !modelSelected && id !== "input" && !visitedSections.has(id);
                   return (
                     <button
@@ -414,6 +488,16 @@ function Dashboard() {
                   </button>
                 </div>
               </header>
+              <div className="shrink-0 border-b border-slate-800 bg-slate-950/95 backdrop-blur z-10">
+                <PipelineStatusSummary
+                  state={pipelineState}
+                  validation={validation}
+                  modelSelected={modelSelected}
+                  onSelectModel={handleSelectModel}
+                  onResolveIssues={handleResolveIssues}
+                  onReviewRun={handleReviewRun}
+                />
+              </div>
               <main
                 ref={mainRef}
                 id="main"
@@ -452,44 +536,46 @@ function Dashboard() {
                           </h2>
                           <p className="text-sm text-slate-400 mt-0.5">{desc}</p>
                         </header>
-                        {id === "input" && (
-                          <ErrorBoundary label="Model source" onReportError={handleReportError}>
-                            <InputEnvironmentPanel />
-                          </ErrorBoundary>
-                        )}
-                        {id === "ihv" && (
-                          <ErrorBoundary label="Hardware" onReportError={handleReportError}>
-                            <Suspense fallback={<PanelFallback />}>
-                              <IHVIntegrationPanel />
-                            </Suspense>
-                          </ErrorBoundary>
-                        )}
-                        {id === "execute" && (
-                          <div className="space-y-8">
-                            <ErrorBoundary label="Recipe & run" onReportError={handleReportError}>
+                        <PipelineSectionGate locked={!modelSelected && id !== "input" && id !== "playground"}>
+                          {id === "input" && (
+                            <ErrorBoundary label="Model source" onReportError={handleReportError}>
+                              <InputEnvironmentPanel />
+                            </ErrorBoundary>
+                          )}
+                          {id === "ihv" && (
+                            <ErrorBoundary label="Hardware" onReportError={handleReportError}>
                               <Suspense fallback={<PanelFallback />}>
-                                <ExecutionWorkspace
-                                  onOpenAiAudit={handleOpenAiAudit}
-                                  onRunStateChange={(running) => {
-                                    setIsOliveRunning(running);
-                                  }}
-                                />
+                                <IHVIntegrationPanel />
                               </Suspense>
                             </ErrorBoundary>
-                            <ErrorBoundary label="Batch queue" onReportError={handleReportError}>
-                              <Suspense fallback={<BatchPanelFallback />}>
-                                <BatchProcessingPanel />
+                          )}
+                          {id === "execute" && (
+                            <div className="space-y-8">
+                              <ErrorBoundary label="Recipe & run" onReportError={handleReportError}>
+                                <Suspense fallback={<PanelFallback />}>
+                                  <ExecutionWorkspace
+                                    onOpenAiAudit={handleOpenAiAudit}
+                                    onRunStateChange={(running) => {
+                                      setIsOliveRunning(running);
+                                    }}
+                                  />
+                                </Suspense>
+                              </ErrorBoundary>
+                              <ErrorBoundary label="Batch queue" onReportError={handleReportError}>
+                                <Suspense fallback={<BatchPanelFallback />}>
+                                  <BatchProcessingPanel />
+                                </Suspense>
+                              </ErrorBoundary>
+                            </div>
+                          )}
+                          {id === "playground" && (
+                            <ErrorBoundary label="Playground" onReportError={handleReportError}>
+                              <Suspense fallback={<PlaygroundPanelFallback />}>
+                                <PlaygroundPanel />
                               </Suspense>
                             </ErrorBoundary>
-                          </div>
-                        )}
-                        {id === "playground" && (
-                          <ErrorBoundary label="Playground" onReportError={handleReportError}>
-                            <Suspense fallback={<PlaygroundPanelFallback />}>
-                              <PlaygroundPanel />
-                            </Suspense>
-                          </ErrorBoundary>
-                        )}
+                          )}
+                        </PipelineSectionGate>
                       </section>
                     );
                   })}
