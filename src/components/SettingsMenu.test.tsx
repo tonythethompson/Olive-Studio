@@ -18,4 +18,13 @@ describe("SettingsMenu", () => {
     expect(onTakeTour).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
   });
+
+  it("invokes onOpenLicense and closes the menu when MIT License is clicked", async () => {
+    const onOpenLicense = vi.fn();
+    render(<SettingsMenu onOpenLicense={onOpenLicense} />);
+    await userEvent.click(screen.getByLabelText("Settings"));
+    await userEvent.click(screen.getByText("MIT License"));
+    expect(onOpenLicense).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
 });

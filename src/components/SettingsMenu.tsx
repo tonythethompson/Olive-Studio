@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Settings, Monitor, Sun, Moon, Zap, Search, Database, GraduationCap } from "lucide-react";
+import { Settings, Monitor, Sun, Moon, Zap, Search, Database, GraduationCap, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   usePreferencesStore,
@@ -50,6 +50,7 @@ async function updateMcpSettings(patch: {
 interface SettingsMenuProps {
   /** Replays the guided tour. The tour marks itself seen, so this is the anytime entry point. */
   onTakeTour?: () => void;
+  onOpenLicense?: () => void;
 }
 
 /**
@@ -57,7 +58,7 @@ interface SettingsMenuProps {
  *
  * @param onTakeTour - Callback invoked when the user selects "Take the tour"
  */
-export function SettingsMenu({ onTakeTour }: SettingsMenuProps) {
+export function SettingsMenu({ onTakeTour, onOpenLicense }: SettingsMenuProps) {
   const [open, setOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [isRemoteMcp, setIsRemoteMcp] = useState(false);
@@ -106,6 +107,12 @@ export function SettingsMenu({ onTakeTour }: SettingsMenuProps) {
     triggerRef.current?.focus();
     onTakeTour?.();
   }, [onTakeTour]);
+
+  const handleOpenLicense = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+    onOpenLicense?.();
+  }, [onOpenLicense]);
 
   useEffect(() => {
     if (!open) return;
@@ -284,6 +291,32 @@ export function SettingsMenu({ onTakeTour }: SettingsMenuProps) {
           )}
           onKeyDown={handleMenuKeyDown}
         >
+          {onOpenLicense && (
+            <>
+              <button
+                ref={(el) => { itemRefs.current[itemIndex++] = el; }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-slate-300",
+                  "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
+                )}
+                onClick={handleOpenLicense}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleOpenLicense();
+                  }
+                }}
+              >
+                <Scale className="h-3.5 w-3.5" />
+                <span>MIT License</span>
+              </button>
+              <div className="my-1 border-t border-slate-700" role="separator" />
+            </>
+          )}
+
           {/* Theme section */}
           <div role="group" aria-labelledby="settings-theme-header">
             <div id="settings-theme-header" className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">

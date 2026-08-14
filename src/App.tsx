@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings } from "lucide-react";
+import { BrainCircuit, Cpu, Terminal, Bot, RefreshCw, FlaskConical, Settings, Bug } from "lucide-react";
 import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
@@ -9,7 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
 import { getPipelineValidation, hasSelectedModel, type PipelineValidationResult } from "@/lib/pipelineValidation";
 import { usePreferencesStore } from "@/lib/stores/preferencesStore";
-import type { ReportArea } from "@/lib/issueReport";
+import { pipelineViewToReportArea, type ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
@@ -461,10 +461,14 @@ function Dashboard() {
             <footer className="shrink-0 border-t border-slate-800 px-2 wide:px-4 py-2.5 flex justify-center wide:justify-start">
               <button
                 type="button"
-                onClick={() => setLicenseOpen(true)}
-                className="text-[11px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                aria-label="Report an issue"
+                onClick={() => {
+                  setReportData(null);
+                  setIsReportOpen(true);
+                }}
+                className="p-1.5 rounded text-slate-400 hover:text-slate-200 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue"
               >
-                MIT
+                <Bug className="h-3.5 w-3.5" />
               </button>
             </footer>
           </aside>
@@ -501,7 +505,10 @@ function Dashboard() {
 
                 </div>
                 <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
-                  <SettingsMenu onTakeTour={() => startTour({ allowResize: true })} />
+                  <SettingsMenu
+                    onTakeTour={() => startTour({ allowResize: true })}
+                    onOpenLicense={() => setLicenseOpen(true)}
+                  />
                   <button
                     type="button"
                     data-tour="assistant"
@@ -644,7 +651,9 @@ function Dashboard() {
                   setReportData(null);
                 }}
                 state={pipelineState}
-                defaultArea={labelToArea(reportData?.label)}
+                defaultArea={
+                  reportData ? labelToArea(reportData.label) : pipelineViewToReportArea(activeView)
+                }
                 defaultDescription={
                   reportData
                     ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`
