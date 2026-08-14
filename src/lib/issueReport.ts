@@ -28,16 +28,32 @@ export function categoryHasSeverity(category: ReportCategory): boolean {
 export type ReportSeverity = (typeof REPORT_SEVERITIES)[number]["id"];
 
 export const REPORT_AREAS = [
-  { id: "recipe-builder", label: "Recipe builder" },
-  { id: "hardware-ep", label: "Hardware / EP" },
-  { id: "execution-batch", label: "Execution & batch" },
-  { id: "playground-arena", label: "Playground / Arena" },
-  { id: "assistant-ai", label: "Assistant AI" },
+  { id: "recipe-builder", label: "Model source" },
+  { id: "hardware-ep", label: "Hardware" },
+  { id: "execution-batch", label: "Recipe & run" },
+  { id: "playground-arena", label: "Playground" },
+  { id: "assistant-ai", label: "Assistant" },
   { id: "install-venv", label: "Install / venv" },
   { id: "other", label: "Other" },
 ] as const;
 
 export type ReportArea = (typeof REPORT_AREAS)[number]["id"];
+
+const PIPELINE_VIEW_TO_REPORT_AREA = {
+  input: "recipe-builder",
+  ihv: "hardware-ep",
+  execute: "execution-batch",
+  playground: "playground-arena",
+} as const satisfies Record<string, ReportArea>;
+
+/**
+ * Maps the active left-rail pipeline stage to a report Area.
+ * Assistant is intentionally omitted; that sidebar has its own report button.
+ */
+export function pipelineViewToReportArea(view: string | undefined | null): ReportArea {
+  if (!view) return "other";
+  return PIPELINE_VIEW_TO_REPORT_AREA[view as keyof typeof PIPELINE_VIEW_TO_REPORT_AREA] ?? "other";
+}
 
 // ── Telemetry options ────────────────────────────────────────────────────────
 

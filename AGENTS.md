@@ -13,7 +13,7 @@
 | Command                 | Purpose                                                            |
 | ----------------------- | ------------------------------------------------------------------ |
 | `pnpm dev`              | Express+Vite dev server on <http://localhost:3000>                 |
-| `pnpm lint`             | tsc --noEmit + eslint (exits 0 with warnings; `--max-warnings 20`) |
+| `pnpm lint`             | tsc --noEmit + eslint (`--max-warnings 0`; any warning fails)      |
 | `pnpm test`             | Unit tests (vitest, src/lib/)                                      |
 | `pnpm test:server`      | Server unit tests (src/server/)                                    |
 | `pnpm test:integration` | Integration tests (mocked externals, real Express server)          |
@@ -72,7 +72,7 @@ Out of scope for this list: Microsoft 365 Agents / Copilot Studio agents (channe
 
 - **mcp pip pin:** `mcp` must be pinned `<2` — version 2.x removes `mcp.server.fastmcp` and breaks imports/tests. Install with: `pip install -e ".[dev]" "mcp<2"`
 - **No real Olive runs in CI/VM:** Do NOT trigger actual Olive optimization ("Execute Live"/batch run) — it downloads models + CUDA wheels. Recipe building, JSON export, and validation are the CPU-only flows.
-- **ESLint warnings are expected:** `pnpm lint` runs `eslint --max-warnings 20` and exits 0 with warnings. Only treat non-zero exit or reported errors as failure.
+- **ESLint warnings fail the build:** `pnpm lint` runs `eslint --max-warnings 0`. Any warning is a failure, same as an error.
 - **Python alias:** `pnpm a11y:scan` invokes `python` (not `python3`); ensure `python` is on PATH.
 - **Integration test mocks:** `src/server/__tests__/setup.integration.ts` mocks child_process, AI providers, and fetch. Tests start a real Express server on a random port.
 

@@ -297,3 +297,79 @@
 .glow-pulsar {
   animation: pulsar-glow 2s ease-in-out infinite;
 }
+/* driver.js guided tour — match the app's dark theme (scoped via popoverClass) */
+.driver-popover.olive-tour-popover {
+  background-color: #0f172a; /* slate-900 */
+  border: 1px solid #1e293b; /* slate-800 */
+  border-radius: 4px;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+  color: #cbd5e1; /* slate-300 */
+}
+
+.driver-popover.olive-tour-popover .driver-popover-title {
+  color: #f1f5f9; /* slate-100 */
+  font-size: 0.875rem;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-description {
+  color: #94a3b8; /* slate-400 */
+  font-size: 0.8125rem;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-progress-text {
+  color: #64748b; /* slate-500 */
+}
+
+.driver-popover.olive-tour-popover .driver-popover-close-btn {
+  color: #64748b;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-close-btn:hover {
+  color: #cbd5e1;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-next-btn,
+.driver-popover.olive-tour-popover .driver-popover-prev-btn,
+.driver-popover.olive-tour-popover .driver-popover-close-btn-text {
+  border-radius: 4px;
+  text-shadow: none;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-next-btn {
+  background-color: var(--color-electric-blue);
+  border-color: var(--color-electric-blue);
+  color: #fff;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-next-btn:hover {
+  background-color: var(--color-electric-blue-dark);
+  border-color: var(--color-electric-blue-dark);
+}
+
+.driver-popover.olive-tour-popover .driver-popover-prev-btn {
+  background-color: transparent;
+  border-color: #334155; /* slate-700 */
+  color: #94a3b8;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-prev-btn:hover {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+/* Arrow colors must match the popover background on every side. */
+.driver-popover.olive-tour-popover .driver-popover-arrow-side-left {
+  border-left-color: #0f172a;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-arrow-side-right {
+  border-right-color: #0f172a;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-arrow-side-top {
+  border-top-color: #0f172a;
+}
+
+.driver-popover.olive-tour-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: #0f172a;
+}

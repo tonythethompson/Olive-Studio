@@ -1241,10 +1241,10 @@ export function ExecutionWorkspace({
                             );
                             setIsReportOpen(true);
                           }}
-                          title="Report this failure as a GitHub issue"
+                          title="Send feedback"
                           className="flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer"
                         >
-                          <Bug className="h-3 w-3" /> Report
+                          <Bug className="h-3 w-3" /> Send feedback
                         </button>
                       )}
                       {executionStatus === "failed" &&

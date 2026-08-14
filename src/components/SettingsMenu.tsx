@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Settings, Monitor, Sun, Moon, Zap, Search, Database } from "lucide-react";
+import { Settings, Monitor, Sun, Moon, Zap, Search, Database, GraduationCap, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   usePreferencesStore,
@@ -47,7 +47,18 @@ async function updateMcpSettings(patch: {
   }
 }
 
-export function SettingsMenu() {
+interface SettingsMenuProps {
+  /** Replays the guided tour. The tour marks itself seen, so this is the anytime entry point. */
+  onTakeTour?: () => void;
+  onOpenLicense?: () => void;
+}
+
+/**
+ * Settings menu for theme, MCP retrieval, and optionally starting the product tour.
+ *
+ * @param onTakeTour - Callback invoked when the user selects "Take the tour"
+ */
+export function SettingsMenu({ onTakeTour, onOpenLicense }: SettingsMenuProps) {
   const [open, setOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [isRemoteMcp, setIsRemoteMcp] = useState(false);
@@ -90,6 +101,18 @@ export function SettingsMenu() {
     },
     [setThemePreference],
   );
+
+  const handleTakeTour = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+    onTakeTour?.();
+  }, [onTakeTour]);
+
+  const handleOpenLicense = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+    onOpenLicense?.();
+  }, [onOpenLicense]);
 
   useEffect(() => {
     if (!open) return;
@@ -247,6 +270,7 @@ export function SettingsMenu() {
         aria-label="Settings"
         aria-expanded={open}
         aria-haspopup="true"
+        data-tour="settings"
         className={cn(
           "p-1.5 rounded text-slate-500 hover:text-slate-200 transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue",
@@ -267,6 +291,32 @@ export function SettingsMenu() {
           )}
           onKeyDown={handleMenuKeyDown}
         >
+          {onOpenLicense && (
+            <>
+              <button
+                ref={(el) => { itemRefs.current[itemIndex++] = el; }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-slate-300",
+                  "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
+                )}
+                onClick={handleOpenLicense}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleOpenLicense();
+                  }
+                }}
+              >
+                <Scale className="h-3.5 w-3.5" />
+                <span>MIT License</span>
+              </button>
+              <div className="my-1 border-t border-slate-700" role="separator" />
+            </>
+          )}
+
           {/* Theme section */}
           <div role="group" aria-labelledby="settings-theme-header">
             <div id="settings-theme-header" className="px-2 py-1 text-[11px] text-slate-500 uppercase tracking-wider">
@@ -396,6 +446,32 @@ export function SettingsMenu() {
             <div className="px-3 py-1.5 text-[11px] text-rose-500" role="alert">
               {settingsError}
             </div>
+          )}
+
+          {onTakeTour && (
+            <>
+              <div className="my-1 border-t border-slate-700" role="separator" />
+              <button
+                ref={(el) => { itemRefs.current[itemIndex++] = el; }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-slate-300",
+                  "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
+                )}
+                onClick={handleTakeTour}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleTakeTour();
+                  }
+                }}
+              >
+                <GraduationCap className="h-3.5 w-3.5" />
+                <span>Take the tour</span>
+              </button>
+            </>
           )}
         </div>
       )}

@@ -83,13 +83,13 @@ export function ReportIssueModal({
 
   // Lock severity to N/A whenever the category isn't "bug" — severity only
   // describes bug impact and has no meaning for feature requests etc.
-  useEffect(() => {
-    if (!categoryHasSeverity(category)) {
-      setSeverity("n-a");
-    } else {
-      setSeverity((prev) => (prev === "n-a" ? "annoying" : prev));
-    }
-  }, [category]);
+  // Adjust during render (not an effect) so the next paint already has the
+  // matching severity.
+  if (!categoryHasSeverity(category) && severity !== "n-a") {
+    setSeverity("n-a");
+  } else if (categoryHasSeverity(category) && severity === "n-a") {
+    setSeverity("annoying");
+  }
 
   const toggleTelemetry = useCallback((id: TelemetryOptionId) => {
     setSelectedTelemetry((prev) => {
@@ -251,8 +251,8 @@ export function ReportIssueModal({
       <Card className="w-full max-w-lg border-slate-800 bg-slate-900 shadow-2xl max-h-[90vh] flex flex-col">
         <CardHeader
           titleId="report-issue-title"
-          title="Report an Issue"
-          description="Help us improve Olive Studio by reporting bugs or suggesting features."
+          title="Send feedback"
+          description="Bugs, ideas, or anything else about Olive Studio."
           badge={
             <Button
               ref={closeButtonRef}

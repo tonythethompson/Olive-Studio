@@ -2,7 +2,7 @@
  * ProviderCardGrid — Provider card grid with local accelerators and export/platform sections.
  * Extracted from IHVIntegrationPanel (Task 6).
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { HardwareProviderCard, type HardwareProviderCardProps } from "./HardwareProviderCard";
 import { ChevronDown, RefreshCw } from "lucide-react";
@@ -31,9 +31,11 @@ export function ProviderCardGrid({
     (p) => p.id === providerCardProps.state.ihvProvider,
   );
   const [showExportTargets, setShowExportTargets] = useState(selectedIsExportTarget);
-  useEffect(() => {
+  const [wasExportTarget, setWasExportTarget] = useState(selectedIsExportTarget);
+  if (wasExportTarget !== selectedIsExportTarget) {
+    setWasExportTarget(selectedIsExportTarget);
     setShowExportTargets(selectedIsExportTarget);
-  }, [selectedIsExportTarget]);
+  }
 
   // Within local accelerators, cards for hardware not actually detected on this machine
   // (e.g. CoreML on a Windows box) are rarely the pick — collapse them the same way
@@ -63,9 +65,11 @@ export function ProviderCardGrid({
     (p) => p.id === providerCardProps.state.ihvProvider,
   );
   const [showUndetectedLocal, setShowUndetectedLocal] = useState(selectedIsUndetectedLocal);
-  useEffect(() => {
+  const [wasUndetectedLocal, setWasUndetectedLocal] = useState(selectedIsUndetectedLocal);
+  if (wasUndetectedLocal !== selectedIsUndetectedLocal) {
+    setWasUndetectedLocal(selectedIsUndetectedLocal);
     setShowUndetectedLocal(selectedIsUndetectedLocal);
-  }, [selectedIsUndetectedLocal]);
+  }
 
   if (probeLoading) {
     return (
@@ -83,7 +87,7 @@ export function ProviderCardGrid({
           <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500">
             Local accelerators
           </p>
-          <div className="grid gap-4 min-w-0 w-full">
+          <div className="grid gap-4 min-w-0 w-full" data-tour="hardware-providers">
             {detectedLocal.map((p) => (
               <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
             ))}

@@ -16,11 +16,6 @@
     "bin/"
   ],
   "packageManager": "pnpm@11.17.0",
-  "pnpm": {
-    "overrides": {
-      "nanoid": ">=3.3.18"
-    }
-  },
   "engines": {
     "node": ">=22.16"
   },
@@ -39,7 +34,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:component": "vitest run --config vitest.component.config.ts",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit && eslint",
+    "lint": "tsc --noEmit && eslint --max-warnings 0",
     "lint:quick": "oxlint --import-plugin src/",
     "validate:recipe": "tsx scripts/validate-recipe-builder.ts",
     "mcp:native-smoke": "python olive-mcp-server/scripts/smoke_native.py",
@@ -47,10 +42,10 @@
     "mcp:agent-smoke": "node scripts/mcp-agent-smoke.mjs",
     "mcp:build-index": "python olive-mcp-server/scripts/build_kb_index.py",
     "a11y:scan": "python tools/a11y-scan.py src",
-    "eslint": "eslint --max-warnings 20 src/ server.ts",
+    "eslint": "eslint --max-warnings 0 src/ server.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "deepcheck": "tsc --noEmit && prettier --check \"src/**/*.{ts,tsx}\" && eslint",
+    "deepcheck": "tsc --noEmit && prettier --check \"src/**/*.{ts,tsx}\" && eslint --max-warnings 0",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
     "tauri": "tauri",
@@ -72,6 +67,7 @@
     "@tauri-apps/plugin-shell": "^2.3.5",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "driver.js": "^1.8.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "express-static-gzip": "^3.0.1",
