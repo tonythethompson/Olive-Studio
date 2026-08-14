@@ -46,20 +46,22 @@ export function applyInstallStreamEvent(
   }
   if (evt.type !== "done") return;
   acc.finalOk = evt.ok !== false;
-  acc.finalError = evt.error;
+  acc.finalError = evt.error || (evt.ok === false ? evt.message : undefined);
   acc.command = evt.command;
   acc.downloadUrl = evt.downloadUrl;
   if (evt.message) acc.lastLog = evt.message;
 }
 
 function finishInstallStream(acc: InstallStreamAcc, res: Response, fallbackError: string): InstallStreamResult {
+  // Never surface a progress `log` as the failure. Interrupted streams have no
+  // `done`, so lastLog is the last progress line and must not become the error.
   if (acc.finalOk === null) {
-    throw new Error(acc.finalError || acc.lastLog || "Install stream ended without a done event");
+    throw new Error(fallbackError);
   }
   if (!res.ok || !acc.finalOk) {
     return {
       ok: false,
-      error: acc.finalError || acc.lastLog || fallbackError,
+      error: acc.finalError || fallbackError,
       command: acc.command,
       downloadUrl: acc.downloadUrl,
     };
