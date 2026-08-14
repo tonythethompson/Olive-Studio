@@ -331,7 +331,7 @@ export async function ensureDeps(
         const { stdout } = await execFileAsync(
           venvPython,
           ["-c", "import torch; print(torch.version.cuda or 'NONE')"],
-          { env },
+          { env, timeout: 30_000 },
         );
         const installedCuda = stdout.trim();
         const needsGpu = !pkg.installArgs.some(
@@ -402,7 +402,7 @@ export async function ensureDeps(
         await execFileAsync(
           venvPython,
           ["-c", `import importlib; importlib.import_module(${JSON.stringify(pkg.importName)})`],
-          { env },
+          { env, timeout: 30_000 },
         );
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
@@ -414,7 +414,7 @@ export async function ensureDeps(
         const { stdout } = await execFileAsync(
           venvPython,
           ["-c", "import onnxruntime as ort; print(ort.__version__)"],
-          { env },
+          { env, timeout: 60_000 },
         );
         const installed = stdout.trim();
         const expected = pinnedOrtGpuInstallArgs()[0]?.split("==")[1];
@@ -432,7 +432,7 @@ export async function ensureDeps(
       }
     } else {
       try {
-        await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`], { env });
+        await execFileAsync(venvPython, ["-c", `import ${pkg.importName}`], { env, timeout: 30_000 });
         onLine(`[deps] ${pkg.label} already installed ✓`);
         continue;
       } catch {
