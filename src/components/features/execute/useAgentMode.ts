@@ -365,6 +365,7 @@ export function useAgentMode(): UseAgentModeReturn {
         } catch {
           cancelOk = false;
         }
+        clearStopSubmitGrace();
         resolvePendingStop(cancelOk, thisGen);
         return;
       }
