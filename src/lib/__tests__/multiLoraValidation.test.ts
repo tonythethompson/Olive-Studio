@@ -364,6 +364,12 @@ describe("multiLoraValidation — Unit Tests", () => {
       expect(getMaxAdapterCount(24)).toBe(8);
       expect(getMaxAdapterCount(80)).toBe(8);
     });
+
+    it("returns 8 when VRAM is unknown (non-finite)", () => {
+      expect(getMaxAdapterCount(Number.NaN)).toBe(8);
+      expect(getMaxAdapterCount(Number.POSITIVE_INFINITY)).toBe(8);
+      expect(getMaxAdapterCount(Number.NEGATIVE_INFINITY)).toBe(8);
+    });
   });
 
   describe("validateAdapters", () => {
