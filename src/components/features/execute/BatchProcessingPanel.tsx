@@ -19,6 +19,10 @@ import { getSelectableProviders, type HardwareProbeResult } from "@/lib/hardware
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import { LazyMCPDiagnosticCard } from "./LazyMCPDiagnosticCard";
+import { BatchComparisonView } from "./BatchComparisonView";
+import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
+import { parseMcpCompareOutput } from "@/lib/batchComparison";
+import type { CompareResultsOutput, ScoringPreference } from "@/lib/types/agentTypes";
 import {
   Play,
   Pause,
@@ -73,6 +77,34 @@ function appendBatchJobLog(
           : -1;
     return { ...j, logs: [...j.logs, line], progress: nextProgress };
   });
+}
+
+/** Fetch + parse a compare_results MCP call; keeps handleCompare's own branching minimal. */
+async function fetchCompareResults(
+  jobIds: string[],
+  preference: ScoringPreference,
+  signal: AbortSignal,
+): Promise<{ ok: true; result: CompareResultsOutput } | { ok: false; error: string }> {
+  const resp = await fetch("/api/mcp/tool", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ toolName: "compare_results", args: { job_ids: jobIds, preference } }),
+    signal,
+  });
+  if (!resp.ok) {
+    return { ok: false, error: `Comparison request failed (HTTP ${resp.status})` };
+  }
+  const data: unknown = await resp.json().catch(() => null);
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  const payload =
+    record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
+      ? (record.result as Record<string, unknown>)
+      : record;
+  const parsed = payload ? parseMcpCompareOutput(payload) : null;
+  if (!parsed) {
+    return { ok: false, error: "Failed to parse comparison response" };
+  }
+  return { ok: true, result: parsed };
 }
 
 async function postBatchOliveRun(
@@ -173,6 +205,7 @@ function applyBatchStreamDone(
           status: finalStatus,
           progress: finalStatus === "completed" ? 100 : j.progress,
           metrics: metrics ?? j.metrics,
+          finishedAtMs: Date.now(),
         }
         : j,
     ),
@@ -201,6 +234,7 @@ function applyBatchStreamError(
             ...j,
             status: "cancelled",
             logs: [...(j.logs || []), "[INFO] Halted by user."],
+            finishedAtMs: Date.now(),
           }
           : j,
       ),
@@ -213,7 +247,7 @@ function applyBatchStreamError(
   const errorLogs = [...(failedJob?.logs || []), "[ERROR] SSE connection lost."];
   setState({
     batchJobs: currentJobs.map((j) =>
-      j.id === batchJobId ? { ...j, status: "failed", logs: errorLogs } : j,
+      j.id === batchJobId ? { ...j, status: "failed", logs: errorLogs, finishedAtMs: Date.now() } : j,
     ),
   });
   fetchKeyedDiagnostic(batchJobId, errorLogs);
@@ -287,7 +321,7 @@ function failQueuedBatchJob(
 ): void {
   ctx.setState({
     batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
-      j.id === jobId ? { ...j, status: "failed", logs: errorLogs } : j,
+      j.id === jobId ? { ...j, status: "failed", logs: errorLogs, finishedAtMs: Date.now() } : j,
     ),
   });
   ctx.fetchKeyedDiagnostic(jobId, errorLogs);
@@ -324,7 +358,7 @@ function markBatchJobRunning(
   ctx.setState({
     batchJobs: (ctx.jobsRef.current ?? []).map((j) =>
       j.id === jobId
-        ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."] }
+        ? { ...j, status: "running", progress: -1, logs: ["[INFO] Starting Olive run..."], startedAtMs: Date.now() }
         : j,
     ),
   });
@@ -344,6 +378,7 @@ async function applyHaltBeforeStream(
           oliveJobId,
           status: terminalStatus,
           logs: [...(j.logs || []), haltLog],
+          finishedAtMs: Date.now(),
         }
         : j,
     ),
@@ -649,6 +684,49 @@ export function BatchProcessingPanel({
     errors: batchDiagnoseErrors,
   } = useMcpDiagnosticKeyed();
   const [appliedFixJobId, setAppliedFixJobId] = useAutoClearError(3000);
+  const [compareResults, setCompareResults] = useState<CompareResultsOutput | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const compareInFlightRef = useRef(false);
+  const compareSeqRef = useRef(0);
+
+  const handleCompare = useCallback(async (preference: ScoringPreference) => {
+    if (compareInFlightRef.current) return;
+    compareInFlightRef.current = true;
+    compareSeqRef.current += 1;
+    const seq = compareSeqRef.current;
+    setComparing(true);
+    setCompareError(null);
+
+    const completed = (jobsRef.current ?? []).filter((j) => j.status === "completed");
+    const jobIds = completed.map((j) => j.oliveJobId ?? j.id).slice(0, 10);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const outcome = await fetchCompareResults(jobIds, preference, controller.signal);
+      if (seq !== compareSeqRef.current) return;
+      if (outcome.ok) {
+        setCompareResults(outcome.result);
+      } else {
+        setCompareError(outcome.error);
+      }
+    } catch (err: unknown) {
+      if (seq !== compareSeqRef.current) return;
+      setCompareError(
+        err instanceof Error && err.name === "AbortError"
+          ? "Comparison request timed out"
+          : "Comparison request failed",
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      if (seq === compareSeqRef.current) {
+        setComparing(false);
+        compareInFlightRef.current = false;
+      }
+    }
+  }, []);
 
   /** Card self-submits feedback; parent hook is optional analytics — keep diagnosis UI unchanged. */
   const handleFeedbackSubmitted = useCallback(
@@ -693,7 +771,11 @@ export function BatchProcessingPanel({
     [hardwareProbe],
   );
 
-  const jobs = state.batchJobs || [];
+  const jobs = useMemo(() => state.batchJobs || [], [state.batchJobs]);
+  const comparisonRecords = useMemo(
+    () => jobs.filter(isTerminalBatchStatusJob).map(batchJobToHistoryRecord),
+    [jobs],
+  );
 
   const forceSettleHaltedJob = (oliveJobId: string) => {
     activeSourcesRef.current.forEach((s) => s.close());
@@ -708,6 +790,7 @@ export function BatchProcessingPanel({
             ...j,
             status: "cancelled",
             logs: [...(j.logs || []), "[INFO] Halted by user."],
+            finishedAtMs: Date.now(),
           }
           : j,
       ),
@@ -838,6 +921,8 @@ export function BatchProcessingPanel({
       progress: 0,
       logs: ["Pipeline reset to initial queued state by analyst."],
       metrics: undefined,
+      startedAtMs: undefined,
+      finishedAtMs: undefined,
     }));
     setState({ batchJobs: resetJobs });
   };
@@ -1206,6 +1291,45 @@ export function BatchProcessingPanel({
           </CardContent>
         </Card>
       </div>
+      <div className="xl:col-span-3">
+        <BatchComparisonView
+          records={comparisonRecords}
+          compareResults={compareResults}
+          comparing={comparing}
+          compareError={compareError}
+          onCompare={(preference) => {
+            void handleCompare(preference);
+          }}
+        />
+      </div>
     </div>
   );
+}
+
+function isTerminalBatchStatusJob(job: BatchJob): job is BatchJob & { status: TerminalBatchStatus } {
+  return isTerminalBatchStatus(job.status);
+}
+
+function batchJobToHistoryRecord(
+  job: BatchJob & { status: TerminalBatchStatus },
+): JobHistoryRecord {
+  return {
+    id: job.id,
+    jobId: job.oliveJobId ?? job.id,
+    timestamp: new Date(
+      job.finishedAtMs ?? job.startedAtMs ?? Date.now(),
+    ).toISOString(),
+    modelId: job.modelIdentifier,
+    ihvProvider: job.provider,
+    memoryOffload: "",
+    status: job.status,
+    exitCode: job.status === "completed" ? 0 : 1,
+    durationMs:
+      job.startedAtMs != null && job.finishedAtMs != null
+        ? Math.max(0, job.finishedAtMs - job.startedAtMs)
+        : 0,
+    passCount: job.passes.length,
+    passNames: job.passes,
+    recipeJson: job.recipeJson ?? "",
+  };
 }
