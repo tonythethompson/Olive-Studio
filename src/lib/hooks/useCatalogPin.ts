@@ -125,7 +125,12 @@ export function useCatalogPin(options: UseCatalogPinOptions = {}): UseCatalogPin
   const { enabled = true } = options;
 
   const [metadata, setMetadata] = useState<CatalogMetadata | null>(() => loadStoredMetadata());
-  const [upstreamSha, setUpstreamSha] = useState<string | null>(null);
+  const [upstreamSha, setUpstreamSha] = useState<string | null>(() => {
+    const stored = loadStoredMetadata();
+    if (!stored) return null;
+    const elapsed = Date.now() - new Date(stored.fetchedAt).getTime();
+    return elapsed < STALE_CHECK_THRESHOLD_MS ? stored.commitSha : null;
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,9 +164,7 @@ export function useCatalogPin(options: UseCatalogPinOptions = {}): UseCatalogPin
       const fetchedAt = new Date(stored.fetchedAt).getTime();
       const elapsed = Date.now() - fetchedAt;
       if (elapsed < STALE_CHECK_THRESHOLD_MS) {
-        // Last fetch was recent enough, skip the upstream check
-        setMetadata(stored);
-        setUpstreamSha(stored.commitSha);
+        // Last fetch was recent enough; metadata + SHA were seeded from storage.
         return;
       }
     }

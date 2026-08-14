@@ -104,6 +104,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     window.addEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
     // Catch expand requests that fired before this listener registered
     // (common when Resolve Issues races a lazy Execute mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- flush module-level pending flag from before mount
     if (takePendingExpandValidation()) setExpanded(true);
     return () => window.removeEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
   }, []);
@@ -118,6 +119,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     };
     window.addEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
     if (takePendingEmphasizeValidation()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- flush module-level pending flag from before mount
       setEmphasized(true);
       emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
     }
