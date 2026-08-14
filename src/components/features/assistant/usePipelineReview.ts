@@ -45,8 +45,8 @@ export interface UsePipelineReviewReturn {
   error: string;
   /** Timestamp (Date.now()) when the last successful review completed, or 0 if none. */
   completedAt: number;
-  /** Trigger a new review cycle. */
-  refresh: () => void;
+  /** Trigger a new review cycle. Option resetFirst clears previous review data before analyzing. */
+  refresh: (options?: { resetFirst?: boolean }) => void;
   /** Clear committed review results (e.g. provider removed). */
   reset: () => void;
   /**
@@ -219,7 +219,7 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
 
   // ── Core review cycle ─────────────────────────────────────────────────────
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((options?: { resetFirst?: boolean }) => {
     const thisReviewId = ++reviewIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -228,6 +228,15 @@ export function usePipelineReview(controlledState?: UIState): UsePipelineReviewR
 
     setIsLoading(true);
     setError("");
+
+    if (options?.resetFirst) {
+      setFindings([]);
+      setScore(0);
+      setLevel("");
+      setSummary("");
+      setResultFingerprint("");
+      setCompletedAt(0);
+    }
 
     // Capture the snapshot and compute its hash before fetch.
     const snapshot = stateRef.current;

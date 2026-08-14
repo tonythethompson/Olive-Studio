@@ -46,7 +46,7 @@ export interface PipelineReviewProps {
   state?: import("@/types").UIState;
   setState?: (partial: Partial<import("@/types").UIState>) => void;
   /** Optional ref populated with `refresh` so the parent can trigger a review. */
-  reviewRefreshRef?: React.RefObject<(() => void) | null>;
+  reviewRefreshRef?: React.RefObject<((options?: { resetFirst?: boolean }) => void) | null>;
   reviewResetRef?: React.RefObject<(() => void) | null>;
 }
 

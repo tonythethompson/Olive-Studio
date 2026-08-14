@@ -79,7 +79,7 @@ export function AssistantSidebar({
   const chat = useAiChat(workspaceContext);
   // Ref to trigger post-patch refresh in PipelineReview from chat actions.
   const postPatchRefreshRef = useRef<(() => void) | null>(null);
-  const reviewRefreshRef = useRef<(() => void) | null>(null);
+  const reviewRefreshRef = useRef<((options?: { resetFirst?: boolean }) => void) | null>(null);
   const reviewResetRef = useRef<(() => void) | null>(null);
   const chatLogForReport = useMemo(
     () =>
@@ -120,7 +120,8 @@ export function AssistantSidebar({
     activeTab,
     onProviderActivated: () => {
       setActiveTab("assistant");
-      reviewRefreshRef.current?.();
+      reviewResetRef.current?.();
+      reviewRefreshRef.current?.({ resetFirst: true });
     },
     onProviderMissing: () => setActiveTab("settings"),
     onProviderCleared: () => {
@@ -138,11 +139,20 @@ export function AssistantSidebar({
   });
 
   const providerSource = providers.providerStatus.source;
+  const prevProviderSourceRef = useRef(providerSource);
 
   useEffect(() => {
     if (!isOpen) return;
+    const providerChanged = prevProviderSourceRef.current !== providerSource;
+    prevProviderSourceRef.current = providerSource;
+
     if (providerSource !== "none") {
-      reviewRefreshRef.current?.();
+      if (providerChanged) {
+        reviewResetRef.current?.();
+        reviewRefreshRef.current?.({ resetFirst: true });
+      } else {
+        reviewRefreshRef.current?.();
+      }
     } else {
       reviewResetRef.current?.();
     }
