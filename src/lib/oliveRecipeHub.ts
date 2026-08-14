@@ -129,7 +129,7 @@ type RecipeAdaptersParseResult =
 function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterParseResult {
   const path =
     typeof item.path === "string" && item.path.length > 0 ? item.path : undefined;
-  if (!path) return { ok: true, adapter: null };
+  if (!path) return { ok: false, reason: "path must be a non-empty string" };
 
   const name =
     typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
