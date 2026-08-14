@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 
 import { execFileAsync } from "../shared/exec.ts";
+import { getInstalledModuleVersion, getModuleLibsDir } from "../shared/venvProbe.ts";
 import { pipInstallForFamily } from "../shared/pipInstall.ts";
 import { ensureVenvFamily } from "../venv/familyEnsure.ts";
 import { envForFamily } from "../venv/pathIsolation.ts";
@@ -42,15 +43,7 @@ const TRT_FAIL_MARK = "OLIVE_TRT_FAIL:";
 // ─── Version / directory queries ─────────────────────────────────────────
 
 export async function getInstalledTensorRtVersion(python: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(python, ["-c", "import tensorrt; print(tensorrt.__version__)"], {
-      timeout: 30_000,
-    });
-    const version = stdout.trim();
-    return version || null;
-  } catch {
-    return null;
-  }
+  return getInstalledModuleVersion(python, "tensorrt");
 }
 
 /**
@@ -60,16 +53,7 @@ export async function getInstalledTensorRtVersion(python: string): Promise<strin
  * @returns The existing `tensorrt_libs` directory path, or `null` if it cannot be located
  */
 export async function getTensorRtLibsDir(python: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(python, [
-      "-c",
-      "import os, tensorrt_libs; print(os.path.dirname(tensorrt_libs.__file__))",
-    ], { timeout: 30_000 });
-    const dir = stdout.trim();
-    return dir && fs.existsSync(dir) ? dir : null;
-  } catch {
-    return null;
-  }
+  return getModuleLibsDir(python, "tensorrt_libs");
 }
 
 /**
