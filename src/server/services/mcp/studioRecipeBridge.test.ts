@@ -45,18 +45,23 @@ describe("mergeBridgeUiState MultiLoRA", () => {
     ]);
   });
 
-  it("rejects path-only adapters at evaluate when PEFT + multiLora require name/rank/alpha", () => {
+  it("normalizes path-only adapters at evaluate when PEFT + multiLora are enabled", () => {
     mockIsMultiLoraEnabled.mockReturnValue(true);
     const result = evaluateStudioRecipeBridge({
       passes: { peft: true },
       vramEstimateGb: 24,
       multiLoraAdapters: [{ path: "/adapters/style" }],
     });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.code).toBe("invalid_ui_state");
-    expect(result.error).toMatch(/name must be a non-empty string/);
-    expect(result.error).toMatch(/rank must be a positive integer/);
-    expect(result.error).toMatch(/alpha must be a positive finite number/);
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts path-only snake_case adapters when multiLora is enabled", () => {
+    mockIsMultiLoraEnabled.mockReturnValue(true);
+    const result = evaluateStudioRecipeBridge({
+      passes: { peft: true },
+      vram_estimate_gb: 24,
+      multi_lora_adapters: [{ path: "/a", target_modules: ["q_proj"] }],
+    });
+    expect(result.ok).toBe(true);
   });
 });
