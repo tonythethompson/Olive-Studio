@@ -1,0 +1,54 @@
+name: Publish Olive MCP Server to PyPI
+
+on:
+  push:
+    tags:
+      - "mcp-server/v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # 3.11+: tomllib is stdlib (no tomli). packaging parses PEP 508 specifiers.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install build packaging
+
+      - name: Verify version matches tag
+        working-directory: olive-mcp-server
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#mcp-server/v}"
+          PKG_VERSION=$(python - <<'PY'
+          import tomllib
+          from pathlib import Path
+          data = tomllib.load(Path("pyproject.toml").open("rb"))
+          print(data["project"]["version"])
+          PY
+          )
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Version mismatch: tag says $TAG_VERSION but pyproject.toml says $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Verify mcp dependency is pinned below 2
+        working-directory: olive-mcp-server
+        run: python scripts/check_mcp_pin.py pyproject.toml
+
+      - name: Build package
+        working-directory: olive-mcp-server
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: olive-mcp-server/dist/

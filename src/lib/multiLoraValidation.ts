@@ -82,6 +82,124 @@ export function getMaxAdapterCount(vramGb: number): number {
     : HIGH_VRAM_MAX_ADAPTERS;
 }
 
+function validateSingleAdapterEntry(
+  entry: unknown,
+  i: number,
+): { errors: ValidationError[]; name?: string } {
+  const errors: ValidationError[] = [];
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+    return {
+      errors: [
+        {
+          index: i,
+          field: "entry",
+          message: `Adapter at index ${i} must be a non-null object`,
+        },
+      ],
+    };
+  }
+
+  const obj = entry as Record<string, unknown>;
+  let name: string | undefined;
+
+  if (typeof obj.name !== "string" || obj.name.length === 0) {
+    errors.push({
+      index: i,
+      field: "name",
+      message: `Adapter at index ${i}: name must be a non-empty string`,
+    });
+  } else {
+    name = obj.name;
+  }
+
+  if (typeof obj.path !== "string" || obj.path.length === 0) {
+    errors.push({
+      index: i,
+      field: "path",
+      message: `Adapter at index ${i}: path must be a non-empty string`,
+    });
+  }
+
+  if (
+    typeof obj.rank !== "number" ||
+    !Number.isInteger(obj.rank) ||
+    obj.rank <= 0
+  ) {
+    errors.push({
+      index: i,
+      field: "rank",
+      message: `Adapter at index ${i}: rank must be a positive integer`,
+    });
+  }
+
+  if (
+    typeof obj.alpha !== "number" ||
+    !Number.isFinite(obj.alpha) ||
+    obj.alpha <= 0
+  ) {
+    errors.push({
+      index: i,
+      field: "alpha",
+      message: `Adapter at index ${i}: alpha must be a positive finite number`,
+    });
+  }
+
+  if (obj.targetModules !== undefined) {
+    if (!Array.isArray(obj.targetModules)) {
+      errors.push({
+        index: i,
+        field: "targetModules",
+        message: `Adapter at index ${i}: targetModules must be an array of non-empty strings`,
+      });
+    } else {
+      const allValid = obj.targetModules.every(
+        (m: unknown) => typeof m === "string" && m.length > 0,
+      );
+      if (!allValid) {
+        errors.push({
+          index: i,
+          field: "targetModules",
+          message: `Adapter at index ${i}: targetModules must contain only non-empty strings`,
+        });
+      }
+    }
+  }
+
+  return { errors, name };
+}
+
+function detectDuplicateAdapterNames(
+  nameToIndices: Map<string, number[]>,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  for (const [name, indices] of nameToIndices) {
+    if (indices.length > 1) {
+      errors.push({
+        index: indices[0],
+        field: "name",
+        message: `Duplicate adapter name "${name}" found at indices ${indices.join(", ")}`,
+      });
+    }
+  }
+  return errors;
+}
+
+function parseValidAdapterEntries(adapters: unknown[]): AdapterEntry[] {
+  return adapters.map((entry) => {
+    const obj = entry as Record<string, unknown>;
+    const result: AdapterEntry = {
+      name: obj.name as string,
+      path: obj.path as string,
+      rank: obj.rank as number,
+      alpha: obj.alpha as number,
+    };
+    if (obj.targetModules !== undefined) {
+      result.targetModules = obj.targetModules as string[];
+    }
+    return result;
+  });
+}
+
 /**
  * Validates an array of adapter entries against MultiLoRA constraints.
  *
@@ -119,125 +237,32 @@ export function validateAdapters(
 
   // Validate each entry
   for (let i = 0; i < adapters.length; i++) {
-    const entry = adapters[i];
-
-    // Entry must be a non-null object
-    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-      errors.push({
-        index: i,
-        field: "entry",
-        message: `Adapter at index ${i} must be a non-null object`,
-      });
-      continue;
-    }
-
-    const obj = entry as Record<string, unknown>;
-
-    // Validate name: non-empty string
-    if (typeof obj.name !== "string" || obj.name.length === 0) {
-      errors.push({
-        index: i,
-        field: "name",
-        message: `Adapter at index ${i}: name must be a non-empty string`,
-      });
-    } else {
-      // Track for duplicate detection
-      const existing = nameToIndices.get(obj.name);
+    const { errors: entryErrors, name } = validateSingleAdapterEntry(
+      adapters[i],
+      i,
+    );
+    errors.push(...entryErrors);
+    if (name) {
+      const existing = nameToIndices.get(name);
       if (existing) {
         existing.push(i);
       } else {
-        nameToIndices.set(obj.name, [i]);
-      }
-    }
-
-    // Validate path: non-empty string
-    if (typeof obj.path !== "string" || obj.path.length === 0) {
-      errors.push({
-        index: i,
-        field: "path",
-        message: `Adapter at index ${i}: path must be a non-empty string`,
-      });
-    }
-
-    // Validate rank: positive integer
-    if (
-      typeof obj.rank !== "number" ||
-      !Number.isInteger(obj.rank) ||
-      obj.rank <= 0
-    ) {
-      errors.push({
-        index: i,
-        field: "rank",
-        message: `Adapter at index ${i}: rank must be a positive integer`,
-      });
-    }
-
-    // Validate alpha: positive finite number
-    if (
-      typeof obj.alpha !== "number" ||
-      !Number.isFinite(obj.alpha) ||
-      obj.alpha <= 0
-    ) {
-      errors.push({
-        index: i,
-        field: "alpha",
-        message: `Adapter at index ${i}: alpha must be a positive finite number`,
-      });
-    }
-
-    // Validate targetModules: if present, must be an array of non-empty strings
-    if (obj.targetModules !== undefined) {
-      if (!Array.isArray(obj.targetModules)) {
-        errors.push({
-          index: i,
-          field: "targetModules",
-          message: `Adapter at index ${i}: targetModules must be an array of non-empty strings`,
-        });
-      } else {
-        const allValid = obj.targetModules.every(
-          (m: unknown) => typeof m === "string" && m.length > 0,
-        );
-        if (!allValid) {
-          errors.push({
-            index: i,
-            field: "targetModules",
-            message: `Adapter at index ${i}: targetModules must contain only non-empty strings`,
-          });
-        }
+        nameToIndices.set(name, [i]);
       }
     }
   }
 
   // Detect and report duplicate names
-  for (const [name, indices] of nameToIndices) {
-    if (indices.length > 1) {
-      errors.push({
-        index: indices[0],
-        field: "name",
-        message: `Duplicate adapter name "${name}" found at indices ${indices.join(", ")}`,
-      });
-    }
-  }
+  errors.push(...detectDuplicateAdapterNames(nameToIndices));
 
   // Build result
   if (errors.length > 0) {
     return { valid: false, errors, adapters: [] };
   }
 
-  // Parse valid entries
-  const parsed: AdapterEntry[] = adapters.map((entry) => {
-    const obj = entry as Record<string, unknown>;
-    const result: AdapterEntry = {
-      name: obj.name as string,
-      path: obj.path as string,
-      rank: obj.rank as number,
-      alpha: obj.alpha as number,
-    };
-    if (obj.targetModules !== undefined) {
-      result.targetModules = obj.targetModules as string[];
-    }
-    return result;
-  });
-
-  return { valid: true, errors: [], adapters: parsed };
+  return {
+    valid: true,
+    errors: [],
+    adapters: parseValidAdapterEntries(adapters),
+  };
 }
