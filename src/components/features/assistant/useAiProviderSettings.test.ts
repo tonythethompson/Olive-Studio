@@ -153,6 +153,41 @@ describe("useAiProviderSettings", () => {
     expect(result.current.providerStatus.source).toBe("none");
   });
 
+  it("clears review when retained Codex provider DELETE rejects after logout", async () => {
+    const onProviderCleared = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown, init?: RequestInit) => {
+      const urlStr = String(url);
+      if (urlStr.includes("codex/logout")) return Promise.resolve(jsonResponse({ ok: true }));
+      if (urlStr.includes("codex/account")) return Promise.resolve(jsonResponse({ ready: false }));
+      if (urlStr.includes("ai/provider") && init?.method === "DELETE") {
+        return Promise.reject(new Error("network down"));
+      }
+      if (urlStr.includes("ai/provider")) {
+        return Promise.resolve(
+          jsonResponse({ source: "runtime", provider: "codex", model: "default" }),
+        );
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const { result } = renderHook(() =>
+      useAiProviderSettings({
+        isOpen: true,
+        activeTab: "settings",
+        onProviderActivated: vi.fn(),
+        onProviderCleared,
+        onProviderMissing: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleCodexLogout();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith("/api/ai/provider", { method: "DELETE" });
+    expect(onProviderCleared).toHaveBeenCalledTimes(1);
+  });
+
   it("does not clear review when logging out of Codex while another provider is active", async () => {
     const onProviderCleared = vi.fn();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown, init?: RequestInit) => {

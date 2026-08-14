@@ -410,11 +410,16 @@ export function useAiProviderSettings({
   const clearReviewAfterAuthLogout = async (providerId: "codex" | "devin") => {
     const status = await fetchProviderStatus();
     const activeId = normalizeUiProviderId(status.provider ?? "") ?? status.provider;
+    const shouldClearReview = status.source === "none" || activeId === providerId;
     if (status.source !== "none" && activeId === providerId) {
-      await fetch("/api/ai/provider", { method: "DELETE" });
-      await fetchProviderStatus();
+      try {
+        await fetch("/api/ai/provider", { method: "DELETE" });
+        await fetchProviderStatus();
+      } catch {
+        // Best-effort: auth is already gone; still clear review UI below.
+      }
     }
-    if (status.source === "none" || activeId === providerId) {
+    if (shouldClearReview) {
       onProviderCleared();
     }
   };
