@@ -50,7 +50,10 @@ export async function getModuleLibsDir(
   try {
     const { stdout } = await execFileAsync(
       python,
-      ["-c", `import os, ${moduleName}; print(os.path.dirname(${moduleName}.__file__))`],
+      [
+        "-c",
+        `import importlib, os; m = importlib.import_module(${JSON.stringify(moduleName)}); print(os.path.dirname(m.__file__))`,
+      ],
       { timeout: PROBE_TIMEOUT_MS },
     );
     const dir = stdout.trim();
