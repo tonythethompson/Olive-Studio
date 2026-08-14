@@ -413,10 +413,13 @@ export function useAiProviderSettings({
     const shouldClearReview = status.source === "none" || activeId === providerId;
     if (status.source !== "none" && activeId === providerId) {
       try {
-        await fetch("/api/ai/provider", { method: "DELETE" });
+        const r = await fetch("/api/ai/provider", { method: "DELETE" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         await fetchProviderStatus();
       } catch {
-        // Best-effort: auth is already gone; still clear review UI below.
+        // Auth is already gone. Drop local selection so reopening the sidebar
+        // does not re-trigger analysis against the logged-out provider.
+        setProviderStatus({ source: "none" });
       }
     }
     if (shouldClearReview) {
