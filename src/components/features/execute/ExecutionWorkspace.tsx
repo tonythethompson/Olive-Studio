@@ -646,18 +646,26 @@ export function ExecutionWorkspace({
 
   const _handleCopy = () => {
     // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
-    navigator.clipboard.writeText(buildRecipeJsonFromState(state));
-    setIsCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => setIsCopied(false), 2000);
+    void navigator.clipboard
+      .writeText(buildRecipeJsonFromState(state))
+      .then(() => {
+        setIsCopied(true);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => setIsCopied(false), 2000);
+      })
+      .catch(() => {});
   };
 
   const handleExportCopy = () => {
     // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
-    navigator.clipboard.writeText(buildRecipeJsonFromState(state));
-    setIsExportCopied(true);
-    if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
-    exportCopiedTimerRef.current = setTimeout(() => setIsExportCopied(false), 2000);
+    void navigator.clipboard
+      .writeText(buildRecipeJsonFromState(state))
+      .then(() => {
+        setIsExportCopied(true);
+        if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
+        exportCopiedTimerRef.current = setTimeout(() => setIsExportCopied(false), 2000);
+      })
+      .catch(() => {});
   };
 
   const handleExportDownload = () => {

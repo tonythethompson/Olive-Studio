@@ -292,7 +292,7 @@ function encodeCompletionConfiguration(opts: {
  * Image: `{ type: 'image', mimeType: 'image/png', base64Data: '...' [, caption: '...'] }`
  *
  * Matches the OpenAI/@ai-sdk multimodal message shape — we accept their
- * `image_url: { url: 'data:image/png;base64,...' }` form via {@link parseContent}.
+ * `image_url: { url: 'data:image/png;base64,...' }` form via {@link normalizeContent}.
  */
 export type ContentPart =
   { type: "text"; text: string } | { type: "image"; mimeType: string; base64Data: string; caption?: string };

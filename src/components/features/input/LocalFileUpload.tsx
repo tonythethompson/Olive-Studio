@@ -103,9 +103,13 @@ export function LocalFileUpload({ state, setState, onConfigTextChange }: LocalFi
   };
 
   const handleCopyHash = (hash: string) => {
-    navigator.clipboard.writeText(hash);
-    setCopiedHash(hash);
-    setTimeout(() => setCopiedHash(null), 2000);
+    void navigator.clipboard
+      .writeText(hash)
+      .then(() => {
+        setCopiedHash(hash);
+        setTimeout(() => setCopiedHash(null), 2000);
+      })
+      .catch(() => {});
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
