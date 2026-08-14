@@ -205,6 +205,18 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(result.reason).toContain("exceeds maximum");
     });
 
+    it("allows up to 8 adapters when VRAM is unknown (import/rebuild path)", () => {
+      const adapters = Array.from({ length: 3 }, (_, i) => ({
+        name: `lora-${i}`,
+        path: `/weights/${i}`,
+        rank: 4,
+        alpha: 8,
+      }));
+      const result = gateMultiLoraAdapters(adapters, Number.NaN);
+      expect(result.allowed).toBe(true);
+      expect(result.adapters).toHaveLength(3);
+    });
+
     it("allows up to 8 adapters for >12GB VRAM", () => {
       const adapters = Array.from({ length: 8 }, (_, i) => ({
         name: `lora-${i}`,
@@ -293,6 +305,7 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
         multiLoraAdapters: [
           { name: "style", path: "/adapters/style", rank: 16, alpha: 32, targetModules: ["q_proj"] },
           { name: "tone", path: "/adapters/tone", rank: 8, alpha: 16 },
+          { name: "domain", path: "/adapters/domain", rank: 4, alpha: 8 },
         ],
         passes: {
           ...DEFAULT_PASSES,
@@ -313,6 +326,7 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
           target_modules: ["q_proj"],
         },
         { name: "tone", path: "/adapters/tone", rank: 8, alpha: 16 },
+        { name: "domain", path: "/adapters/domain", rank: 4, alpha: 8 },
       ]);
       expect(
         ((recipe.passes as Record<string, unknown>).extract_adapters as { type: string }).type,
@@ -322,13 +336,15 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(imported.multiLoraAdapters).toEqual([
         { name: "style", path: "/adapters/style", rank: 16, alpha: 32, targetModules: ["q_proj"] },
         { name: "tone", path: "/adapters/tone", rank: 8, alpha: 16 },
+        { name: "domain", path: "/adapters/domain", rank: 4, alpha: 8 },
       ]);
       expect(imported.passes?.peft).toBe(true);
+      // Recipes do not persist vramEstimateGb; rebuild must still succeed.
+      expect(imported.vramEstimateGb).toBeUndefined();
 
       const rebuilt = buildOliveRecipe(
         baseState({
           ...imported,
-          vramEstimateGb: 24,
           multiLoraAdapters: imported.multiLoraAdapters,
           passes: { ...DEFAULT_PASSES, ...imported.passes },
         }),

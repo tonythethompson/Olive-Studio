@@ -72,11 +72,13 @@ const HIGH_VRAM_MAX_ADAPTERS = 8;
  * Returns the maximum number of adapters allowed given the available VRAM.
  *
  * @param vramGb - Available VRAM in gigabytes
- * @returns Maximum adapter count (2 for <= 12 GB, 8 for > 12 GB)
+ * @returns Maximum adapter count (2 for <= 12 GB, 8 for > 12 GB or unknown)
  */
 export function getMaxAdapterCount(vramGb: number): number {
-  // Non-finite values (NaN, Infinity) get the restrictive limit
-  if (!Number.isFinite(vramGb)) return LOW_VRAM_MAX_ADAPTERS;
+  // Unknown / non-finite VRAM: allow the absolute max. Olive recipes do not
+  // persist vramEstimateGb, so import → rebuild must not treat missing VRAM as
+  // <=12 GB and reject otherwise-valid 3–8 adapter configs.
+  if (!Number.isFinite(vramGb)) return HIGH_VRAM_MAX_ADAPTERS;
   return vramGb <= LOW_VRAM_THRESHOLD_GB
     ? LOW_VRAM_MAX_ADAPTERS
     : HIGH_VRAM_MAX_ADAPTERS;
@@ -209,7 +211,7 @@ function parseValidAdapterEntries(adapters: unknown[]): AdapterEntry[] {
  * 3. `rank`: positive integer (> 0, Number.isInteger)
  * 4. `alpha`: positive finite number (> 0, Number.isFinite)
  * 5. `targetModules`: if present, must be an array of non-empty strings
- * 6. Max adapter count: 2 for <= 12 GB VRAM, 8 for > 12 GB VRAM
+ * 6. Max adapter count: 2 for <= 12 GB VRAM, 8 for > 12 GB or unknown VRAM
  * 7. Duplicate name detection: identify both conflicting indices
  *
  * @param adapters - Untyped adapter entries from runtime input
@@ -225,10 +227,15 @@ export function validateAdapters(
 
   // Check adapter count limit
   if (adapters.length > maxCount) {
+    const vramBand = Number.isFinite(vramGb)
+      ? vramGb <= LOW_VRAM_THRESHOLD_GB
+        ? "<= 12"
+        : "> 12"
+      : "unknown";
     errors.push({
       index: -1,
       field: "adapters",
-      message: `Adapter count ${adapters.length} exceeds maximum of ${maxCount} for ${!Number.isFinite(vramGb) || vramGb <= LOW_VRAM_THRESHOLD_GB ? "<= 12" : "> 12"} GB VRAM`,
+      message: `Adapter count ${adapters.length} exceeds maximum of ${maxCount} for ${vramBand} GB VRAM`,
     });
   }
 
