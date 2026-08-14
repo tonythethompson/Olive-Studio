@@ -404,5 +404,44 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(imported.multiLoraAdapters).toEqual([{ path: "/legacy/adapter" }]);
       expect(imported.passes?.peft).toBe(true);
     });
+
+    it("drops non-positive or fractional rank/alpha on import so rebuild does not throw", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "bad-rank", path: "/adapters/bad-rank", rank: 0, alpha: 32 },
+          { name: "frac-rank", path: "/adapters/frac", rank: 1.5, alpha: 16 },
+          { name: "bad-alpha", path: "/adapters/bad-alpha", rank: 8, alpha: -1 },
+          { name: "ok", path: "/adapters/ok", rank: 8, alpha: 16 },
+        ],
+        passes: {
+          peft: { type: "LoRA", config: {} },
+          extract_adapters: { type: "ExtractAdapters", config: {} },
+        },
+        engine: {},
+      };
+      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+      expect(imported.multiLoraAdapters).toEqual([
+        { name: "bad-rank", path: "/adapters/bad-rank", alpha: 32 },
+        { name: "frac-rank", path: "/adapters/frac", alpha: 16 },
+        { name: "bad-alpha", path: "/adapters/bad-alpha", rank: 8 },
+        { name: "ok", path: "/adapters/ok", rank: 8, alpha: 16 },
+      ]);
+      expect(() =>
+        buildOliveRecipe(
+          baseState({
+            ...imported,
+            multiLoraAdapters: imported.multiLoraAdapters,
+            passes: { ...DEFAULT_PASSES, ...imported.passes },
+            vramEstimateGb: 24,
+          }),
+        ),
+      ).not.toThrow();
+    });
   });
 });

@@ -100,6 +100,8 @@ function readOptionalRecipeTargetModules(
 
 /**
  * Parse one recipe `adapters[]` entry into UIState MultiLoRA shape.
+ * Rank/alpha must already satisfy builder rules; present-but-invalid values are
+ * dropped so import does not leave workspace state that fails on rebuild.
  */
 function parseRecipeAdapterEntry(
   item: Record<string, unknown>,
@@ -110,10 +112,15 @@ function parseRecipeAdapterEntry(
 
   const name =
     typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
+  // Match oliveRecipeBuilder: positive integer rank, positive finite alpha.
   const rank =
-    typeof item.rank === "number" && Number.isFinite(item.rank) ? item.rank : undefined;
+    typeof item.rank === "number" && Number.isInteger(item.rank) && item.rank > 0
+      ? item.rank
+      : undefined;
   const alpha =
-    typeof item.alpha === "number" && Number.isFinite(item.alpha) ? item.alpha : undefined;
+    typeof item.alpha === "number" && Number.isFinite(item.alpha) && item.alpha > 0
+      ? item.alpha
+      : undefined;
   const targetModules = readOptionalRecipeTargetModules(item);
 
   return {
