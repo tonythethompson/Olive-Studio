@@ -77,7 +77,7 @@ jobs:
           echo "Packaged Node archive path: $NODE_REL"
           test -n "$NODE_REL"
           EXTRACT_DIR="$(mktemp -d)"
-          trap 'rm -rf "$EXTRACT_DIR"; kill ${SERVER_PID:-} 2>/dev/null || true' EXIT
+          trap 'if [ -n "${SERVER_PID:-}" ]; then kill -- "-$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi; rm -rf "$EXTRACT_DIR"' EXIT
           dpkg-deb -x "$DEB" "$EXTRACT_DIR"
           NODE="$EXTRACT_DIR/$NODE_REL"
           echo "Packaged Node path: $NODE"
@@ -102,12 +102,15 @@ jobs:
             echo "No packaged node_modules; desktop build must emit a fully bundled dist/server.mjs"
           fi
           smoke_server() {
-            local root="$1" node="$2" label="$3"
-            (cd "$root" && PORT=31415 "$node" "dist/server.mjs") &
+            local root="$1" node="$2" label="$3" port="$4"
+            # Isolate the server and its first-launch MCP child process so the
+            # following smoke test cannot reuse its listener or leave files in
+            # the extracted bundle while the cleanup trap removes it.
+            setsid bash -c 'cd "$1" && PORT="$2" exec "$3" dist/server.mjs' bash "$root" "$port" "$node" &
             SERVER_PID=$!
             for _ in $(seq 1 20); do
-              if curl -fsS http://127.0.0.1:31415/api/health >/dev/null; then
-                kill "$SERVER_PID" 2>/dev/null || true
+              if curl -fsS "http://127.0.0.1:$port/api/health" >/dev/null; then
+                kill -- -"$SERVER_PID" 2>/dev/null || true
                 wait "$SERVER_PID" 2>/dev/null || true
                 unset SERVER_PID
                 return 0
@@ -117,7 +120,7 @@ jobs:
             echo "$label bundled Node runtime did not start the packaged production server"
             return 1
           }
-          smoke_server "$SERVER_ROOT" "$NODE" "DEB"
+          smoke_server "$SERVER_ROOT" "$NODE" "DEB" 31415
 
           APPIMAGE_DIR="$EXTRACT_DIR/appimage"
           mkdir -p "$APPIMAGE_DIR"
@@ -130,4 +133,4 @@ jobs:
           test -n "$APPIMAGE_SERVER_MJS"
           test -x "$APPIMAGE_NODE"
           APPIMAGE_SERVER_ROOT="$(dirname "$(dirname "$APPIMAGE_SERVER_MJS")")"
-          smoke_server "$APPIMAGE_SERVER_ROOT" "$APPIMAGE_NODE" "AppImage"
+          smoke_server "$APPIMAGE_SERVER_ROOT" "$APPIMAGE_NODE" "AppImage" 31416

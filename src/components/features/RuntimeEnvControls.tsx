@@ -140,7 +140,10 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
       });
       const result = await consumeInstallNdjson(res, fallbackError, setMessage);
       if (!result.ok) throw new Error(result.error ?? fallbackError);
-      if (!(await refresh())) return;
+      if (!(await refresh())) {
+        setMessage(null);
+        return;
+      }
       setMessage(success);
     }, initialMessage);
 
