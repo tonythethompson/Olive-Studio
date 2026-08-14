@@ -126,6 +126,8 @@ interface SubmitResolutionCtx {
   setOutcome: (outcome: AgentOutcome) => void;
   clearStartTimeout: () => void;
   clearStopSubmitGrace: () => void;
+  /** Clears the shared grace timer only if it's still owned by `generation` — a stale, superseded generation's late resolution must not cancel a newer generation's active grace timer. */
+  clearStopSubmitGraceIfOwnedBy: (generation: number) => void;
   applyCancelledOutcome: () => void;
   resolvePendingStop: (ok: boolean, submitGeneration?: number) => void;
 }
@@ -146,6 +148,7 @@ async function resolveAgentSubmitResponse(ctx: SubmitResolutionCtx): Promise<voi
     setOutcome,
     clearStartTimeout,
     clearStopSubmitGrace,
+    clearStopSubmitGraceIfOwnedBy,
     applyCancelledOutcome,
     resolvePendingStop,
   } = ctx;
@@ -208,7 +211,9 @@ async function resolveAgentSubmitResponse(ctx: SubmitResolutionCtx): Promise<voi
     } catch {
       cancelOk = false;
     }
-    clearStopSubmitGrace();
+    // A newer generation may have armed its own grace timer since this stale
+    // submit was sent — only clear the shared timer if it's still this one's.
+    clearStopSubmitGraceIfOwnedBy(thisGen);
     resolvePendingStop(cancelOk, thisGen);
     return;
   }
@@ -272,6 +277,8 @@ export function useAgentMode(): UseAgentModeReturn {
   // Ref to hold the start timeout so we can clear it on success or stop.
   const startTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopSubmitGraceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Generation that owns the currently-armed grace timer, if any. */
+  const stopSubmitGraceGenerationRef = useRef<number | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
   // Ref to track current step count for cancellation entries.
   const stepCountRef = useRef(0);
@@ -316,15 +323,33 @@ export function useAgentMode(): UseAgentModeReturn {
       clearTimeout(stopSubmitGraceRef.current);
       stopSubmitGraceRef.current = null;
     }
+    stopSubmitGraceGenerationRef.current = null;
   }, []);
+
+  /**
+   * Clears the shared grace timer only if `generation` still owns it. A
+   * stale, superseded generation's late-arriving submit response must not
+   * cancel a newer generation's currently-armed grace timer — doing so would
+   * strand that newer session's deferred stopAgent() waiter forever.
+   */
+  const clearStopSubmitGraceIfOwnedBy = useCallback(
+    (generation: number) => {
+      if (stopSubmitGraceGenerationRef.current === generation) {
+        clearStopSubmitGrace();
+      }
+    },
+    [clearStopSubmitGrace],
+  );
 
   /** Bound a deferred stop that is waiting on a still-pending submit. */
   const armStopSubmitGrace = useCallback((generation: number) => {
     if (stopSubmitGraceRef.current !== null) return;
+    stopSubmitGraceGenerationRef.current = generation;
     stopSubmitGraceRef.current = setTimeout(() => {
       if (generation !== runGenerationRef.current) return;
       if (!stopRequestedRef.current) return;
       stopSubmitGraceRef.current = null;
+      stopSubmitGraceGenerationRef.current = null;
       submitControllerRef.current?.abort();
       const payload = submitPayloadRef.current;
       submitPayloadRef.current = null;
@@ -490,6 +515,7 @@ export function useAgentMode(): UseAgentModeReturn {
         setOutcome,
         clearStartTimeout,
         clearStopSubmitGrace,
+        clearStopSubmitGraceIfOwnedBy,
         applyCancelledOutcome,
         resolvePendingStop,
       });
@@ -526,6 +552,7 @@ export function useAgentMode(): UseAgentModeReturn {
     armStopSubmitGrace,
     clearStartTimeout,
     clearStopSubmitGrace,
+    clearStopSubmitGraceIfOwnedBy,
     resolvePendingStop,
   ]);
 
