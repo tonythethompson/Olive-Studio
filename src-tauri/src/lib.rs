@@ -118,7 +118,7 @@ fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
 
   let child = cmd.spawn().map_err(|e| {
     format!(
-      "Failed to start Node server with {}: {e}\nInstall Node.js 22+ or use an official Linux package that includes the bundled runtime.",
+      "Failed to start Node server with {}: {e}\nInstall Node.js 22+ or use a packaged build that includes the bundled runtime.",
       node.display()
     )
   })?;
