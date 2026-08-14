@@ -193,6 +193,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
           if (evt.message) lastLog = evt.message;
         }
       }
+      if (done) break;
     }
     if (buf.trim()) {
       try {
