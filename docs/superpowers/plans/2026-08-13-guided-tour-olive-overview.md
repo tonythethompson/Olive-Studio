@@ -18,7 +18,8 @@
 - Do not say "dummy" or "fixture" in UI copy. Say "sample recipe".
 - Do not revert pipeline state when the tour ends or is skipped.
 - Never call `replaceState` for the sample if `hasSelectedModel(state)` is already true.
-- Auto-start only when `window.innerWidth >= DESKTOP_MIN_WIDTH_PX` (600) and `!tourSeen`.
+- Auto-start only when `window.innerWidth >= WIDE_SHELL_MIN_WIDTH_PX` (900) and `!tourSeen`. Auto-start never resizes.
+- **Take the tour** may grow the window toward 900px when `screen.availWidth >= 900`. The app floor is phone width (`DESKTOP_MIN_WIDTH_PX`, ~320). Do not start the tour if the window is still under 900 after a resize attempt.
 - If `isPipelineOliveRunning()` is true, do not start the tour and do not mutate pipeline state.
 - `mcp` stays pinned `<2`. Do not change that pin.
 - Tests for this work must not hit the network.
@@ -29,9 +30,10 @@
 |------|----------------|
 | `src/data/tour-demo-recipe.json` | Static Olive recipe for `sshleifer/tiny-gpt2` on CPU |
 | `src/lib/tour.ts` | Steps, `ensureTourDemoModel`, `startGuidedTour`, `advanceFrom` |
-| `src/lib/tour.test.ts` | Unit tests for steps, demo apply, keyboard flags, copy |
+| `src/lib/tourViewport.ts` | `ensureDesktopTourViewport()`: grow toward 900px on Take the tour |
+| `src/lib/tour.test.ts` | Unit tests for steps, demo apply, keyboard flags, copy, viewport helper |
 | `src/lib/stores/preferencesStore.ts` | Drop `welcomeDismissed` / `dismissWelcome`; keep `tourSeen` and MCP fields |
-| `src/App.tsx` | Remove welcome modal; auto-start on `!tourSeen` + desktop; guard running jobs |
+| `src/App.tsx` | Remove welcome modal; auto-start on `!tourSeen` + width >= 900; Take the tour may resize |
 | `src/components/WelcomeModal.tsx` | Delete |
 | `src/components/WelcomeModal.test.tsx` | Delete |
 | `src/components/features/input/InputRecipeRail.tsx` | `data-tour="model-source"` plus sample Apply button |
@@ -669,15 +671,16 @@ git commit -m "feat: add tour anchors and a sample recipe apply control"
 ### Task 6: First-run wiring and remove `WelcomeModal`
 
 **Files:**
+- Create: `src/lib/tourViewport.ts`
 - Modify: `src/App.tsx` (import, `welcomeOpen` state ~144-147, auto-start effect ~215-225, `<WelcomeModal>` ~628)
 - Modify: `src/lib/stores/preferencesStore.ts` (remove `welcomeDismissed` and `dismissWelcome` only; keep MCP fields and `tourSeen`)
 - Delete: `src/components/WelcomeModal.tsx`
 - Delete: `src/components/WelcomeModal.test.tsx`
-- Test: `src/lib/tour.test.ts` already covers `tourSeen`. Add a preferences assertion in `src/lib/tour.test.ts` guided-tour preference describe.
+- Test: `src/lib/tourViewport.test.ts` and a preferences assertion in `src/lib/tour.test.ts`
 
 **Interfaces:**
-- Consumes: `startGuidedTour` (nullable) from Task 4; `DESKTOP_MIN_WIDTH_PX` from `src/components/DesktopMinimumViewport.tsx`; `isPipelineOliveRunning` from `src/lib/pipelineNavigation.ts`
-- Produces: No `WelcomeModal` in the tree. Auto-start iff `!tourSeen` and desktop width. Settings replay still calls `startTour`.
+- Consumes: `startGuidedTour` (nullable) from Task 4; `WIDE_SHELL_MIN_WIDTH_PX` (900) and `DESKTOP_MIN_WIDTH_PX` (~320 live constant) from `src/components/DesktopMinimumViewport.tsx`; `isPipelineOliveRunning` from `src/lib/pipelineNavigation.ts`
+- Produces: `export async function ensureDesktopTourViewport(): Promise<boolean>` (true iff `innerWidth >= 900` after optional grow). No `WelcomeModal`. Auto-start iff `!tourSeen` and current width >= 900. Settings `onTakeTour` calls `ensureDesktopTourViewport()` then `startGuidedTour`.
 
 - [ ] **Step 1: Extend the preference test**
 
@@ -703,39 +706,79 @@ In `src/lib/stores/preferencesStore.ts`, delete `welcomeDismissed`, `dismissWelc
 
 Stale `welcomeDismissed` keys already in `olive:preferences` are ignored by Zustand persist.
 
-- [ ] **Step 4: Rewire `App.tsx`**
+- [ ] **Step 4: Add `ensureDesktopTourViewport` and rewire `App.tsx`**
 
-1. Remove `import { WelcomeModal } from "@/components/WelcomeModal";`
-2. Add:
+Create `src/lib/tourViewport.ts`:
 
 ```ts
-import { DesktopMinimumViewport, DESKTOP_MIN_WIDTH_PX } from "@/components/DesktopMinimumViewport";
-import { isPipelineOliveRunning } from "@/lib/pipelineNavigation";
+import { WIDE_SHELL_MIN_WIDTH_PX } from "@/components/DesktopMinimumViewport";
+
+export async function ensureDesktopTourViewport(): Promise<boolean> {
+  if (window.innerWidth >= WIDE_SHELL_MIN_WIDTH_PX) return true;
+  if (window.screen.availWidth < WIDE_SHELL_MIN_WIDTH_PX) return false;
+
+  const targetW = Math.min(Math.max(WIDE_SHELL_MIN_WIDTH_PX, window.innerWidth), window.screen.availWidth);
+  const targetH = Math.min(Math.max(window.innerHeight, 600), window.screen.availHeight);
+
+  try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    const { LogicalSize } = await import("@tauri-apps/api/dpi");
+    await getCurrentWindow().setSize(new LogicalSize(targetW, targetH));
+  } catch {
+    try {
+      window.resizeTo(targetW, targetH);
+    } catch {
+      return false;
+    }
+  }
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+  return window.innerWidth >= WIDE_SHELL_MIN_WIDTH_PX;
+}
 ```
 
-(If `DesktopMinimumViewport` is already imported from that module, add `DESKTOP_MIN_WIDTH_PX` to the existing import. Do not import the component twice.)
+Add unit tests in `src/lib/tourViewport.test.ts` that mock `innerWidth` / `screen.availWidth`:
 
+- already >= 900: returns true, does not call resize
+- availWidth < 900: returns false, does not call resize
+- innerWidth 320 and availWidth 1440: calls Tauri `setSize` (mock the dynamic import) or `resizeTo`, then returns true when `innerWidth` is stubbed to 900 after
+
+In `App.tsx`:
+
+1. Remove `import { WelcomeModal } from "@/components/WelcomeModal";`
+2. Add `import { isPipelineOliveRunning } from "@/lib/pipelineNavigation";` if not already imported from that module (merge with the existing `pipelineNavigation` import).
 3. Delete the `welcomeOpen` / `setWelcomeOpen` state.
 4. Replace `startTour` and the auto-start effect:
 
 ```ts
-const startTour = useCallback(() => {
+const startTour = useCallback((opts?: { allowResize?: boolean }) => {
   if (isPipelineOliveRunning()) return;
-  if (window.innerWidth < DESKTOP_MIN_WIDTH_PX) return;
-  void import("@/lib/tour").then(({ startGuidedTour }) => {
+  void (async () => {
+    if (opts?.allowResize) {
+      const { ensureDesktopTourViewport } = await import("@/lib/tourViewport");
+      const ready = await ensureDesktopTourViewport();
+      if (!ready) return;
+    } else if (window.innerWidth < 900) {
+      return;
+    }
+    const { startGuidedTour } = await import("@/lib/tour");
     startGuidedTour(() => usePreferencesStore.getState().markTourSeen());
-  });
+  })();
 }, []);
 
 useEffect(() => {
   if (usePreferencesStore.getState().tourSeen) return;
-  const timer = window.setTimeout(startTour, 600);
+  const timer = window.setTimeout(() => startTour(), 600);
   return () => window.clearTimeout(timer);
 }, [startTour]);
 ```
 
 5. Delete `<WelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />`.
-6. Keep `<SettingsMenu onTakeTour={startTour} />`.
+6. Keep `<SettingsMenu onTakeTour={() => startTour({ allowResize: true })} />`.
+
+Use `WIDE_SHELL_MIN_WIDTH_PX` instead of the literal `900` in `App.tsx` (import it next to `DesktopMinimumViewport`).
 
 - [ ] **Step 5: Delete the modal files**
 
@@ -755,7 +798,7 @@ Expected: PASS. `WelcomeModal.test.tsx` is gone (do not run it).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/App.tsx src/lib/stores/preferencesStore.ts src/lib/tour.test.ts
+git add src/App.tsx src/lib/stores/preferencesStore.ts src/lib/tour.test.ts src/lib/tourViewport.ts src/lib/tourViewport.test.ts
 git add -u src/components/WelcomeModal.tsx src/components/WelcomeModal.test.tsx
 git commit -m "feat: make the guided tour the only first-run welcome"
 ```
@@ -817,7 +860,8 @@ Skip this commit if the tree is already clean.
 | Model source Apply (sample or any) advances | 4 (store subscribe) |
 | waitForElement after unlock | 3 |
 | No em/en dashes | 3, 7 |
-| Auto-start `!tourSeen` + desktop | 6 |
+| Auto-start `!tourSeen` + width >= 900 (no resize) | 6 |
+| Take the tour grows a phone-narrow window when availWidth >= 900 | 6 |
 | No start while Olive running | 4, 6 |
 | Settings replay same steps | 6 (existing `onTakeTour`) |
 | No network / no Olive run | 1, 2 |

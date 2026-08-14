@@ -22,13 +22,26 @@ One guided tour is the entire welcome. It starts with what Olive is and why it i
 - Do not fetch the demo recipe from GitHub or the network.
 - Do not roll back the demo when the tour finishes or is skipped.
 - Do not add a second welcome dialog.
-- Do not auto-start the tour below the desktop minimum viewport.
+- Do not auto-start the tour while the viewport is narrower than `WIDE_SHELL_MIN_WIDTH_PX` (900). Auto-start never resizes the window.
+- Do not shrink a window that is already wide enough for the tour.
+- The app window floor is phone width (`DESKTOP_MIN_WIDTH_PX`, ~320). That is not the tour's target width.
 
 ## UX
 
 ### First-run
 
 On desktop, if `tourSeen` is false, auto-start the tour after the dashboard has painted (keep the existing ~600ms delay). Finishing or skipping the tour calls `markTourSeen`. Replay is always **Settings → Take the tour** and uses the same step list.
+
+### Window size on Take the tour
+
+The app may be as narrow as phone width (`DESKTOP_MIN_WIDTH_PX`, about 320). The tour needs the wide shell (`WIDE_SHELL_MIN_WIDTH_PX`, 900). Auto-start never resizes. **Settings → Take the tour** grows the window when it is narrow and the display has room:
+
+1. If `window.innerWidth >= 900`, start the tour. Do not resize.
+2. If `screen.availWidth < 900`, do not resize. Start the tour only if `innerWidth` is already at least 900. Otherwise do nothing (leave the current layout).
+3. If `availWidth >= 900`, grow to `min(max(900, innerWidth), availWidth)` by `min(max(innerHeight, 600), availHeight)`. Prefer Tauri `getCurrentWindow().setSize` (same API as `TitleBar.tsx`). In a browser tab, try `window.resizeTo` once. Most tabs ignore it. That is expected.
+4. After a successful resize, wait one animation frame so the wide shell paints, then start the tour. If `innerWidth` is still under 900, do not start.
+
+Do not fullscreen. Do not move the window off-screen. Do not persist the new size as a preference beyond what the OS or Tauri already remember. Read `DESKTOP_MIN_WIDTH_PX` and `WIDE_SHELL_MIN_WIDTH_PX` from `DesktopMinimumViewport.tsx` at implement time (this branch may still show 600 for the app floor; use the live constant, which is intended to be phone width ~320).
 
 ### Removed
 
@@ -115,7 +128,7 @@ src/lib/stores/pipelineStore.ts
 |-----------|----------|
 | `isPipelineOliveRunning()` | Do not auto-start. Settings replay is a no-op (or a single toast using the existing nav-blocked message). Do not mutate pipeline state. |
 | Demo apply throws or does not satisfy `hasSelectedModel` | Log nothing user-facing. Continue the tour. Hardware/Recipe stay locked; popovers fall back to section headings. |
-| Viewport narrower than `DESKTOP_MIN_WIDTH_PX` | Do not auto-start. Starting from Settings is allowed only if the desktop shell is showing. |
+| Viewport narrower than `WIDE_SHELL_MIN_WIDTH_PX` (900) | Do not auto-start. **Take the tour** grows the window when `screen.availWidth >= 900`, then starts. If the display is too small or resize is refused (typical browser tab), do not start. |
 | Missing `data-tour` target | Driver.js highlights the fallback heading. The tour does not crash. |
 
 ## Testing
