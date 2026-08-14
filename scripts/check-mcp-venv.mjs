@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 /**
- * Session-start check: warn if the Olive MCP venv is missing, its Python is
- * outside the supported range (3.10-3.13; 3.14+ is unsupported), mcp is not
+ * Session-start check: warn if the Olive MCP venv is missing, mcp is not
  * installed, or the installed mcp major version is >= 2 (2.x removes
  * mcp.server.fastmcp). Warn-only — never fails the session.
->>>>>>> c16113f (Improve MCP setup Python/index handling)
  */
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -24,18 +22,7 @@ if (!python) {
   process.exit(0);
 }
 
-const v = spawnSync(python, ["--version"], { encoding: "utf8" });
-const minorMatch = /Python 3\.(\d+)/.exec(v.stdout || v.stderr || "");
-const minor = minorMatch ? Number(minorMatch[1]) : null;
-if (minor === null || minor < 10 || minor > 13) {
-  console.log(
-    `WARNING: Olive MCP Server venv uses an unsupported Python (${(v.stdout || v.stderr || "").trim() || "unknown version"}; need 3.10-3.13). Re-run: .\\scripts\\setup-mcp.ps1 (or ./scripts/setup-mcp.sh) to recreate it.`,
-  );
-  process.exit(0);
-}
-
 const r = spawnSync(python, ["-c", "import importlib.metadata; print(importlib.metadata.version('mcp'))"], {
->>>>>>> c16113f (Improve MCP setup Python/index handling)
   encoding: "utf8",
   env: { ...process.env, PYTHONPATH: mcpDir },
 });
