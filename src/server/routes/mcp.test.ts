@@ -16,6 +16,8 @@ const mcpToolMocks = vi.hoisted(() => ({
   spawnImpl: null as null | ((...args: unknown[]) => unknown),
   execFileCalls: [] as unknown[][],
   callOliveMcpToolImpl: null as null | ((name: string, args: Record<string, unknown>) => Promise<unknown>),
+  reconnectMcpClientImpl: null as null | (() => Promise<void>),
+  reconnectCalls: 0,
 }));
 
 vi.mock("child_process", async (importOriginal) => {
@@ -36,6 +38,12 @@ vi.mock("../services/mcp/persistentClient.ts", async (importOriginal) => {
       // rather than spawning a real Python process
       return { error: "MCP mock not configured", unavailable: true };
     },
+    reconnectMcpClient: async () => {
+      mcpToolMocks.reconnectCalls += 1;
+      if (mcpToolMocks.reconnectMcpClientImpl) {
+        return mcpToolMocks.reconnectMcpClientImpl();
+      }
+    },
     shutdownMcpClient: async () => { },
     resetPersistentClient: () => { },
   };
@@ -48,7 +56,8 @@ import fs from "fs";
 import { mountMcpRoutes } from "./mcp.ts";
 import { setKbStatusCache } from "../services/mcp/state.ts";
 import mcpBreaker, { resetMcpBreaker } from "../services/mcp/breaker.ts";
-import { kbSyncRateLimit } from "../middleware/rateLimit.ts";
+import { kbSyncRateLimit, mcpSettingsRateLimit } from "../middleware/rateLimit.ts";
+import { readStudioConfig, writeStudioConfig } from "../config.ts";
 
 function tripMcpBreaker(): void {
   for (let i = 0; i < 3; i += 1) {
@@ -109,8 +118,11 @@ beforeEach(async () => {
   mcpToolMocks.execFileImpl = null;
   mcpToolMocks.execFileCalls.length = 0;
   mcpToolMocks.callOliveMcpToolImpl = null;
+  mcpToolMocks.reconnectMcpClientImpl = null;
+  mcpToolMocks.reconnectCalls = 0;
   // Keep per-test sync requests from hitting the 2/min production rate limit.
   await kbSyncRateLimit.resetKey("127.0.0.1");
+  await mcpSettingsRateLimit.resetKey("127.0.0.1");
 });
 
 afterEach(() => {
@@ -335,5 +347,143 @@ describe("POST /api/mcp/studio-recipe mcpAccess", () => {
     expect(body.ok).toBe(false);
     expect(body.error).toBe("mcp_access_disabled");
     expect(body.required).toEqual({ mcpAccess: true });
+  });
+});
+
+describe("POST /api/mcp/settings", () => {
+  let initialMcpSettings: ReturnType<typeof readStudioConfig>["mcpSettings"];
+
+  beforeEach(() => {
+    initialMcpSettings = readStudioConfig().mcpSettings;
+  });
+
+  afterEach(() => {
+    writeStudioConfig({ mcpSettings: initialMcpSettings });
+  });
+
+  it("serializes overlapping writes so the later patch cannot restore stale fields", async () => {
+    writeStudioConfig({ mcpSettings: { retrievalMode: "auto", preloadEmbeddings: false } });
+
+    let releaseFirst!: () => void;
+    const firstReconnect = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let reconnects = 0;
+    mcpToolMocks.reconnectMcpClientImpl = async () => {
+      reconnects += 1;
+      if (reconnects === 1) await firstReconnect;
+    };
+
+    const first = fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "keyword" }),
+    });
+    await vi.waitFor(() => {
+      expect(reconnects).toBe(1);
+    });
+
+    const second = fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preloadEmbeddings: true }),
+    });
+
+    releaseFirst();
+    const [res1, res2] = await Promise.all([first, second]);
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+    const body2 = (await res2.json()) as {
+      mcpSettings?: { retrievalMode?: string; preloadEmbeddings?: boolean };
+    };
+    expect(body2.mcpSettings).toEqual({ retrievalMode: "keyword", preloadEmbeddings: true });
+  });
+
+  it("reverts on-disk config when reconnectMcpClient fails", async () => {
+    writeStudioConfig({ mcpSettings: { retrievalMode: "auto", preloadEmbeddings: false } });
+
+    mcpToolMocks.reconnectMcpClientImpl = async () => {
+      throw new Error("Failed to spawn process");
+    };
+
+    const res = await fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "semantic" }),
+    });
+
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { ok?: boolean; error?: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("Failed to restart MCP server with new settings");
+
+    const onDisk = readStudioConfig();
+    expect(onDisk.mcpSettings).toEqual({ retrievalMode: "auto", preloadEmbeddings: false });
+    // Failed apply + rollback attempt.
+    expect(mcpToolMocks.reconnectCalls).toBe(2);
+  });
+
+  it("awaits rollback reconnect before the next settings write can start", async () => {
+    writeStudioConfig({ mcpSettings: { retrievalMode: "auto", preloadEmbeddings: false } });
+
+    let releaseRollback!: () => void;
+    const rollbackHold = new Promise<void>((resolve) => {
+      releaseRollback = resolve;
+    });
+    let reconnects = 0;
+    mcpToolMocks.reconnectMcpClientImpl = async () => {
+      reconnects += 1;
+      if (reconnects === 1) throw new Error("Failed to spawn process");
+      if (reconnects === 2) await rollbackHold;
+    };
+
+    const first = fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "semantic" }),
+    });
+    await vi.waitFor(() => {
+      expect(reconnects).toBe(2);
+    });
+
+    const second = fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "keyword" }),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reconnects).toBe(2);
+
+    releaseRollback();
+    const [res1, res2] = await Promise.all([first, second]);
+    expect(res1.status).toBe(500);
+    expect(res2.status).toBe(200);
+    expect(reconnects).toBe(3);
+    const body2 = (await res2.json()) as {
+      mcpSettings?: { retrievalMode?: string; preloadEmbeddings?: boolean };
+    };
+    expect(body2.mcpSettings?.retrievalMode).toBe("keyword");
+  });
+
+  it("rejects settings changes when OLIVE_MCP_URL is configured", async () => {
+    const originalUrl = process.env.OLIVE_MCP_URL;
+    process.env.OLIVE_MCP_URL = "http://localhost:8080/sse";
+    try {
+      const res = await fetch(`${baseUrl}/api/mcp/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retrievalMode: "keyword" }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toContain("remote MCP server");
+    } finally {
+      if (originalUrl !== undefined) {
+        process.env.OLIVE_MCP_URL = originalUrl;
+      } else {
+        delete process.env.OLIVE_MCP_URL;
+      }
+    }
   });
 });

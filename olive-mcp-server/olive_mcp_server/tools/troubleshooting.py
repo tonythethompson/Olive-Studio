@@ -518,7 +518,9 @@ def _best_match(
         scored.append((entry, hybrid, hits))
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
     candidates = scored
-    if require_keyword:
+    # Auto/keyword never accept a cosine-only hit: BGE-small scores
+    # unrelated "error" strings at ~0.55–0.65 against this index.
+    if resolved_mode != "semantic" and (require_keyword or resolved_mode in ("auto", "keyword")):
         candidates = [row for row in scored if row[2] > 0]
         if not candidates:
             return None, 0.0, meta
@@ -688,7 +690,7 @@ def troubleshoot_olive_error(
             error_message,
             pass_name,
             config_context,
-            require_keyword=True,
+            require_keyword=(get_retrieval_mode(mode_arg) != "semantic"),
             mode=mode_arg,
         )
         if hit is not None and score > 0:

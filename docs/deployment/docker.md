@@ -11,7 +11,7 @@ Express application using Docker Compose.
 | Docker Compose | v2.x (bundled with Docker Desktop) |
 
 > **Note:** The multi-stage Dockerfile produces an image of approximately **1.5–3 GB**
-> because it bundles CPU PyTorch, sentence-transformers, and the all-MiniLM-L6-v2 embedding model.
+> because it bundles CPU PyTorch, sentence-transformers, and the BGE-small embedding model.
 
 ## Building the Image
 
@@ -23,7 +23,7 @@ cd olive-mcp-server
 docker build -t olive-mcp-server .
 ```
 
-The build pre-caches the `all-MiniLM-L6-v2` embedding model so the runtime container
+The build pre-caches the `BAAI/bge-small-en-v1.5` embedding model so the runtime container
 does not require network access for semantic search on first request.
 
 ## Running the Container
@@ -60,8 +60,8 @@ without rebuilding the image.
 | `OLIVE_MCP_RETRIEVAL_MODE` | `auto`, `keyword`, `semantic` | `auto` | Search strategy for knowledge base queries. `auto` uses semantic when budget allows, falls back to keyword. |
 | `OLIVE_MCP_SEMANTIC_BUDGET_MS` | Non-negative integer | `8000` | Maximum milliseconds for semantic search in `auto` mode; `0` means unlimited. |
 | `OLIVE_MCP_PRELOAD_EMBEDDINGS` | `1`, `0` | `0` | When `1`, loads the embedding model and KB indexes at startup before accepting traffic. Increases cold-start time but eliminates first-request latency. |
+| `SYNC_KB_TOKEN` | Any string | _(unset)_ | Studio Express only (not this MCP container): when set on the Studio process, requires matching `x-sync-token` on `POST /api/mcp/sync-kb`. |
 | `HF_HUB_OFFLINE` | `1`, `0` | `1` | Prevents Hugging Face Hub downloads at runtime (model is pre-cached in the image). |
-
 `SYNC_KB_TOKEN` is **not** an MCP container variable. It is enforced by the Olive Studio
 Express process on `POST /api/mcp/sync-kb`. Set it (and matching `VITE_SYNC_KB_TOKEN` /
 `x-sync-token` from the UI) on the Studio host process, not on `olive_mcp_server`.
@@ -111,8 +111,8 @@ docker compose up -d
 ```
 
 Olive Studio itself is not containerized in this repo. Run it on the host with
-`pnpm start` (or `pnpm dev`). The Express MCP client launches a **local stdio**
-subprocess; it does not read `OLIVE_MCP_URL`.
+`pnpm start` (or `pnpm dev`), then point Studio at the container with
+`OLIVE_MCP_URL=http://127.0.0.1:8000` (or another reachable SSE URL).
 
 Do **not** expect a Dockerized MCP process to reach Studio via `http://127.0.0.1:3000`.
 That address is the container's own loopback, and Studio's job/recipe routes are
@@ -156,7 +156,7 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 3 -H "Accept: text/event-strea
   remain restricted to loopback even when bound to all interfaces.
 - When exposing to a network, place a reverse proxy (nginx, Caddy, Traefik) in front
   with HTTPS and authentication.
-- Set `SYNC_KB_TOKEN` on the Studio host process (not the MCP container) to protect `/api/mcp/sync-kb`.
+- Set `SYNC_KB_TOKEN` on the Studio host process (not the MCP container) to protect `POST /api/mcp/sync-kb`.
 - The MCP server runs as a non-root user (`mcp`) inside the container.
 
 ## Troubleshooting
@@ -168,4 +168,5 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 3 -H "Accept: text/event-strea
 | Slow first request | Embedding model loading on demand | Set `OLIVE_MCP_PRELOAD_EMBEDDINGS=1` to front-load at startup |
 | `HfHubHTTPError` at runtime | Container attempting to download models | Ensure `HF_HUB_OFFLINE=1` (set by default in image); rebuild if model cache is missing |
 | Health check failing | Server not yet ready within start period | Increase `start_period` in compose or Dockerfile healthcheck |
-| Studio MCP tools fail | Express uses stdio, not `OLIVE_MCP_URL` | Run Studio on the host (`pnpm start`); set `OLIVE_STUDIO_API_URL` on the MCP process for loopback tools |
+| Studio cannot reach MCP | `OLIVE_MCP_URL` is unset or points at the wrong address | Run Studio on the host and set `OLIVE_MCP_URL=http://127.0.0.1:8000` (or the published container URL) |
+| Studio-backed MCP tools fail | Dockerized MCP cannot call the host's loopback-only Studio routes | Run the MCP server on the host with `OLIVE_STUDIO_API_URL=http://127.0.0.1:3000` when you need Studio job/recipe tools |

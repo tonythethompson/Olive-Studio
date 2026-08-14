@@ -27,7 +27,6 @@ for arg in "$@"; do
       ;;
   esac
 done
-
 echo ""
 echo "=== Olive MCP Server Setup ==="
 echo ""

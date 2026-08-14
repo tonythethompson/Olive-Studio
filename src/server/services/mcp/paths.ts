@@ -5,6 +5,7 @@
 import { existsSync } from "fs";
 import path from "path";
 import { getVenvPython } from "../venv/paths.ts";
+import { readStudioConfig } from "../../config.ts";
 
 /**
  * Resolves the Python executable used to run MCP tools.
@@ -23,13 +24,27 @@ export function getMcpPython(): string {
 
 /**
  * Builds the environment variables used to run the Olive MCP server.
+ * Merges persisted MCP settings (retrieval mode, preload embeddings) from
+ * the on-disk Studio config into the child process environment.
  *
  * @returns The current process environment with `olive-mcp-server` prepended to `PYTHONPATH`
  */
 export function buildPythonEnv(): NodeJS.ProcessEnv {
   const serverDir = path.join(process.cwd(), "olive-mcp-server");
   const pythonPath = [serverDir, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
-  return { ...process.env, PYTHONPATH: pythonPath };
+  const env: NodeJS.ProcessEnv = { ...process.env, PYTHONPATH: pythonPath };
+
+  const { mcpSettings } = readStudioConfig();
+  if (mcpSettings) {
+    if (mcpSettings.retrievalMode) {
+      env.OLIVE_MCP_RETRIEVAL_MODE = mcpSettings.retrievalMode;
+    }
+    if (mcpSettings.preloadEmbeddings !== undefined) {
+      env.OLIVE_MCP_PRELOAD_EMBEDDINGS = mcpSettings.preloadEmbeddings ? "1" : "0";
+    }
+  }
+
+  return env;
 }
 
 /**

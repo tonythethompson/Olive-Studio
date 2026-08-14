@@ -1,6 +1,6 @@
 # Multi-stage build for Olive MCP Server
-# Image size is dominated by CPU PyTorch + sentence-transformers + MiniLM
-# (~1.5–3GB depending on platform wheels — not a slim ~120MB image).
+# Image size is dominated by CPU PyTorch + sentence-transformers + BGE-small
+# (~1.5–3GB depending on platform wheels — not a slim ~130MB image).
 
 # ── Stage 1: Install dependencies ────────────────────────────────────────────
 FROM python:3.12-slim AS builder
@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir --prefix=/install \
 RUN PYTHONPATH="$(echo /install/lib/python*/site-packages)" \
     python -c "\
 from sentence_transformers import SentenceTransformer; \
-m = SentenceTransformer('all-MiniLM-L6-v2', device='cpu'); \
+m = SentenceTransformer('BAAI/bge-small-en-v1.5', device='cpu'); \
 v = m.encode(['warmup'], convert_to_numpy=True, normalize_embeddings=True); \
 assert v.shape == (1, 384), v.shape"
 
