@@ -45,6 +45,101 @@ describe("mergeBridgeUiState MultiLoRA", () => {
     ]);
   });
 
+  it("rejects adapters whose targetModules contain empty or non-string values", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", targetModules: ["q_proj", ""] }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/targetModules must be an array of non-empty strings/i);
+  });
+
+  it("rejects adapters with explicitly invalid rank instead of defaulting", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", rank: "high", alpha: 32 }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/rank must be a positive integer/i);
+  });
+
+  it("rejects adapters with non-finite alpha instead of defaulting", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", rank: 8, alpha: Number.NaN }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/alpha must be a positive finite number/i);
+  });
+
+  it("rejects adapters with non-positive rank instead of defaulting", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", rank: 0, alpha: 16 }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/rank must be a positive integer/i);
+  });
+
+  it("rejects adapters whose target_modules mix strings with non-strings", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multi_lora_adapters: [{ path: "/a", target_modules: ["q_proj", 1] }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/targetModules must be an array of non-empty strings/i);
+  });
+
+  it("rejects more than 32 targetModules instead of truncating", () => {
+    const modules = Array.from({ length: 33 }, (_, i) => `mod_${i}`);
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", targetModules: modules }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/targetModules exceeds maximum of 32/i);
+  });
+
+  it("rejects a targetModules name longer than 128 characters instead of shortening it", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multi_lora_adapters: [{ path: "/a", target_modules: ["q_proj", "m".repeat(129)] }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/each targetModules entry must be at most 128 characters/i);
+  });
+
+  it("accepts 32 targetModules including a 128-character name", () => {
+    const modules = Array.from({ length: 31 }, (_, i) => `mod_${i}`);
+    modules.push("n".repeat(128));
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", targetModules: modules }],
+    });
+    expect(merged.ok).toBe(true);
+    if (!merged.ok) return;
+    expect(merged.state.multiLoraAdapters).toEqual([{ path: "/a", targetModules: modules }]);
+  });
+
+  it("rejects non-object adapter entries instead of dropping them", () => {
+    const valid = { path: "/a" };
+    for (const malformed of [null, "adapter-path", ["/a"]]) {
+      const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+        multiLoraAdapters: [valid, malformed],
+      });
+      expect(merged.ok).toBe(false);
+      if (merged.ok) return;
+      expect(merged.code).toBe("invalid_ui_state");
+      expect(merged.error).toMatch(/each adapter must be a non-null object/i);
+    }
+  });
+
   it("normalizes path-only adapters at evaluate when PEFT + multiLora are enabled", () => {
     mockIsMultiLoraEnabled.mockReturnValue(true);
     const result = evaluateStudioRecipeBridge({

@@ -122,6 +122,26 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(result.adapters[0].alpha).toBe(16);
     });
 
+    it("rejects single adapter with explicitly invalid rank instead of defaulting", () => {
+      const adapters = [{ path: "/weights/a", rank: 0, alpha: 16 }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/rank must be a positive integer/i);
+    });
+
+    it("rejects single adapter with explicitly invalid alpha instead of defaulting", () => {
+      const adapters = [{ path: "/weights/a", rank: 8, alpha: -1 }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/alpha must be a positive finite number/i);
+    });
+
+    it("rejects single adapter with explicitly invalid targetModules instead of dropping them", () => {
+      const adapters = [{ path: "/weights/a", targetModules: [""] }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/targetModules must be an array of non-empty strings/i);
+    });
     it("rejects single adapter with missing path", () => {
       const adapters = [{ name: "no-path", rank: 8, alpha: 16 }];
       const result = gateMultiLoraAdapters(adapters, 24);
@@ -187,6 +207,12 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       ]);
     });
 
+    it("rejects explicitly invalid rank when flag is enabled instead of defaulting", () => {
+      const adapters = [{ path: "/adapters/style", rank: 1.5, alpha: 16 }];
+      const result = gateMultiLoraAdapters(adapters, 24);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/rank must be a positive integer/i);
+    });
     it("normalizes target_modules snake_case from MCP payloads", () => {
       const adapters = [{ path: "/a", target_modules: ["q_proj", "v_proj"] }];
       const result = gateMultiLoraAdapters(adapters, 24);
@@ -375,6 +401,108 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
       expect(imported.multiLoraAdapters).toEqual([{ path: "/legacy/adapter" }]);
       expect(imported.passes?.peft).toBe(true);
+    });
+
+    it("rejects non-positive or fractional rank/alpha on import instead of defaulting", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "bad-rank", path: "/adapters/bad-rank", rank: 0, alpha: 32 },
+        ],
+        passes: {
+          peft: { type: "LoRA", config: {} },
+          extract_adapters: { type: "ExtractAdapters", config: {} },
+        },
+        engine: {},
+      };
+      expect(() => deriveUiStateFromOliveRecipe(recipe, { replacePasses: true })).toThrow(
+        /rank must be a positive integer/i,
+      );
+    });
+
+    it("rejects non-positive alpha on import instead of defaulting", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "bad-alpha", path: "/adapters/bad-alpha", rank: 8, alpha: -1 },
+        ],
+        passes: {
+          peft: { type: "LoRA", config: {} },
+        },
+        engine: {},
+      };
+      expect(() => deriveUiStateFromOliveRecipe(recipe, { replacePasses: true })).toThrow(
+        /alpha must be a positive finite number/i,
+      );
+    });
+
+    it("rejects invalid target_modules on import instead of dropping them", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const emptyEntry = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "bad-modules", path: "/adapters/bad-modules", target_modules: [""] },
+        ],
+        passes: { peft: { type: "LoRA", config: {} } },
+        engine: {},
+      };
+      expect(() => deriveUiStateFromOliveRecipe(emptyEntry, { replacePasses: true })).toThrow(
+        /targetModules must be an array of non-empty strings/i,
+      );
+
+      const mixedTypes = {
+        ...emptyEntry,
+        adapters: [
+          { name: "mixed", path: "/adapters/mixed", targetModules: ["q_proj", 1] },
+        ],
+      };
+      expect(() => deriveUiStateFromOliveRecipe(mixedTypes, { replacePasses: true })).toThrow(
+        /targetModules must be an array of non-empty strings/i,
+      );
+
+      const notArray = {
+        ...emptyEntry,
+        adapters: [
+          { name: "scalar", path: "/adapters/scalar", target_modules: "q_proj" },
+        ],
+      };
+      expect(() => deriveUiStateFromOliveRecipe(notArray, { replacePasses: true })).toThrow(
+        /targetModules must be an array of non-empty strings/i,
+      );
+    });
+
+    it("preserves valid target_modules from snake_case import payloads", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "style", path: "/adapters/style", target_modules: ["q_proj", "v_proj"] },
+        ],
+        passes: { peft: { type: "LoRA", config: {} } },
+        engine: {},
+      };
+      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
+      expect(imported.multiLoraAdapters).toEqual([
+        { name: "style", path: "/adapters/style", targetModules: ["q_proj", "v_proj"] },
+      ]);
     });
   });
 });

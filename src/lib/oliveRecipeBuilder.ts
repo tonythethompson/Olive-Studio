@@ -898,37 +898,87 @@ function resolveAdapterFallbackName(path: string, index: number): string {
   return basenameFromFsPath(path) || (index === 0 ? "default" : `adapter-${index}`);
 }
 
-function resolvePositiveInt(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
+type NormalizeAdapterResult =
+  | { ok: true; adapter: AdapterEntry }
+  | { ok: false; reason: string };
+
+type ResolveFieldResult<T> = { ok: true; value: T } | { ok: false; reason: string };
+
+/** Missing rank defaults to 8; present-but-invalid rank is rejected. */
+function resolveAdapterRank(value: unknown): ResolveFieldResult<number> {
+  if (value === undefined) return { ok: true, value: 8 };
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer." };
 }
 
-function resolvePositiveFinite(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+/** Missing alpha defaults to 16; present-but-invalid alpha is rejected. */
+function resolveAdapterAlpha(value: unknown): ResolveFieldResult<number> {
+  if (value === undefined) return { ok: true, value: 16 };
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number." };
+}
+
+/**
+ * Absent targetModules/target_modules is fine. If either key is present, the
+ * value must be a non-empty-string array (or we reject).
+ */
+function resolveAdapterTargetModules(
+  obj: Record<string, unknown>,
+): ResolveFieldResult<string[] | undefined> {
+  const hasTargetModulesKey = "targetModules" in obj || "target_modules" in obj;
+  const targetModules = readOptionalTargetModules(obj);
+  if (hasTargetModulesKey && targetModules === undefined) {
+    return {
+      ok: false,
+      reason: "targetModules must be an array of non-empty strings.",
+    };
+  }
+  return { ok: true, value: targetModules };
 }
 
 /**
  * Normalize a path-bearing adapter entry so MCP path-only payloads and
  * flag-off single-adapter mode share the same name/rank/alpha defaults.
- * Returns null when `path` is missing or empty (still invalid).
+ *
+ * Missing optional fields get defaults. Present-but-invalid rank/alpha/
+ * targetModules are rejected so callers cannot silently rewrite bad values.
  */
 function normalizePathBearingAdapter(
   entry: unknown,
   index: number,
-): AdapterEntry | null {
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+): NormalizeAdapterResult {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return { ok: false, reason: "Adapter entry must be a non-null object." };
+  }
   const obj = entry as Record<string, unknown>;
-  if (typeof obj.path !== "string" || obj.path.length === 0) return null;
+  if (typeof obj.path !== "string" || obj.path.length === 0) {
+    return { ok: false, reason: "path must be a non-empty string." };
+  }
 
-  const targetModules = readOptionalTargetModules(obj);
+  const targetModules = resolveAdapterTargetModules(obj);
+  if (!targetModules.ok) return targetModules;
+
+  const rank = resolveAdapterRank(obj.rank);
+  if (!rank.ok) return rank;
+
+  const alpha = resolveAdapterAlpha(obj.alpha);
+  if (!alpha.ok) return alpha;
+
   const fallbackName = resolveAdapterFallbackName(obj.path, index);
-
   return {
-    name:
-      typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
-    path: obj.path,
-    rank: resolvePositiveInt(obj.rank, 8),
-    alpha: resolvePositiveFinite(obj.alpha, 16),
-    ...(targetModules ? { targetModules } : {}),
+    ok: true,
+    adapter: {
+      name:
+        typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
+      path: obj.path,
+      rank: rank.value,
+      alpha: alpha.value,
+      ...(targetModules.value ? { targetModules: targetModules.value } : {}),
+    },
   };
 }
 
@@ -950,13 +1000,13 @@ export function gateMultiLoraAdapters(
     // Single adapter (or empty) is allowed even with flag off — treated as legacy single-adapter mode
     if (adapters.length === 1) {
       const normalized = normalizePathBearingAdapter(adapters[0], 0);
-      if (normalized) {
-        return { allowed: true, adapters: [normalized], reason: undefined };
+      if (normalized.ok) {
+        return { allowed: true, adapters: [normalized.adapter], reason: undefined };
       }
       return {
         allowed: false,
         adapters: [],
-        reason: "Invalid single-adapter entry: path must be a non-empty string.",
+        reason: `Invalid single-adapter entry: ${normalized.reason}`,
       };
     }
     // Empty array — nothing to gate
@@ -966,10 +1016,29 @@ export function gateMultiLoraAdapters(
   // Flag is enabled — normalize path-only MCP bridge entries, then validate.
   // Path-only payloads are accepted by the bridge; apply the same defaults as
   // flag-off mode so evaluate/build do not reject otherwise usable adapters.
-  const normalized = adapters.map((entry, i) => {
-    const withDefaults = normalizePathBearingAdapter(entry, i);
-    return withDefaults ?? entry;
-  });
+  const normalized: unknown[] = [];
+  for (let i = 0; i < adapters.length; i += 1) {
+    const withDefaults = normalizePathBearingAdapter(adapters[i], i);
+    if (!withDefaults.ok) {
+      // Missing path / non-object: let validateAdapters report the raw entry.
+      // Present-but-invalid rank/alpha/targetModules: reject here so defaults
+      // cannot mask the caller's bad values.
+      if (
+        withDefaults.reason.includes("rank") ||
+        withDefaults.reason.includes("alpha") ||
+        withDefaults.reason.includes("targetModules")
+      ) {
+        return {
+          allowed: false,
+          adapters: [],
+          reason: `Adapter at index ${i}: ${withDefaults.reason}`,
+        };
+      }
+      normalized.push(adapters[i]);
+      continue;
+    }
+    normalized.push(withDefaults.adapter);
+  }
   const result = validateAdapters(normalized, vramGb);
   if (result.valid) {
     return { allowed: true, adapters: result.adapters, reason: undefined };

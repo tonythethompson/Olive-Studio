@@ -33,19 +33,25 @@ export type ProviderConflict = HardwareConflict;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Extract the set of pass fields targeted by a Finding's applyPatch actions.
- * A "pass field" is a key within `patch.passes` (e.g. "quantMethod", "conversionFormat").
+ * Extract the set of UIState fields targeted by a Finding's applyPatch actions.
+ * Includes `patch.passes` keys and top-level keys (e.g. ihvProvider, cudaVersion)
+ * so deterministic autofixes outside `passes` stay authoritative.
  */
-function getAiFindingTargetPassFields(finding: Finding): Set<string> {
+function getAiFindingTargetFields(finding: Finding): Set<string> {
   const fields = new Set<string>();
   for (const action of finding.actions) {
-    if (action.kind === "applyPatch") {
-      const patch = (action as ActionPayloadApplyPatch).payload;
-      if (patch.passes) {
-        for (const key of Object.keys(patch.passes)) {
-          fields.add(key);
+    if (action.kind !== "applyPatch") continue;
+    const patch = (action as ActionPayloadApplyPatch).payload;
+    for (const key of Object.keys(patch)) {
+      if (key === "passes") {
+        if (patch.passes) {
+          for (const passKey of Object.keys(patch.passes)) {
+            fields.add(passKey);
+          }
         }
+        continue;
       }
+      fields.add(key);
     }
   }
   return fields;
@@ -53,17 +59,17 @@ function getAiFindingTargetPassFields(finding: Finding): Set<string> {
 
 /**
  * Determine if an AI finding contradicts a deterministic issue on the same
- * pass field. Any AI finding targeting the same pass field as a deterministic
- * issue is discarded — deterministic validation is authoritative (Req 5.1).
+ * field. Any AI finding targeting the same field as a deterministic issue
+ * is discarded — deterministic validation is authoritative (Req 5.1).
  */
 function contradictsDeterministicIssue(
   finding: Finding,
   deterministicPassFields: Map<string, PipelineIssue>,
 ): boolean {
-  const aiTargetFields = getAiFindingTargetPassFields(finding);
+  const aiTargetFields = getAiFindingTargetFields(finding);
   if (aiTargetFields.size === 0) return false;
 
-  // Any AI finding targeting the same pass field as a deterministic issue
+  // Any AI finding targeting the same field as a deterministic issue
   // is discarded — deterministic validation is authoritative (Req 5.1).
   for (const field of aiTargetFields) {
     if (deterministicPassFields.has(field)) {
