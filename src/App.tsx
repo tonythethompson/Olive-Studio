@@ -16,7 +16,7 @@ import { AgentAccessControls } from "@/components/features/AgentAccessControls";
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
-import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation } from "@/lib/pipelineNavigation";
+import { OLIVE_PIPELINE_NAVIGATE, isPipelineViewId, type PipelineViewId, expandPipelineValidation, emphasizeValidationPanel } from "@/lib/pipelineNavigation";
 import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PipelineStatusSummary } from "@/components/features/pipeline/PipelineStatusSummary";
@@ -224,9 +224,22 @@ function Dashboard() {
   const handleSelectModel = useCallback(() => scrollToSection("input"), [scrollToSection]);
   const handleReviewRun = useCallback(() => scrollToSection("execute"), [scrollToSection]);
   const handleResolveIssues = useCallback(() => {
+    const panel = document.getElementById("recipe-validation-panel");
+    const main = mainRef.current;
+    if (panel && main) {
+      const mainRect = main.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const visibleHeight = Math.max(0, Math.min(panelRect.bottom, mainRect.bottom) - Math.max(panelRect.top, mainRect.top));
+      if (visibleHeight > panelRect.height * 0.5) {
+        expandPipelineValidation();
+        emphasizeValidationPanel();
+        return;
+      }
+    }
     scrollToSection("execute");
     window.setTimeout(() => {
       expandPipelineValidation();
+      emphasizeValidationPanel();
       document.getElementById("recipe-validation-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 400);
   }, [scrollToSection]);
