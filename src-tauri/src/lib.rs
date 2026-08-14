@@ -55,9 +55,9 @@ fn server_entry(root: &Path) -> PathBuf {
   root.join("dist").join("server.cjs")
 }
 
-/// Release workflows place a Node 22 runtime in this resource path.
+/// Release workflows place a Node 22 runtime in this resource path (Linux/Windows).
 /// Development builds and locally-built packages can still use the Node binary
-/// on PATH, but official desktop artifacts must not depend on it.
+/// on PATH. macOS builds currently require a system Node installation.
 fn node_executable(root: &Path) -> PathBuf {
   #[cfg(target_os = "linux")]
   {
