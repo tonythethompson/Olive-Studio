@@ -51,6 +51,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
 
       - name: Bundle Node runtime
         shell: bash
@@ -94,9 +96,10 @@ jobs:
           test -n "$SERVER_MJS"
           SERVER_ROOT="$(dirname "$(dirname "$SERVER_MJS")")"
           echo "Packaged server entry: $SERVER_MJS"
-          if [ ! -d "$SERVER_ROOT/node_modules" ] && [ ! -d "$SERVER_ROOT/dist/node_modules" ]; then
-            echo "ERROR: Packaged server dependencies (node_modules) not found next to $SERVER_MJS"
-            exit 1
+          if [ -d "$SERVER_ROOT/node_modules" ] || [ -d "$SERVER_ROOT/dist/node_modules" ]; then
+            echo "Found packaged node_modules next to the server"
+          else
+            echo "No packaged node_modules; desktop build must emit a fully bundled dist/server.mjs"
           fi
           (cd "$SERVER_ROOT" && PORT=31415 "$NODE" "dist/server.mjs") &
           SERVER_PID=$!

@@ -17,6 +17,8 @@ jobs:
         cache: pnpm
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
+      env:
+        OLIVE_SKIP_MCP_SETUP: "1"
     - name: Install Playwright Browsers
       run: pnpm exec playwright install --with-deps
     - name: Run Playwright tests
