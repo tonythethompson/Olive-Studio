@@ -30,16 +30,42 @@ import type {
 /** Timeout (ms) after which a start attempt is considered failed. */
 const START_TIMEOUT_MS = 10_000;
 
-function requestAgentCancel(jobId: string): Promise<Response> {
+/** Bound cancel waits so mode-switch / stop UI cannot hang on a stalled network. */
+const CANCEL_TIMEOUT_MS = 15_000;
+
+function requestAgentCancel(jobId: string, init?: RequestInit): Promise<Response> {
   return fetch("/api/olive/agent/cancel", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jobId }),
+    ...init,
   });
 }
 
+async function requestAgentCancelWithTimeout(
+  jobId: string,
+  timeoutMs = CANCEL_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await requestAgentCancel(jobId, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function requestAgentCancelQuiet(jobId: string): Promise<Response | null> {
-  return requestAgentCancel(jobId).catch(() => null);
+  return requestAgentCancelWithTimeout(jobId).catch(() => null);
+}
+
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "name" in err &&
+    (err as { name?: string }).name === "AbortError"
+  );
 }
 
 // ─── Hook Return Type ───────────────────────────────────────────────────────────
@@ -241,7 +267,7 @@ export function useAgentMode(): UseAgentModeReturn {
         }
         let cancelOk = false;
         try {
-          const cancelResp = await requestAgentCancel(data.jobId);
+          const cancelResp = await requestAgentCancelWithTimeout(data.jobId);
           cancelOk = cancelResp.ok;
         } catch {
           cancelOk = false;
@@ -283,7 +309,7 @@ export function useAgentMode(): UseAgentModeReturn {
         }
         let cancelOk = false;
         try {
-          cancelOk = (await requestAgentCancel(data.jobId)).ok;
+          cancelOk = (await requestAgentCancelWithTimeout(data.jobId)).ok;
         } catch {
           cancelOk = false;
         }
@@ -363,7 +389,7 @@ export function useAgentMode(): UseAgentModeReturn {
     const stopGen = runGenerationRef.current;
 
     try {
-      const resp = await requestAgentCancel(activeJobId);
+      const resp = await requestAgentCancelWithTimeout(activeJobId);
       const data = (await resp.json().catch(() => ({}))) as { error?: string; status?: string };
       if (runGenerationRef.current !== stopGen) return false;
       if (!resp.ok) {
@@ -374,7 +400,12 @@ export function useAgentMode(): UseAgentModeReturn {
     } catch (err) {
       if (runGenerationRef.current !== stopGen) return false;
       stopRequestedRef.current = false;
-      const message = err instanceof Error ? err.message : "Failed to cancel agent job";
+      const message =
+        isAbortError(err)
+          ? "Cancel request timed out"
+          : err instanceof Error
+            ? err.message
+            : "Failed to cancel agent job";
       setOutcome({
         status: "failure",
         totalSteps: stepCountRef.current,

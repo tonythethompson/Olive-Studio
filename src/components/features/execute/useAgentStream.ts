@@ -27,6 +27,15 @@ function isTruncationNotice(text: string): boolean {
   return text.includes("Earlier log lines were trimmed");
 }
 
+/** Server may replay up to MAX_JOB_LOG_LINES logs; metrics must not consume that budget. */
+function isMetricsStreamEvent(eventType: string, data: unknown): boolean {
+  if (eventType === "metrics") return true;
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+  if (typeof obj.kind === "string" || typeof obj.line === "string") return false;
+  return "util" in obj || "vramUsedMb" in obj || "gpu" in obj || "gpus" in obj;
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 export interface UseAgentStreamOptions {
@@ -300,10 +309,13 @@ export function useAgentStream({
             const eventId =
               (typeof event.lastEventId === "string" && event.lastEventId) ||
               (record && typeof record.id === "string" ? record.id : "");
+            const metricsEvent = isMetricsStreamEvent(event.type, data);
             if (eventId) {
               if (seenPayloadKeysRef.current.has(eventId)) return;
               addSeenPayloadKey(seenPayloadKeysRef.current, eventId);
-            } else if (replayingPrefixRef.current) {
+            } else if (replayingPrefixRef.current && !metricsEvent) {
+              // Prefix matching is log-only. Metrics between replayed logs must
+              // not terminate / desync the skip window.
               const res = shouldSkipReplayEntry(
                 deliveredPrefixRef.current,
                 replayIndexRef.current,
@@ -313,7 +325,12 @@ export function useAgentStream({
               replayingPrefixRef.current = res.stillReplaying;
               if (res.skip) return;
             }
-            pushDeliveredPrefix(deliveredPrefixRef.current, { kind: entry.kind, text: entry.text });
+            if (!metricsEvent) {
+              pushDeliveredPrefix(deliveredPrefixRef.current, {
+                kind: entry.kind,
+                text: entry.text,
+              });
+            }
             // A parsed payload means the stream is actually delivering data.
             retryCountRef.current = 0;
             onEntryRef.current(entry);

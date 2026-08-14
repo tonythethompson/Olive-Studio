@@ -302,6 +302,53 @@ describe("useAgentMode", () => {
       expect(result.current.outcome?.status).toBe("failure");
     });
 
+    it("does not hang mode-switch when cancel fetch never resolves", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string, init?: RequestInit) => {
+          if (String(url).includes("/olive/jobs/submit")) {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({ jobId: "job-hang-cancel" }),
+            } as Response);
+          }
+          return new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            if (!signal) return;
+            const onAbort = () => {
+              const err = new Error("The operation was aborted.");
+              err.name = "AbortError";
+              reject(err);
+            };
+            if (signal.aborted) {
+              onAbort();
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+          });
+        }),
+      );
+
+      const { result } = renderHook(() => useAgentMode());
+      await act(async () => {
+        await result.current.startAgent({ recipeJson: "{}" });
+      });
+      act(() => {
+        result.current.confirmStart();
+      });
+
+      let cancelled: boolean | undefined;
+      await act(async () => {
+        const stopPromise = result.current.stopAgent();
+        await vi.advanceTimersByTimeAsync(15_000);
+        cancelled = await stopPromise;
+      });
+
+      expect(cancelled).toBe(false);
+      expect(result.current.agentRunning).toBe(true);
+      expect(result.current.outcome?.errorDescription).toMatch(/timed out/i);
+    }, 20_000);
+
     it("resolves deferred stop on start timeout when submit is pending", async () => {
       let resolveSubmit: (value: Response) => void = () => {};
       const submitPromise = new Promise<Response>((resolve) => {

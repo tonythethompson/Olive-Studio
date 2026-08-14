@@ -253,6 +253,51 @@ describe("useAgentStream", () => {
       expect(onEntry.mock.calls[2][0].text).toBe("[INFO] pass C");
     });
 
+    it("does not let metrics shrink the log replay prefix window", () => {
+      const onEntry = vi.fn();
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
+
+      const logs = Array.from({ length: 20 }, (_, i) =>
+        JSON.stringify({ line: `[INFO] pass log line ${i + 1}` }),
+      );
+      const metric = JSON.stringify({ util: 55, vramUsedMb: 1024, gpu: "test" });
+
+      act(() => {
+        for (const line of logs) {
+          mockEventSources[0].emit("log", new MessageEvent("log", { data: line }));
+          mockEventSources[0].emit("metrics", new MessageEvent("metrics", { data: metric }));
+        }
+      });
+      // 20 logs + 20 metrics
+      expect(onEntry).toHaveBeenCalledTimes(40);
+
+      act(() => {
+        mockEventSources[0].onerror?.();
+      });
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      act(() => {
+        for (const line of logs) {
+          mockEventSources[1].emit("log", new MessageEvent("log", { data: line }));
+        }
+        mockEventSources[1].emit(
+          "log",
+          new MessageEvent("log", {
+            data: JSON.stringify({ line: "[INFO] pass log line 21" }),
+          }),
+        );
+      });
+
+      // Replayed logs skipped; only the new line is appended (metrics not needed on replay).
+      expect(onEntry).toHaveBeenCalledTimes(41);
+      expect(onEntry.mock.calls[40][0].text).toBe("[INFO] pass log line 21");
+    });
+
     it("accepts a truncation notice then continues prefix skip", () => {
       const onEntry = vi.fn();
       renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
