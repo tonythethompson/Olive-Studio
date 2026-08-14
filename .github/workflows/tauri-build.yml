@@ -25,6 +25,8 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
 
       - name: Build frontend
         run: pnpm build

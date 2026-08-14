@@ -201,8 +201,12 @@ export function useDiagnosis({
         logSnippet: executionLogs.slice(-20).join("\n"),
         fixApplied: false,
       };
-      setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
-      setActiveHistoryIndex(0);
+      prevDiagnosticRef.current = mcpDiagnostic;
+      queueMicrotask(() => {
+        setDiagnosisHistory((prev) => [entry, ...prev].slice(0, 50));
+        setActiveHistoryIndex(0);
+      });
+      return;
     }
     prevDiagnosticRef.current = mcpDiagnostic;
   }, [mcpDiagnostic, executionLogs]);

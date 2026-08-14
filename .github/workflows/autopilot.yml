@@ -168,6 +168,8 @@ jobs:
           elif [ -f pyproject.toml ]; then
             pip install -e ".[dev]" || pip install -e . || true
           fi
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
 
       - name: Resolve test command
         if: steps.threads.outputs.count != '0'

@@ -98,6 +98,8 @@ jobs:
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
