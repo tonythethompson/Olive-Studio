@@ -98,7 +98,7 @@ export function useRecipeCatalog(opts: UseRecipeCatalogOpts) {
     });
   })();
 
-  // Computed on each render (like filteredRecipes below): the catalog array is
+  // Computed on each render (like filteredRecipes above): the catalog array is
   // mutated in place by the async import, so memoizing over catalogReady would
   // leave these stale after load. Recomputing is cheap and always lint-clean.
   const localMatchSummary = localModelHints
