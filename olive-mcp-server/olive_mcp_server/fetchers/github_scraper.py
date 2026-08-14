@@ -7,6 +7,8 @@ from typing import Any
 
 import requests
 
+from ._http import fetch_json
+
 REPO = "microsoft/Olive"
 RELEASES_URL = f"https://api.github.com/repos/{REPO}/releases"
 ISSUES_URL = f"https://api.github.com/repos/{REPO}/issues"
@@ -80,7 +82,7 @@ def fetch_github_issues(labels: list[str] | None = None, max_results: int = 50) 
             params["labels"] = ",".join(labels)
         for page in range(1, 4):
             params["page"] = page
-            issues_response = requests.get(ISSUES_URL, params=params, headers=headers, timeout=15)
+            issues_response = fetch_json(ISSUES_URL, params=params, headers=headers)
             _request_error(issues_response)
             raw_batch = issues_response.json()
             batch = [item for item in raw_batch if "pull_request" not in item]
@@ -92,8 +94,8 @@ def fetch_github_issues(labels: list[str] | None = None, max_results: int = 50) 
         errors["issues_error"] = str(exc)
 
     try:
-        releases_response = requests.get(
-            RELEASES_URL, params={"per_page": 5}, headers=headers, timeout=15
+        releases_response = fetch_json(
+            RELEASES_URL, params={"per_page": 5}, headers=headers
         )
         _request_error(releases_response)
         releases = releases_response.json()[:5]

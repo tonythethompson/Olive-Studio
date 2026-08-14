@@ -326,10 +326,7 @@ def main(kb_dir: Path | None = None) -> None:
         "generator_version": generator_version,
         "source_timestamp": source_ts,
         "source_fingerprint": source_fingerprint,
-        "changed_files": list(
-            changed_files
-            or ((existing_meta.get("runs", {}).get(GENERATOR_NAME, {}) or {}).get("changed_files") or [])
-        ),
+        "changed_files": list(changed_files),
         "success": success,
     }
 

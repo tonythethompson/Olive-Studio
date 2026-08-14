@@ -13,6 +13,7 @@ EP_SLUGS = {
     "OpenVINOExecutionProvider": "OpenVINO",
     "DirectMLExecutionProvider": "DirectML",
 }
+_EP_SLUGS_NORMALIZED = {key.lower(): value for key, value in EP_SLUGS.items()}
 
 
 def fetch_onnx_runtime_docs(execution_providers: list[str] | None = None) -> dict[str, Any]:
@@ -27,7 +28,7 @@ def fetch_onnx_runtime_docs(execution_providers: list[str] | None = None) -> dic
     eps = execution_providers if execution_providers is not None else [
         "CPUExecutionProvider",
         "CUDAExecutionProvider",
-        "TensorRTExecutionProvider",
+        "TensorrtExecutionProvider",
         "CoreMLExecutionProvider",
         "QNNExecutionProvider",
         "OpenVINOExecutionProvider",
@@ -41,14 +42,13 @@ def fetch_onnx_runtime_docs(execution_providers: list[str] | None = None) -> dic
     }
 
     for ep in eps:
-        if ep == "CPUExecutionProvider":
-            result["pages"][ep] = (
-                "# CPUExecutionProvider\n"
+        if ep.lower() == "cpuexecutionprovider":
+            result.setdefault("informational", {})[ep] = (
                 "CPUExecutionProvider is documented by the ONNX Runtime execution-provider overview."
             )
             result["sources"][ep] = ONNX_RUNTIME_EP_URL
             continue
-        slug = EP_SLUGS.get(ep, ep.removesuffix("ExecutionProvider"))
+        slug = _EP_SLUGS_NORMALIZED.get(ep.lower(), ep.removesuffix("ExecutionProvider"))
         candidates = [f"{ONNX_RUNTIME_EP_URL}{slug}-ExecutionProvider.html"]
         last_error = "No URL candidates tried"
         for url in candidates:

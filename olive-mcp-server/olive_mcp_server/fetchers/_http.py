@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from email.utils import parsedate_to_datetime
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -42,19 +43,58 @@ def _retry_delay(response: Any, attempt: int) -> float:
 
 def fetch_html(url: str) -> str:
     """Fetch HTML with bounded retries for transient responses."""
+    current_url = url
+    origin_host = urlparse(url).netloc
     for attempt in range(3):
-        response = get_session().get(url, timeout=DEFAULT_TIMEOUT, allow_redirects=False)
+        response = get_session().get(current_url, timeout=DEFAULT_TIMEOUT, allow_redirects=False)
         if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
             time.sleep(_retry_delay(response, attempt))
             continue
-        response.raise_for_status()
         location = response.headers.get("Location", "") if hasattr(response, "headers") else ""
         if response.status_code in {301, 302, 303, 307, 308} and location:
-            raise requests.HTTPError(f"HTML request redirected unexpectedly to {location}")
+            if attempt >= 2:
+                raise requests.TooManyRedirects(f"Too many redirects fetching {url}")
+            current_url = urljoin(current_url, location)
+            if urlparse(current_url).netloc != origin_host:
+                raise requests.RequestException(f"HTML request redirected to another host: {current_url}")
+            continue
+        response.raise_for_status()
         content_type = response.headers.get("Content-Type", "") if hasattr(response, "headers") else ""
-        if content_type and "html" not in content_type.lower():
+        if content_type and "html" not in content_type.lower() and "text/plain" not in content_type.lower():
             raise requests.RequestException(f"Expected HTML response, got {content_type}")
         return response.text
+    raise requests.RequestException(f"HTTP request failed after retries: {url}")
+
+
+def fetch_json(
+    url: str,
+    *,
+    params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+) -> requests.Response:
+    """Fetch a JSON API response through the shared session."""
+    current_url = url
+    origin_host = urlparse(url).netloc
+    for attempt in range(3):
+        response = get_session().get(
+            current_url,
+            params=params,
+            headers=headers,
+            timeout=DEFAULT_TIMEOUT,
+            allow_redirects=False,
+        )
+        if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+            time.sleep(_retry_delay(response, attempt))
+            continue
+        location = response.headers.get("Location", "") if hasattr(response, "headers") else ""
+        if response.status_code in {301, 302, 303, 307, 308} and location:
+            if attempt >= 2:
+                raise requests.TooManyRedirects(f"Too many redirects fetching {url}")
+            current_url = urljoin(current_url, location)
+            if urlparse(current_url).netloc != origin_host:
+                raise requests.RequestException(f"JSON request redirected to another host: {current_url}")
+            continue
+        return response
     raise requests.RequestException(f"HTTP request failed after retries: {url}")
 
 

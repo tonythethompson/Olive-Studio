@@ -34,7 +34,15 @@ def test_refresh_is_deterministic_and_preserves_candidates(monkeypatch, tmp_path
     first = {p.name: p.read_bytes() for p in tmp_path.glob("*.json")}
     update_kb.main(tmp_path)
     second = {p.name: p.read_bytes() for p in tmp_path.glob("*.json")}
-    assert first == second
+    assert first["update_report.json"] == second["update_report.json"]
+    assert first["candidate_quirks.json"] == second["candidate_quirks.json"]
+    first_report = json.loads(first["update_report.json"])
+    second_report = json.loads(second["update_report.json"])
+    assert first_report["source_fingerprint"] == second_report["source_fingerprint"]
+    assert first_report["source_timestamp"] == second_report["source_timestamp"]
+    first_meta = json.loads(first["refresh_metadata.json"])
+    second_meta = json.loads(second["refresh_metadata.json"])
+    assert second_meta["runs"]["update_kb"]["changed_files"] == []
     candidates = json.loads((tmp_path / "candidate_quirks.json").read_text())
     assert candidates and {"category", "title", "description", "source"} <= candidates[0].keys()
     report = json.loads((tmp_path / "update_report.json").read_text())
