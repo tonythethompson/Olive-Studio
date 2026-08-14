@@ -16,6 +16,10 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      # Serialize matrix legs: tauri-action updates shared latest.json via a
+      # non-atomic read-merge-delete-upload. Concurrent jobs can clobber each
+      # other's platform entries (or 404 deleting an already-replaced asset).
+      max-parallel: 1
       matrix:
         include:
           - platform: ubuntu-22.04
