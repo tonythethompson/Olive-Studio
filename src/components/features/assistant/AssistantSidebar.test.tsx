@@ -61,12 +61,12 @@ describe("AssistantSidebar", () => {
     expect(screen.getByTestId("pipeline-review")).toBeTruthy();
   });
 
-  it("renders tab navigation (assistant, settings)", async () => {
+  it("renders tab navigation (assistant, settings, agent)", async () => {
     await act(async () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual(["Assistant", "Settings"]);
+    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual(["Assistant", "Settings", "Agent"]);
   });
 
   it("calls onClose when close button is clicked", async () => {
@@ -97,6 +97,28 @@ describe("AssistantSidebar", () => {
     // The sidebar uses aria-hidden + w-0 rather than conditional rendering
     const sidebar = container!.querySelector("[aria-hidden='true']");
     expect(sidebar).not.toBeNull();
+  });
+
+  it("renders the Agent tab panel with policy controls and no dropdown dialog", async () => {
+    await act(async () => {
+      renderWithProviders(<AssistantSidebar {...defaultProps} />);
+    });
+
+    const agentTab = screen.getByRole("tab", { name: /^Agent$/ });
+    await act(async () => {
+      fireEvent.click(agentTab);
+    });
+
+    const panel = document.getElementById("assistant-panel-agent");
+    expect(panel).not.toBeNull();
+    expect(panel!.getAttribute("aria-labelledby")).toBe("assistant-tab-agent");
+
+    // The embedded panel variant renders the policy toggles inline...
+    expect(screen.getByText(/Agent \/ MCP access/i)).toBeTruthy();
+    expect(screen.getByLabelText(/MCP access/i)).toBeTruthy();
+
+    // ...and never the compact control's popover dialog.
+    expect(screen.queryByRole("dialog", { name: /Agent and MCP access settings/i })).toBeNull();
   });
 
   it("compact sidebar: scrim dismiss, inert/aria-hidden, responsive classes, Escape", async () => {
