@@ -157,9 +157,9 @@ async function installCapabilityPackages(
       case "TensorflowLiteExecutionProvider":
       case "XnnpackExecutionProvider":
       case "WasmExecutionProvider":
-      case "QnnAbiExecutionProvider":
         return { ok: true };
 
+      // QNN ABI shares the QNN venv family / plugin stack with QNNExecutionProvider.
       case "QNNExecutionProvider":
       case "QnnAbiExecutionProvider": {
         const result = await ensureQnn(onLine);
