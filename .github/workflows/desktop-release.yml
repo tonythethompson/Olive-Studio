@@ -1,0 +1,102 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      # Serialize matrix legs: tauri-action updates shared latest.json via a
+      # non-atomic read-merge-delete-upload. Concurrent jobs can clobber each
+      # other's platform entries (or 404 deleting an already-replaced asset).
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            rust_targets: x86_64-unknown-linux-gnu
+            tauri_target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            rust_targets: x86_64-pc-windows-msvc
+            tauri_target: x86_64-pc-windows-msvc
+          - platform: macos-latest
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri_target: universal-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify tag matches package versions
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          TAURI_VER="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          PKG_VER="$(node -p "require('./package.json').version")"
+          CARGO_VER="$(node -e "const fs=require('fs'); const m=fs.readFileSync('src-tauri/Cargo.toml','utf8').match(/^version\\s*=\\s*\\\"([^\\\"]+)\\\"/m); if (!m) process.exit(1); console.log(m[1]);")"
+          echo "tag=$TAG tauri=$TAURI_VER cargo=$CARGO_VER package=$PKG_VER"
+          if [ "$TAG" != "$TAURI_VER" ] || [ "$TAG" != "$CARGO_VER" ] || [ "$TAG" != "$PKG_VER" ]; then
+            echo "Release tag must match src-tauri/tauri.conf.json, src-tauri/Cargo.toml, and package.json versions"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install macOS universal target
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # Publishes installers + updater latest.json to this GitHub Release.
+          # Packaged clients read:
+          # https://github.com/tonythethompson/Olive-Studio/releases/latest/download/latest.json
+          # (Draft releases are invisible to /latest until published.)
+          tagName: ${{ github.ref_name }}
+          releaseName: "Olive Studio ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for details."
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.tauri_target }}

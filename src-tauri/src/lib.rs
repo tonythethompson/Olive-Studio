@@ -16,6 +16,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, Url};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 
 const DEFAULT_PORT: u16 = 3000;
 const HEALTH_TIMEOUT_SECS: u64 = 120;
@@ -310,6 +312,74 @@ pub fn run() {
 
       // Shell plugin for opening external URLs (GitHub, mailto, etc.)
       app.handle().plugin(tauri_plugin_shell::init())?;
+      app.handle().plugin(tauri_plugin_dialog::init())?;
+
+      // Updater plugin: private key is CI-only ($TAURI_SIGNING_PRIVATE_KEY).
+      // Runtime verification uses plugins.updater.pubkey in tauri.conf.json.
+      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
+      if !cfg!(debug_assertions) {
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+          // Windows install runs on_before_exit then std::process::exit(0), which
+          // skips RunEvent::Exit. Stop the Node sidecar there so it is not orphaned.
+          let cleanup_handle = handle.clone();
+          match handle
+            .updater_builder()
+            .on_before_exit(move || {
+              stop_managed_sidecar(&cleanup_handle.state::<SidecarState>());
+              cleanup_handle.cleanup_before_exit();
+            })
+            .build()
+          {
+            Ok(updater) => match updater.check().await {
+              Ok(Some(update)) => {
+                log::info!(
+                  "found update v{} (current: v{})",
+                  update.version,
+                  update.current_version
+                );
+                // Require consent before install: Windows exits the process during
+                // install, which would otherwise kill an in-flight Olive job.
+                let dialog_handle = handle.clone();
+                let version = update.version.clone();
+                let accepted = tauri::async_runtime::spawn_blocking(move || {
+                  dialog_handle
+                    .dialog()
+                    .message(format!(
+                      "Olive Studio v{version} is available.\n\nInstall now? The app will close and restart. Choose Cancel if an optimization or other work is still running."
+                    ))
+                    .title("Update available")
+                    .kind(MessageDialogKind::Info)
+                    .buttons(MessageDialogButtons::OkCancel)
+                    .blocking_show()
+                })
+                .await
+                .unwrap_or(false);
+
+                if !accepted {
+                  log::info!("update v{} deferred by user", update.version);
+                  return;
+                }
+
+                if let Err(e) = update.download_and_install(|_chunk, _total| {}, || {}).await {
+                  log::error!("failed to download and install update: {e}");
+                } else {
+                  log::info!(
+                    "update v{} downloaded and installed successfully",
+                    update.version
+                  );
+                }
+              }
+              Ok(None) => {
+                log::info!("no update available");
+              }
+              Err(e) => log::warn!("updater check failed: {e}"),
+            },
+            Err(e) => log::warn!("updater unavailable: {e}"),
+          }
+        });
+      }
 
       Ok(())
     })
