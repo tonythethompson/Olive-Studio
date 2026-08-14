@@ -160,12 +160,17 @@ function Dashboard() {
     };
 
     measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(leftEl);
-    ro.observe(rightEl);
     window.addEventListener("resize", measure);
+
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(leftEl);
+      ro.observe(rightEl);
+    }
+
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
       window.removeEventListener("resize", measure);
     };
   }, [isAiSidebarOpen]);
@@ -434,7 +439,7 @@ function Dashboard() {
 
           <div className="flex-1 flex min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
-              <header className="min-h-12 grid grid-cols-[minmax(0,1fr)_minmax(0,max-content)_minmax(0,1fr)] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
+              <header className="min-h-12 grid grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_minmax(min-content,1fr)] items-center gap-2 wide:gap-4 px-3 wide:px-6 min-[1000px]:px-8 py-1.5 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 shrink-0">
                 {/*
                   Invisible mirror of the Assistant button. The two outer grid
                   tracks use minmax(0,1fr), so they can compress to zero and

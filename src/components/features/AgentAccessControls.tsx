@@ -206,8 +206,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
         <div>
           <div className="text-sm font-semibold text-slate-200 font-sans">Agent / MCP access</div>
           <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-sans">
-            Controls what coding agents may do through Olive MCP. Studio always owns execution;
-            agents never spawn Olive directly.
+            Controls what coding agents may do through Olive MCP.
           </p>
         </div>
         <button

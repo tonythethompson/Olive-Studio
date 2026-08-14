@@ -451,7 +451,7 @@ export function IHVIntegrationPanel({
                 </div>
 
                 {/* View Switch Segmented Control */}
-                <div className="flex items-center bg-slate-950 p-1 border border-slate-800 rounded-lg self-start shrink-0">
+                <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 border border-slate-800 rounded-lg self-start min-w-0">
                   <button
                     type="button"
                     onClick={() => setActiveTab("matrix")}

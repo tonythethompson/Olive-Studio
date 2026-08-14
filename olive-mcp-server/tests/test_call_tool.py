@@ -12,7 +12,14 @@ def _clean_frequency_store():
 
 
 def test_call_tool_dispatches_troubleshoot():
-    result = call_tool("troubleshoot_olive_error", {"error_message": "unexpected keyword argument hf_config"})
+    # Force keyword mode: this test exercises tool dispatch, not semantic
+    # retrieval, and must not trigger a real embedding-model load in the
+    # shared single-flight worker (which can outlive this test's process on
+    # slow/offline CI runners and starve later tests' inflight-drain fixture).
+    result = call_tool(
+        "troubleshoot_olive_error",
+        {"error_message": "unexpected keyword argument hf_config", "mode": "keyword"},
+    )
     assert isinstance(result, dict)
     assert "title" in result
     assert "root_cause" in result
