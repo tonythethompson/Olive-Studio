@@ -20,7 +20,7 @@ if (!python) {
   process.exit(0);
 }
 
-const r = spawnSync(python, ["-c", "import mcp; print(mcp.__version__)"], {
+const r = spawnSync(python, ["-c", "import importlib.metadata; print(importlib.metadata.version('mcp'))"], {
   encoding: "utf8",
   env: { ...process.env, PYTHONPATH: mcpDir },
 });
