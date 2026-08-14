@@ -879,6 +879,33 @@ function basenameFromFsPath(path: string): string {
   return path.slice(start, end);
 }
 
+function readOptionalTargetModules(obj: Record<string, unknown>): string[] | undefined {
+  const rawModules = Array.isArray(obj.targetModules)
+    ? obj.targetModules
+    : Array.isArray(obj.target_modules)
+      ? obj.target_modules
+      : undefined;
+  if (
+    !Array.isArray(rawModules) ||
+    !rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
+  ) {
+    return undefined;
+  }
+  return rawModules;
+}
+
+function resolveAdapterFallbackName(path: string, index: number): string {
+  return basenameFromFsPath(path) || (index === 0 ? "default" : `adapter-${index}`);
+}
+
+function resolvePositiveInt(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function resolvePositiveFinite(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 /**
  * Normalize a path-bearing adapter entry so MCP path-only payloads and
  * flag-off single-adapter mode share the same name/rank/alpha defaults.
@@ -892,32 +919,15 @@ function normalizePathBearingAdapter(
   const obj = entry as Record<string, unknown>;
   if (typeof obj.path !== "string" || obj.path.length === 0) return null;
 
-  const rawModules = Array.isArray(obj.targetModules)
-    ? obj.targetModules
-    : Array.isArray(obj.target_modules)
-      ? obj.target_modules
-      : undefined;
-  const targetModules =
-    Array.isArray(rawModules) &&
-    rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
-      ? (rawModules as string[])
-      : undefined;
-
-  const pathBase = basenameFromFsPath(obj.path);
-  const fallbackName = pathBase || (index === 0 ? "default" : `adapter-${index}`);
+  const targetModules = readOptionalTargetModules(obj);
+  const fallbackName = resolveAdapterFallbackName(obj.path, index);
 
   return {
     name:
       typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
     path: obj.path,
-    rank:
-      typeof obj.rank === "number" && Number.isInteger(obj.rank) && obj.rank > 0
-        ? obj.rank
-        : 8,
-    alpha:
-      typeof obj.alpha === "number" && Number.isFinite(obj.alpha) && obj.alpha > 0
-        ? obj.alpha
-        : 16,
+    rank: resolvePositiveInt(obj.rank, 8),
+    alpha: resolvePositiveFinite(obj.alpha, 16),
     ...(targetModules ? { targetModules } : {}),
   };
 }
