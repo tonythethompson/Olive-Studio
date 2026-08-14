@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAgentStream } from "./useAgentStream";
+import { JOB_LOG_TRIM_WATERMARK } from "@/lib/oliveJobLogLimits";
 
 // ─── EventSource Mock ────────────────────────────────────────────────────────
 
@@ -468,6 +469,61 @@ describe("useAgentStream", () => {
       });
       expect(onEntry).toHaveBeenCalledTimes(1201);
       expect(onEntry.mock.calls[1200][0].text).toBe("[INFO] pass log line 1201");
+    });
+
+    it("does not let a truncation notice evict a full replay prefix", () => {
+      const onEntry = vi.fn();
+      renderHook(() => useAgentStream({ enabled: true, jobId: "job-1", onEntry }));
+
+      act(() => {
+        for (let i = 1; i <= JOB_LOG_TRIM_WATERMARK; i++) {
+          mockEventSources[0].onmessage?.(
+            new MessageEvent("message", {
+              data: JSON.stringify({ line: `[INFO] pass log line ${i}` }),
+            }),
+          );
+        }
+      });
+      expect(onEntry).toHaveBeenCalledTimes(JOB_LOG_TRIM_WATERMARK);
+
+      act(() => {
+        mockEventSources[0].onerror?.();
+      });
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      const notice = JSON.stringify({
+        line: "[info] Earlier log lines were trimmed to bound memory (retaining last 1000).",
+      });
+      act(() => {
+        mockEventSources[1].onmessage?.(new MessageEvent("message", { data: notice }));
+        for (let i = 1; i <= JOB_LOG_TRIM_WATERMARK; i++) {
+          mockEventSources[1].onmessage?.(
+            new MessageEvent("message", {
+              data: JSON.stringify({ line: `[INFO] pass log line ${i}` }),
+            }),
+          );
+        }
+        mockEventSources[1].onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify({
+              line: `[INFO] pass log line ${JOB_LOG_TRIM_WATERMARK + 1}`,
+            }),
+          }),
+        );
+      });
+
+      expect(onEntry).toHaveBeenCalledTimes(JOB_LOG_TRIM_WATERMARK + 2);
+      expect(onEntry.mock.calls[JOB_LOG_TRIM_WATERMARK][0].text).toMatch(
+        /Earlier log lines were trimmed/,
+      );
+      expect(onEntry.mock.calls[JOB_LOG_TRIM_WATERMARK + 1][0].text).toBe(
+        `[INFO] pass log line ${JOB_LOG_TRIM_WATERMARK + 1}`,
+      );
     });
 
     it("ignores events with invalid kind field", () => {

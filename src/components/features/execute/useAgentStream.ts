@@ -327,7 +327,7 @@ export function useAgentStream({
               replayingPrefixRef.current = res.stillReplaying;
               if (res.skip) return;
             }
-            if (!metricsEvent) {
+            if (!metricsEvent && !isTruncationNotice(entry.text)) {
               pushDeliveredPrefix(deliveredPrefixRef.current, {
                 kind: entry.kind,
                 text: entry.text,
