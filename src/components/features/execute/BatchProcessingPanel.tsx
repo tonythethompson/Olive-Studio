@@ -79,6 +79,34 @@ function appendBatchJobLog(
   });
 }
 
+/** Fetch + parse a compare_results MCP call; keeps handleCompare's own branching minimal. */
+async function fetchCompareResults(
+  jobIds: string[],
+  preference: ScoringPreference,
+  signal: AbortSignal,
+): Promise<{ ok: true; result: CompareResultsOutput } | { ok: false; error: string }> {
+  const resp = await fetch("/api/mcp/tool", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ toolName: "compare_results", args: { job_ids: jobIds, preference } }),
+    signal,
+  });
+  if (!resp.ok) {
+    return { ok: false, error: `Comparison request failed (HTTP ${resp.status})` };
+  }
+  const data: unknown = await resp.json().catch(() => null);
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  const payload =
+    record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
+      ? (record.result as Record<string, unknown>)
+      : record;
+  const parsed = payload ? parseMcpCompareOutput(payload) : null;
+  if (!parsed) {
+    return { ok: false, error: "Failed to parse comparison response" };
+  }
+  return { ok: true, result: parsed };
+}
+
 async function postBatchOliveRun(
   recipe: unknown,
 ): Promise<{ ok: true; jobId: string } | { ok: false; error: string }> {
@@ -677,44 +705,20 @@ export function BatchProcessingPanel({
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      const resp = await fetch("/api/mcp/tool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toolName: "compare_results",
-          args: { job_ids: jobIds, preference },
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      const outcome = await fetchCompareResults(jobIds, preference, controller.signal);
       if (seq !== compareSeqRef.current) return;
-
-      if (!resp.ok) {
-        setCompareError(`Comparison request failed (HTTP ${resp.status})`);
-        return;
-      }
-
-      const data: unknown = await resp.json().catch(() => null);
-      if (seq !== compareSeqRef.current) return;
-
-      const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-      const payload =
-        record && record.result && typeof record.result === "object" && !Array.isArray(record.result)
-          ? (record.result as Record<string, unknown>)
-          : record;
-      const parsed = payload ? parseMcpCompareOutput(payload) : null;
-      if (parsed) {
-        setCompareResults(parsed);
+      if (outcome.ok) {
+        setCompareResults(outcome.result);
       } else {
-        setCompareError("Failed to parse comparison response");
+        setCompareError(outcome.error);
       }
     } catch (err: unknown) {
       if (seq !== compareSeqRef.current) return;
-      if (err instanceof Error && err.name === "AbortError") {
-        setCompareError("Comparison request timed out");
-      } else {
-        setCompareError("Comparison request failed");
-      }
+      setCompareError(
+        err instanceof Error && err.name === "AbortError"
+          ? "Comparison request timed out"
+          : "Comparison request failed",
+      );
     } finally {
       clearTimeout(timeoutId);
       if (seq === compareSeqRef.current) {

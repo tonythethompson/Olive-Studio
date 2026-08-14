@@ -10,7 +10,7 @@
  * Requirements: 6.1, 6.3, 6.4, 6.6, 7.5
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 
 import {
   appendEntry as appendEntryFIFO,
@@ -72,6 +72,115 @@ function isAbortError(err: unknown): boolean {
     "name" in err &&
     (err as { name?: string }).name === "AbortError"
   );
+}
+
+interface SubmitResolutionCtx {
+  thisGen: number;
+  resp: Response;
+  data: { jobId?: string; error?: string };
+  runGenerationRef: MutableRefObject<number>;
+  stopRequestedRef: MutableRefObject<boolean>;
+  jobIdRef: MutableRefObject<string | undefined>;
+  stepCountRef: MutableRefObject<number>;
+  startedAtRef: MutableRefObject<string | undefined>;
+  setJobId: (id: string | undefined) => void;
+  setAgentRunning: (running: boolean) => void;
+  setOutcome: (outcome: AgentOutcome) => void;
+  clearStartTimeout: () => void;
+  clearStopSubmitGrace: () => void;
+  applyCancelledOutcome: () => void;
+  resolvePendingStop: (ok: boolean, submitGeneration?: number) => void;
+}
+
+/** Resolve a completed /api/olive/jobs/submit response against current stop/generation state. */
+async function resolveAgentSubmitResponse(ctx: SubmitResolutionCtx): Promise<void> {
+  const {
+    thisGen,
+    resp,
+    data,
+    runGenerationRef,
+    stopRequestedRef,
+    jobIdRef,
+    stepCountRef,
+    startedAtRef,
+    setJobId,
+    setAgentRunning,
+    setOutcome,
+    clearStartTimeout,
+    clearStopSubmitGrace,
+    applyCancelledOutcome,
+    resolvePendingStop,
+  } = ctx;
+
+  if (stopRequestedRef.current && thisGen === runGenerationRef.current) {
+    if (!data.jobId) {
+      stopRequestedRef.current = false;
+      clearStartTimeout();
+      clearStopSubmitGrace();
+      runGenerationRef.current += 1;
+      applyCancelledOutcome();
+      resolvePendingStop(true, thisGen);
+      return;
+    }
+    let cancelOk = false;
+    try {
+      cancelOk = (await requestAgentCancelWithTimeout(data.jobId)).ok;
+    } catch {
+      cancelOk = false;
+    }
+    if (thisGen !== runGenerationRef.current) {
+      resolvePendingStop(false, thisGen);
+      return;
+    }
+    if (cancelOk) {
+      // Settle before the 10s startup timer can append a second terminal entry.
+      clearStartTimeout();
+      clearStopSubmitGrace();
+      runGenerationRef.current += 1;
+      applyCancelledOutcome();
+      resolvePendingStop(true, thisGen);
+      return;
+    }
+    // Cancel failed: keep the job attached, but drop the startup timer so it
+    // cannot mark this still-running session as a start failure.
+    stopRequestedRef.current = false;
+    clearStartTimeout();
+    clearStopSubmitGrace();
+    setJobId(data.jobId);
+    jobIdRef.current = data.jobId;
+    setAgentRunning(true);
+    setOutcome({
+      status: "failure",
+      totalSteps: stepCountRef.current,
+      elapsedMs: startedAtRef.current ? Date.now() - new Date(startedAtRef.current).getTime() : 0,
+      errorDescription: "Failed to cancel agent job",
+    });
+    resolvePendingStop(false, thisGen);
+    return;
+  }
+
+  if (thisGen !== runGenerationRef.current) {
+    if (!data.jobId) {
+      resolvePendingStop(true, thisGen);
+      return;
+    }
+    let cancelOk = false;
+    try {
+      cancelOk = (await requestAgentCancelWithTimeout(data.jobId)).ok;
+    } catch {
+      cancelOk = false;
+    }
+    clearStopSubmitGrace();
+    resolvePendingStop(cancelOk, thisGen);
+    return;
+  }
+
+  if (!resp.ok || !data.jobId) {
+    throw new Error(data.error || `HTTP ${resp.status}`);
+  }
+  clearStopSubmitGrace();
+  setJobId(data.jobId);
+  jobIdRef.current = data.jobId;
 }
 
 // ─── Hook Return Type ───────────────────────────────────────────────────────────
@@ -305,76 +414,23 @@ export function useAgentMode(): UseAgentModeReturn {
         signal: submitController.signal,
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
-      if (stopRequestedRef.current && thisGen === runGenerationRef.current) {
-        if (!data.jobId) {
-          stopRequestedRef.current = false;
-          clearStartTimeout();
-          clearStopSubmitGrace();
-          runGenerationRef.current += 1;
-          applyCancelledOutcome();
-          resolvePendingStop(true, thisGen);
-          return;
-        }
-        let cancelOk = false;
-        try {
-          const cancelResp = await requestAgentCancelWithTimeout(data.jobId);
-          cancelOk = cancelResp.ok;
-        } catch {
-          cancelOk = false;
-        }
-        if (thisGen !== runGenerationRef.current) {
-          resolvePendingStop(false, thisGen);
-          return;
-        }
-        if (cancelOk) {
-          // Settle before the 10s startup timer can append a second terminal entry.
-          clearStartTimeout();
-          clearStopSubmitGrace();
-          runGenerationRef.current += 1;
-          applyCancelledOutcome();
-          resolvePendingStop(true, thisGen);
-          return;
-        }
-        // Cancel failed: keep the job attached, but drop the startup timer so it
-        // cannot mark this still-running session as a start failure.
-        stopRequestedRef.current = false;
-        clearStartTimeout();
-        clearStopSubmitGrace();
-        setJobId(data.jobId);
-        jobIdRef.current = data.jobId;
-        setAgentRunning(true);
-        setOutcome({
-          status: "failure",
-          totalSteps: stepCountRef.current,
-          elapsedMs: startedAtRef.current
-            ? Date.now() - new Date(startedAtRef.current).getTime()
-            : 0,
-          errorDescription: "Failed to cancel agent job",
-        });
-        resolvePendingStop(false, thisGen);
-        return;
-      }
-      if (thisGen !== runGenerationRef.current) {
-        if (!data.jobId) {
-          resolvePendingStop(true, thisGen);
-          return;
-        }
-        let cancelOk = false;
-        try {
-          cancelOk = (await requestAgentCancelWithTimeout(data.jobId)).ok;
-        } catch {
-          cancelOk = false;
-        }
-        clearStopSubmitGrace();
-        resolvePendingStop(cancelOk, thisGen);
-        return;
-      }
-      if (!resp.ok || !data.jobId) {
-        throw new Error(data.error || `HTTP ${resp.status}`);
-      }
-      clearStopSubmitGrace();
-      setJobId(data.jobId);
-      jobIdRef.current = data.jobId;
+      await resolveAgentSubmitResponse({
+        thisGen,
+        resp,
+        data,
+        runGenerationRef,
+        stopRequestedRef,
+        jobIdRef,
+        stepCountRef,
+        startedAtRef,
+        setJobId,
+        setAgentRunning,
+        setOutcome,
+        clearStartTimeout,
+        clearStopSubmitGrace,
+        applyCancelledOutcome,
+        resolvePendingStop,
+      });
     } catch (err) {
       if (thisGen !== runGenerationRef.current) {
         resolvePendingStop(false, thisGen);
