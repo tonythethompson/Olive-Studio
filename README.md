@@ -6,12 +6,12 @@
 [![CI](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/tonythethompson/Olive-Studio/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="../Assets/hero.png" alt="Olive Studio — visual GUI for Microsoft Olive model optimization: model input, optimization passes, and deployment artifact pipeline" width="900" />
+  <img src="Assets/hero.png" alt="Olive Studio — visual GUI for Microsoft Olive model optimization: model input, optimization passes, and deployment artifact pipeline" width="900" />
 </p>
 
 Olive Studio is a visual GUI for [Microsoft Olive](https://github.com/microsoft/Olive) model optimization. Configure model sources, hardware targets, and optimization passes, then execute on your own machine without cloud accounts. Ships with an AI assistant (20 providers), hardware validation with one-click autofix, and an MCP server for agent-driven workflows.
 
-[Microsoft Olive docs](https://microsoft.github.io/Olive/) · [Olive recipes catalog](https://github.com/microsoft/olive-recipes) · [Roadmap](../docs/ROADMAP.md)
+[Microsoft Olive docs](https://microsoft.github.io/Olive/) · [Olive recipes catalog](https://github.com/microsoft/olive-recipes) · [Roadmap](docs/ROADMAP.md)
 
 ---
 
@@ -19,11 +19,11 @@ Olive Studio is a visual GUI for [Microsoft Olive](https://github.com/microsoft/
 
 | Recipe catalog | Hardware detection |
 |:-:|:-:|
-| ![Recipe catalog with presets and AI audit](../public/screenshots/01-recipe-catalog.png) | ![Hardware probe with VRAM estimation](../public/screenshots/02-hardware-detection.png) |
+| ![Recipe catalog with presets and AI audit](public/screenshots/01-recipe-catalog.png) | ![Hardware probe with VRAM estimation](public/screenshots/02-hardware-detection.png) |
 
 | Hardware VRAM & providers | Recipe graph flow |
 |:-:|:-:|
-| ![Provider cards with VRAM estimates](../public/screenshots/02-hardware-vram.png) | ![Pipeline graph with AI suggestions](../public/screenshots/03-recipe-graph.png) |
+| ![Provider cards with VRAM estimates](public/screenshots/02-hardware-vram.png) | ![Pipeline graph with AI suggestions](public/screenshots/03-recipe-graph.png) |
 
 ---
 
@@ -148,7 +148,7 @@ Create `.env` or `.env.local` in the project root. All are optional:
 | `SYNC_KB_TOKEN` | Server-side secret for `POST /api/mcp/sync-kb` |
 | `VITE_SYNC_KB_TOKEN` | Client-side copy of `SYNC_KB_TOKEN` sent as `x-sync-token` |
 
-Full list of supported keys in [AGENTS.md](../AGENTS.md).
+Full list of supported keys in [AGENTS.md](AGENTS.md).
 
 ---
 
@@ -169,7 +169,7 @@ The repository includes `olive-mcp-server/`, a Python FastMCP server with 27 too
 - `.mcp.json` at repo root registers it for AI coding agents (Claude Code, Cursor, etc.)
 - Troubleshooting feedback is local-only and aggregate (no logs or PII stored)
 
-See [olive-mcp-server/README.md](../olive-mcp-server/README.md) for setup and tool documentation.
+See [olive-mcp-server/README.md](olive-mcp-server/README.md) for setup and tool documentation.
 
 ---
 
@@ -212,7 +212,7 @@ Olive-Studio/
 
 ## Contributing
 
-Issues and pull requests welcome. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+Issues and pull requests welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -233,7 +233,7 @@ Issues and pull requests welcome. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 - Multi-model batch comparison view
 - Export optimization reports
 
-Full details in [docs/ROADMAP.md](../docs/ROADMAP.md).
+Full details in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -247,6 +247,6 @@ Full details in [docs/ROADMAP.md](../docs/ROADMAP.md).
 
 ## License
 
-MIT. See [LICENSE](../LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 Microsoft Olive and related names are trademarks of Microsoft Corporation. This project is independent community tooling.
