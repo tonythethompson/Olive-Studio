@@ -100,11 +100,16 @@ export function useRecipeCatalog(opts: UseRecipeCatalogOpts) {
 
   const localMatchSummary = useMemo(
     () => (localModelHints ? summarizeLocalRecipeMatches(localModelHints, SUGGESTED_RECIPES) : null),
+    // catalogReady isn't read in the body, but SUGGESTED_RECIPES mutates in
+    // place (see above) so its reference never changes — this dep is the
+    // only way useMemo notices the catalog finished loading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [localModelHints, catalogReady],
   );
 
   const hardwareMatchSummary = useMemo(
     () => (hardwareProbe ? summarizeRecipeHardwareCompatibility(SUGGESTED_RECIPES, hardwareProbe) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see localMatchSummary above
     [hardwareProbe, catalogReady],
   );
 

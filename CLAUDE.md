@@ -15,7 +15,7 @@ pnpm test:integration       # Integration tests (real Express, mocked externals)
 pnpm test:component         # Component tests (jsdom + @testing-library/react)
 pnpm test:watch             # Watch mode
 
-pnpm lint                   # tsc --noEmit + eslint (exit 0 with warnings ≤20)
+pnpm lint                   # tsc --noEmit + eslint (--max-warnings 0)
 pnpm lint:quick             # oxlint fast pass (no type-check)
 pnpm format                 # prettier --write src/**/*.{ts,tsx}
 
@@ -112,7 +112,7 @@ The `@` alias resolves to `src/` in all vitest configs.
 
 ## Gotchas
 
-- **ESLint exit code**: `pnpm lint` runs `eslint --max-warnings 20` and exits 0 with ≤20 warnings. Only a non-zero exit or `error`-level findings are actual failures.
+- **ESLint exit code**: `pnpm lint` runs `eslint --max-warnings 0` — any warning fails the command, same as an error.
 - **No real Olive runs in CI/VM**: Recipe building, JSON export, and validation are CPU-only. Do NOT trigger "Execute Live" or batch runs in CI — they download models and CUDA wheels.
 - **`python` alias**: `pnpm a11y:scan` calls `python`, not `python3`. Ensure `python` is on PATH.
 - **Barrel imports**: Avoid `export *` barrel files — Vite tree-shaking and component test isolation both suffer. Import from the actual module file.
