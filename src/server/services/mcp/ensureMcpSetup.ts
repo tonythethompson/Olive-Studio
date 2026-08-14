@@ -8,26 +8,44 @@
  *
  * Never blocks server startup and never throws — the app works without MCP
  * either way, this only makes it available with zero manual steps when it can.
+ *
+ * Packaged installs can land in a read-only location for a standard user
+ * (macOS /Applications, a Linux AppImage's mounted resources; Tauri's default
+ * Windows NSIS install is per-user and writable, but isn't guaranteed to stay
+ * that way). The rest of this app's venvs already live under `process.cwd()`
+ * the same way (see src/server/services/venv/spec.ts) -- moving all of them to
+ * a proper per-user app-data directory is a larger, separate change. Here we
+ * only make sure a non-writable install degrades to a clean no-op (same as
+ * before this feature existed) instead of a partial failure or a crash.
  */
-import { existsSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync } from "fs";
 import { spawn } from "child_process";
 import path from "path";
 import { mcpServerDir } from "./paths.ts";
 import { readStudioConfig, writeStudioConfig } from "../../config.ts";
+import { findSystemPython } from "../venv/systemPython.ts";
 // Plain ESM (not TS) so scripts/postinstall-mcp-setup.mjs can share it with zero build step.
-import { venvPython, venvIsWorking, findSystemPython as findPathPython } from "../../../../scripts/mcpVenvProbe.mjs";
-// Full resolver (env override -> persisted systemPython -> known install locations -> PATH).
-// Only usable here (TS, bundled server code) -- the plain-.mjs probe above stays PATH-only so
-// the zero-build-step postinstall script can keep importing it directly.
-import { findSystemPython as findConfiguredPython } from "../venv/systemPython.ts";
+import { venvPython, venvIsWorking } from "../../../../scripts/mcpVenvProbe.mjs";
 
 const RETRY_BACKOFF_MS = 60 * 60 * 1000;
 
 let attemptedThisProcess = false;
 
-// `cmd` is always a fixed candidate ("python"/"python3") or a path this module
-// constructs under a known `.venv` dir -- never user input -- and spawn runs
-// without a shell, so there's no command-injection surface here.
+function isWritable(dir: string): boolean {
+  const probe = path.join(dir, `.mcp-setup-write-test-${process.pid}`);
+  try {
+    writeFileSync(probe, "");
+    unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// `cmd` is always a fixed candidate ("python"/"python3"), a path resolved by
+// findSystemPython(), or a path this module constructs under a known `.venv`
+// dir -- never user input -- and spawn runs without a shell, so there's no
+// command-injection surface here.
 function run(cmd: string, args: string[], cwd: string): Promise<boolean> {
   return new Promise((resolve) => {
     // nosemgrep: javascript.lang.security.detect-child-process -- cmd is internal-only, see comment above this function
@@ -42,15 +60,10 @@ function run(cmd: string, args: string[], cwd: string): Promise<boolean> {
 }
 
 function recordResult(lastResult: "ok" | "python-missing" | "failed"): void {
-  // Never throw out of a fire-and-forget setup step: on a packaged install where the
-  // resource dir (and thus .olive-studio/config.json under it) isn't writable, this
-  // write itself can fail. Swallow it -- setup is still best-effort either way, and an
-  // unhandled rejection here would otherwise propagate out of the caller's void-called
-  // promise chain.
   try {
     writeStudioConfig({ mcpAutoSetup: { lastAttemptAt: new Date().toISOString(), lastResult } });
   } catch (err: unknown) {
-    console.warn("[mcp-setup] Failed to persist setup result:", err instanceof Error ? err.message : err);
+    console.warn("[mcp-setup] failed to persist setup result:", err instanceof Error ? err.message : err);
   }
 }
 
@@ -90,20 +103,40 @@ async function performSetup(mcpDir: string, pythonCmd: string): Promise<void> {
   recordResult("ok");
 }
 
-/**
- * Resolves the Python interpreter to use for setup: prefers the full config-aware
- * resolver (OLIVE_STUDIO_PYTHON -> persisted systemPython -> known per-OS install
- * locations -> PATH) so a user who selected Python via Runtime -> Set Python (or has
- * it outside PATH) is honored here too, then falls back to the PATH-only probe.
- */
-async function resolveSetupPython(): Promise<string | null> {
-  try {
-    const configured = await findConfiguredPython();
-    if (configured) return configured;
-  } catch {
-    // fall through to the PATH-only probe below
+async function runEnsureMcpSetup(): Promise<void> {
+  const mcpDir = mcpServerDir();
+  if (!existsSync(mcpDir)) return; // not bundled: npm CLI install, or dev checkout mid-clone
+
+  const existing = venvPython(mcpDir);
+  if (existing && venvIsWorking(existing, mcpDir)) return; // already set up
+
+  const last = readStudioConfig().mcpAutoSetup;
+  if (last && last.lastResult !== "ok" && Date.now() - Date.parse(last.lastAttemptAt) < RETRY_BACKOFF_MS) {
+    return; // avoid re-attempting/re-warning a repeat failure on every relaunch within the backoff window
   }
-  return findPathPython();
+
+  if (!isWritable(mcpDir)) {
+    console.warn(
+      "[mcp-setup] MCP server directory is read-only (common for /Applications or AppImage installs) -- " +
+        "skipping auto-setup. MCP features are unavailable until it's set up from a writable location.",
+    );
+    recordResult("failed");
+    return;
+  }
+
+  // Honors OLIVE_STUDIO_PYTHON / the persisted systemPython setting / standard
+  // per-user install locations, not just a bare "python"/"python3" on PATH.
+  const pythonCmd = await findSystemPython();
+  if (!pythonCmd) {
+    console.warn(
+      "[mcp-setup] No supported system Python found. MCP features are unavailable until Python is installed " +
+        "(will retry automatically).",
+    );
+    recordResult("python-missing");
+    return;
+  }
+
+  await performSetup(mcpDir, pythonCmd);
 }
 
 /** Fire-and-forget: call once at server startup. Safe to call in any context. */
@@ -111,28 +144,7 @@ export function ensureMcpSetupInBackground(): void {
   if (attemptedThisProcess) return;
   attemptedThisProcess = true;
 
-  const mcpDir = mcpServerDir();
-  if (!existsSync(mcpDir)) return; // not bundled: npm CLI install, or dev checkout mid-clone
-
-  const existing = venvPython(mcpDir);
-  if (existing && venvIsWorking(existing, mcpDir)) return; // already set up
-
-  void (async () => {
-    const pythonCmd = await resolveSetupPython();
-    if (!pythonCmd) {
-      console.warn(
-        "[mcp-setup] Python >= 3.10 not found. MCP features are unavailable until Python is installed " +
-          "(the app will retry automatically on next launch).",
-      );
-      recordResult("python-missing");
-      return;
-    }
-
-    const last = readStudioConfig().mcpAutoSetup;
-    if (last?.lastResult === "failed" && Date.now() - Date.parse(last.lastAttemptAt) < RETRY_BACKOFF_MS) {
-      return; // avoid hammering a failing install (e.g. offline) on every relaunch
-    }
-
-    await performSetup(mcpDir, pythonCmd);
-  })();
+  runEnsureMcpSetup().catch((err: unknown) => {
+    console.warn("[mcp-setup] background setup failed unexpectedly:", err instanceof Error ? err.message : err);
+  });
 }
