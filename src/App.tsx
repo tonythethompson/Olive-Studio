@@ -12,7 +12,7 @@ import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { KbSyncIndicator } from "@/components/features/KbSyncIndicator";
 import { RuntimeEnvControls } from "@/components/features/RuntimeEnvControls";
-import { AgentAccessControls } from "@/components/features/AgentAccessControls";
+
 import { TitleBar } from "@/components/TitleBar";
 import { DesktopMinimumViewport, WIDE_SHELL_MIN_WIDTH_PX } from "@/components/DesktopMinimumViewport";
 import { cn } from "@/lib/utils";
@@ -122,7 +122,7 @@ function Dashboard() {
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
   const [pendingResolveIssues, setPendingResolveIssues] = useState(false);
 
-  // Header center cluster (KB sync / runtime / agent access) must never wrap
+  // Header center cluster (KB sync / runtime) must never wrap
   // onto a second line. Measure the actual gap between the fixed left and
   // right header columns and collapse the cluster to icon-only once the
   // full-label layout wouldn't fit — driven by real available space rather
@@ -460,8 +460,7 @@ function Dashboard() {
                   <KbSyncIndicator compact={headerCompact} />
                   {!headerCompact && <span className="block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />}
                   <RuntimeEnvControls compact={headerCompact} />
-                  {!headerCompact && <span className="block w-px h-4 bg-slate-700/80 shrink-0" aria-hidden />}
-                  <AgentAccessControls compact={headerCompact} />
+
                 </div>
                 <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
                   <SettingsMenu />

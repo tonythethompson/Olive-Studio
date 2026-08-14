@@ -1,7 +1,7 @@
 {
   "stem": "ts_studio",
   "kind": "entries",
-  "model": "all-MiniLM-L6-v2",
+  "model": "BAAI/bge-small-en-v1.5",
   "dim": 384,
   "count": 12,
   "content_hash": "36dcdf321ad6d99545edfbc4a9dea97d26e106de1ddcc2da7d7faa785a894c50",

@@ -11,6 +11,7 @@
  */
 import type { IHVProvider, ModelSource, OpenVinoTargetDevice, UIState } from "../../../types.ts";
 import { coercePassValue } from "../../../lib/auditAutofix.ts";
+import { gateMultiLoraAdapters } from "../../../lib/oliveRecipeBuilder.ts";
 import { mergeUiState, type UiStatePatch } from "../../../lib/pipelineValidation.ts";
 import {
   projectUiStateToRecipeEvaluation,
@@ -98,6 +99,140 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
   return out;
 }
 
+const MAX_BRIDGE_ADAPTERS = 8;
+const MAX_BRIDGE_TARGET_MODULES = 32;
+const MAX_BRIDGE_TARGET_MODULE_NAME = 128;
+
+type BridgeTargetModulesResult =
+  | { ok: true; modules?: string[] }
+  | { ok: false; reason: string };
+
+function parseBridgeTargetModules(rawModules: unknown): BridgeTargetModulesResult {
+  if (rawModules === undefined) return { ok: true, modules: undefined };
+  if (!Array.isArray(rawModules)) {
+    return {
+      ok: false,
+      reason: "targetModules must be an array of non-empty strings",
+    };
+  }
+  if (rawModules.length === 0) return { ok: true, modules: undefined };
+  if (rawModules.length > MAX_BRIDGE_TARGET_MODULES) {
+    return {
+      ok: false,
+      reason: `targetModules exceeds maximum of ${MAX_BRIDGE_TARGET_MODULES}`,
+    };
+  }
+
+  const modules: string[] = [];
+  for (const entry of rawModules) {
+    if (typeof entry !== "string" || entry.trim().length === 0) {
+      return {
+        ok: false,
+        reason: "targetModules must be an array of non-empty strings",
+      };
+    }
+    const moduleName = entry.trim();
+    if (moduleName.length > MAX_BRIDGE_TARGET_MODULE_NAME) {
+      return {
+        ok: false,
+        reason: `each targetModules entry must be at most ${MAX_BRIDGE_TARGET_MODULE_NAME} characters`,
+      };
+    }
+    modules.push(moduleName);
+  }
+  return { ok: true, modules };
+}
+
+type BridgeAdapterParseResult =
+  | { ok: true; adapter: NonNullable<UIState["multiLoraAdapters"]>[number] | null }
+  | { ok: false; reason: string };
+
+type BridgeOptionalNumberResult =
+  | { ok: true; value?: number }
+  | { ok: false; reason: string };
+
+/** Absent rank is fine; present-but-invalid must not become the builder default. */
+function parseBridgeRank(item: Record<string, unknown>): BridgeOptionalNumberResult {
+  if (!("rank" in item)) return { ok: true, value: undefined };
+  const value = item.rank;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer" };
+}
+
+/** Absent alpha is fine; present-but-invalid must not become the builder default. */
+function parseBridgeAlpha(item: Record<string, unknown>): BridgeOptionalNumberResult {
+  if (!("alpha" in item)) return { ok: true, value: undefined };
+  const value = item.alpha;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number" };
+}
+
+function parseSingleBridgeAdapter(item: Record<string, unknown>): BridgeAdapterParseResult {
+  const adapterPath = clipString(item.path, 1024);
+  if (!adapterPath) return { ok: false, reason: "path must be a non-empty string" };
+  const name = clipString(item.name, 128);
+  const rankResult = parseBridgeRank(item);
+  if (!rankResult.ok) return rankResult;
+  const alphaResult = parseBridgeAlpha(item);
+  if (!alphaResult.ok) return alphaResult;
+  const hasTargetModulesKey = "targetModules" in item || "target_modules" in item;
+  const rawModules = Array.isArray(item.targetModules)
+    ? item.targetModules
+    : Array.isArray(item.target_modules)
+      ? item.target_modules
+      : hasTargetModulesKey
+        ? item.targetModules ?? item.target_modules
+        : undefined;
+  const targetModulesResult = parseBridgeTargetModules(rawModules);
+  if (!targetModulesResult.ok) {
+    return { ok: false, reason: targetModulesResult.reason };
+  }
+
+  return {
+    ok: true,
+    adapter: {
+      path: adapterPath,
+      ...(name ? { name } : {}),
+      ...(rankResult.value !== undefined ? { rank: rankResult.value } : {}),
+      ...(alphaResult.value !== undefined ? { alpha: alphaResult.value } : {}),
+      ...(targetModulesResult.modules ? { targetModules: targetModulesResult.modules } : {}),
+    },
+  };
+}
+
+type BridgeAdaptersParseResult =
+  | { ok: true; adapters?: UIState["multiLoraAdapters"] }
+  | { ok: false; reason: string };
+
+function parseBridgeAdapters(raw: unknown): BridgeAdaptersParseResult {
+  if (raw === undefined) return { ok: true, adapters: undefined };
+  if (!Array.isArray(raw)) {
+    return { ok: false, reason: "adapters must be an array" };
+  }
+  const out: NonNullable<UIState["multiLoraAdapters"]> = [];
+  for (const item of raw) {
+    if (!isObjectRecord(item)) {
+      return { ok: false, reason: "each adapter must be a non-null object" };
+    }
+    const parsed = parseSingleBridgeAdapter(item);
+    if (!parsed.ok) return parsed;
+    if (parsed.adapter) {
+      out.push(parsed.adapter);
+      if (out.length > MAX_BRIDGE_ADAPTERS) {
+        return {
+          ok: false,
+          reason: `Adapter count exceeds maximum of ${MAX_BRIDGE_ADAPTERS}`,
+        };
+      }
+    }
+  }
+  return { ok: true, adapters: out.length > 0 ? out : undefined };
+}
+
 function assignClippedBridgeStrings(
   partial: UiStatePatch,
   raw: Record<string, unknown>,
@@ -171,6 +306,17 @@ export function mergeBridgeUiState(
   const localFiles = parseLocalFiles(raw.localFiles);
   if (localFiles) partial.localFiles = localFiles;
 
+  const adaptersResult = parseBridgeAdapters(raw.multiLoraAdapters ?? raw.multi_lora_adapters);
+  if (!adaptersResult.ok) {
+    return { ok: false, code: "invalid_ui_state", error: adaptersResult.reason };
+  }
+  if (adaptersResult.adapters) partial.multiLoraAdapters = adaptersResult.adapters;
+
+  const vramRaw = raw.vramEstimateGb ?? raw.vram_estimate_gb;
+  if (typeof vramRaw === "number" && Number.isFinite(vramRaw)) {
+    partial.vramEstimateGb = vramRaw;
+  }
+
   const passesError = assignBridgePasses(partial, raw);
   if (passesError) return passesError;
 
@@ -210,6 +356,20 @@ export function evaluateStudioRecipeBridge(
 
   const merged = mergeBridgeUiState(createDefaultState(), rawState);
   if (!merged.ok) return merged;
+
+  const adapters = merged.state.multiLoraAdapters;
+  if (merged.state.passes.peft && Array.isArray(adapters) && adapters.length > 0) {
+    const vram =
+      typeof merged.state.vramEstimateGb === "number" ? merged.state.vramEstimateGb : Number.NaN;
+    const gate = gateMultiLoraAdapters(adapters, vram);
+    if (!gate.allowed) {
+      return {
+        ok: false,
+        code: "invalid_ui_state",
+        error: `Multi-LoRA adapter configuration rejected: ${gate.reason ?? "invalid adapter configuration"}`,
+      };
+    }
+  }
 
   // Exactly one projection call — pure, no Olive / I/O.
   const evaluation = evaluate(merged.state);

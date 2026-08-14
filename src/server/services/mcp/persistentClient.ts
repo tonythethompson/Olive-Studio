@@ -1,17 +1,18 @@
 /**
- * Persistent MCP client using stdio transport.
+ * Persistent MCP client using stdio transport by default, or SSE when
+ * OLIVE_MCP_URL is configured.
  *
- * Maintains a long-lived child process running `python -m olive_mcp_server`
- * and communicates via JSON-RPC over stdin/stdout (MCP protocol). Tool calls
- * complete in <50ms (warm) vs ~500ms per subprocess spawn.
+ * The local mode maintains a long-lived child process running
+ * `python -m olive_mcp_server` and communicates via JSON-RPC over stdin/stdout
+ * (MCP protocol). Tool calls complete in <50ms (warm) vs ~500ms per subprocess spawn.
  *
  * Connection lifecycle: idle → connecting → connected → (crash) → reconnecting.
  * The circuit breaker governs spawn failures / crashes; tool-level errors
  * (bad args, unknown tool) never trip the breaker.
  */
-import { Client } from "@modelcontextprotocol/client";
+import { Client, SSEClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import mcpBreaker, { type McpCallAdmission } from "./breaker.ts";
+import mcpBreaker, { resetMcpBreaker, type McpCallAdmission } from "./breaker.ts";
 import { getMcpPython, buildPythonEnv, mcpServerDir } from "./paths.ts";
 
 export type McpToolCallResult = { result?: unknown; error?: string; unavailable?: boolean };
@@ -21,15 +22,19 @@ export type McpToolRequest = { toolName: string; args?: Record<string, unknown> 
 export const MCP_UNAVAILABLE_ERROR =
   "MCP server unavailable — verify the Olive MCP server is installed before retrying.";
 
+const MCP_CALL_TIMEOUT_MS = 45_000;
+
 // ─── Connection State Machine ──────────────────────────────────────────
 
 type ConnectionState = "idle" | "connecting" | "connected" | "crashed";
 
 let state: ConnectionState = "idle";
 let client: Client | null = null;
-let transport: StdioClientTransport | null = null;
+let transport: StdioClientTransport | SSEClientTransport | null = null;
 /** Pending connect() promise — prevents concurrent connection attempts. */
 let connectingPromise: Promise<void> | null = null;
+/** Pending reconnect — overlapping settings updates share one teardown/connect. */
+let reconnectPromise: Promise<void> | null = null;
 
 // ─── Internal helpers ──────────────────────────────────────────────────
 
@@ -48,28 +53,38 @@ async function connect(): Promise<void> {
   connectingPromise = (async () => {
     state = "connecting";
     try {
-      const python = getMcpPython();
-      const env = buildPythonEnv();
-      const cwd = mcpServerDir();
+      const remoteUrl = process.env.OLIVE_MCP_URL;
+      if (remoteUrl) {
+        // The Compose MCP service exposes the SSE endpoint at /sse.
+        const url = new URL(remoteUrl);
+        if (url.pathname === "/" || url.pathname === "") url.pathname = "/sse";
 
-      transport = new StdioClientTransport({
-        command: python,
-        args: ["-m", "olive_mcp_server"],
-        env: { ...env } as Record<string, string>,
-        cwd,
-        stderr: "pipe",
-      });
+        transport = new SSEClientTransport(url);
+      } else {
+        const python = getMcpPython();
+        const env = buildPythonEnv();
+        const cwd = mcpServerDir();
 
-      // Log stderr from the MCP server for diagnostics (don't suppress errors).
-      const stderrStream = transport.stderr;
-      if (stderrStream && "on" in stderrStream) {
-        (stderrStream as NodeJS.ReadableStream).on("data", (chunk: Buffer) => {
-          const line = chunk.toString().trim();
-          if (line) {
-            // Only log non-empty lines to avoid noise
-            process.stderr.write(`[olive-mcp] ${line}\n`);
-          }
+        const stdioTransport = new StdioClientTransport({
+          command: python,
+          args: ["-m", "olive_mcp_server"],
+          env: { ...env } as Record<string, string>,
+          cwd,
+          stderr: "pipe",
         });
+        transport = stdioTransport;
+
+        // Log stderr from the MCP server for diagnostics (don't suppress errors).
+        const stderrStream = stdioTransport.stderr;
+        if (stderrStream && "on" in stderrStream) {
+          (stderrStream as NodeJS.ReadableStream).on("data", (chunk: Buffer) => {
+            const line = chunk.toString().trim();
+            if (line) {
+              // Only log non-empty lines to avoid noise
+              process.stderr.write(`[olive-mcp] ${line}\n`);
+            }
+          });
+        }
       }
 
       // Capture instance ref so a stale transport's close event doesn't
@@ -102,7 +117,7 @@ async function connect(): Promise<void> {
 // ─── Public API (same signatures as the old client.ts) ─────────────────
 
 /**
- * Invokes a single Olive MCP tool via the persistent stdio connection.
+ * Invokes a single Olive MCP tool via the persistent MCP connection.
  *
  * @param toolName - The name of the tool to invoke
  * @param args - Arguments to pass to the tool
@@ -154,7 +169,6 @@ export async function callOliveMcpTools(requests: McpToolRequest[]): Promise<Mcp
   // ── Execute tool calls sequentially ──
   const results: McpToolCallResult[] = [];
   let hadInfraFailure = false;
-  const MCP_CALL_TIMEOUT_MS = 45_000;
 
   for (const req of requests) {
     // Check connection is still alive before each call
@@ -315,13 +329,70 @@ export function resetPersistentClient(): void {
   transport = null;
   state = "idle";
   connectingPromise = null;
+  reconnectPromise = null;
+}
+
+/**
+ * Force-reconnect the MCP server child process.
+ * Tears down the current connection (if any) and spawns a fresh process
+ * with the latest environment variables from buildPythonEnv().
+ * Used by the settings UI when MCP env vars (retrieval mode, preload, etc.)
+ * change and need to take effect.
+ */
+export async function reconnectMcpClient(): Promise<void> {
+  if (reconnectPromise) return reconnectPromise;
+
+  reconnectPromise = (async () => {
+    // Serialize with any in-flight connect() so its success/catch cannot
+    // overwrite the replacement session after we reset module state.
+    const pending = connectingPromise;
+    connectingPromise = null;
+    if (pending) {
+      try {
+        await pending;
+      } catch {
+        // Previous connect failed; continue with a fresh attempt.
+      }
+    }
+
+    if (client) {
+      try { await client.close(); } catch { /* best-effort */ }
+    }
+    if (transport) {
+      try { void transport.close().catch(() => undefined); } catch { /* best-effort */ }
+    }
+    client = null;
+    transport = null;
+    state = "idle";
+    connectingPromise = null;
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        connect(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error(`MCP client reconnect timed out after ${MCP_CALL_TIMEOUT_MS / 1000} seconds`));
+          }, MCP_CALL_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+    // Forced reconnect succeeded — do not leave a previously tripped breaker open.
+    resetMcpBreaker();
+  })().finally(() => {
+    reconnectPromise = null;
+  });
+
+  return reconnectPromise;
 }
 
 /** Test-only snapshot of module connection refs. */
 export function getPersistentClientSnapshotForTests(): {
   state: ConnectionState;
   client: Client | null;
-  transport: StdioClientTransport | null;
+  transport: StdioClientTransport | SSEClientTransport | null;
 } {
   return { state, client, transport };
 }
@@ -330,7 +401,7 @@ export function getPersistentClientSnapshotForTests(): {
 export function setPersistentClientSnapshotForTests(next: {
   state: ConnectionState;
   client: Client | null;
-  transport: StdioClientTransport | null;
+  transport: StdioClientTransport | SSEClientTransport | null;
 }): void {
   state = next.state;
   client = next.client;

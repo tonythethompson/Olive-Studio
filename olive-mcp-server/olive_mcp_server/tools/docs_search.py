@@ -458,12 +458,12 @@ def _search_live(
             logger.debug("Live-doc keyword search failed", exc_info=True)
             return []
 
-    # Keyword mode: never touch MiniLM / live embedding index.
+    # Keyword mode: never touch the embedding model / live embedding index.
     if resolved == "keyword":
         return _keyword_live(), retrieval_meta(mode=resolved, effective="keyword")
 
     # Auto budgets even when the model is warm: live fetch/index build can still
-    # be cold after local search already loaded MiniLM.
+    # be cold after local search already loaded the embedding model.
     use_budget = resolved == "auto"
     if use_budget:
         if budget_ms is None:

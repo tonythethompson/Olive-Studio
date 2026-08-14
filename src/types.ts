@@ -82,6 +82,10 @@ export interface BatchJob {
   logs: string[];
   /** olive backend job ID once started */
   oliveJobId?: string;
+  /** Wall-clock start (ms since epoch) once the job leaves the queue. */
+  startedAtMs?: number;
+  /** Wall-clock end (ms since epoch) when the job becomes terminal. */
+  finishedAtMs?: number;
   metrics?: {
     latency: string;
     throughput: string;
@@ -130,6 +134,19 @@ export interface UIState {
   batchJobs?: BatchJob[];
   /** Active olive job ID for the Execute Live button */
   activeJobId?: string | null;
+  /**
+   * Multi-LoRA adapter entries for ExtractAdapters (when PEFT + multiLora flag).
+   * Empty/omitted means no extra adapters beyond the primary PEFT pass.
+   */
+  multiLoraAdapters?: Array<{
+    name?: string;
+    path: string;
+    rank?: number;
+    alpha?: number;
+    targetModules?: string[];
+  }>;
+  /** Estimated available VRAM in GB used to gate multi-LoRA adapter count. */
+  vramEstimateGb?: number;
   /**
    * MCP / advanced pass-level recipe overrides (output_name, extra config keys).
    * Applied by `buildOliveRecipe` onto matching pass types.

@@ -45,6 +45,8 @@ export interface RecipeCatalogItem {
   description: string;
   /** How architecture/device tags were derived. Folder inference is approximate. */
   metadataSource?: "folder" | "recipe";
+  /** Pinned catalog commit; when set, content is fetched at this SHA, not branch HEAD. */
+  commitSha?: string;
 }
 
 export interface ParsedGitHubTarget {
@@ -77,6 +79,134 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readOptionalRecipeTargetModules(
+  item: Record<string, unknown>,
+): string[] | undefined {
+  const rawModules = Array.isArray(item.targetModules)
+    ? item.targetModules
+    : Array.isArray(item.target_modules)
+      ? item.target_modules
+      : undefined;
+  if (
+    !Array.isArray(rawModules) ||
+    !rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
+  ) {
+    return undefined;
+  }
+  return rawModules;
+}
+
+/**
+ * Absent targetModules/target_modules is fine. If either key is present, the
+ * value must be an array of non-empty strings (or we reject).
+ */
+function parseRecipeAdapterTargetModules(
+  item: Record<string, unknown>,
+): { ok: true; modules?: string[] } | { ok: false; reason: string } {
+  const hasTargetModulesKey = "targetModules" in item || "target_modules" in item;
+  const targetModules = readOptionalRecipeTargetModules(item);
+  if (hasTargetModulesKey && targetModules === undefined) {
+    return { ok: false, reason: "targetModules must be an array of non-empty strings" };
+  }
+  return { ok: true, modules: targetModules };
+}
+
+type RecipeAdapterParseResult =
+  | { ok: true; adapter: NonNullable<UIState["multiLoraAdapters"]>[number] | null }
+  | { ok: false; reason: string };
+
+type RecipeAdaptersParseResult =
+  | { ok: true; adapters?: UIState["multiLoraAdapters"] }
+  | { ok: false; reason: string };
+
+type RecipeOptionalNumberResult =
+  | { ok: true; value?: number }
+  | { ok: false; reason: string };
+
+/** Absent rank is omitted. Present-but-invalid rank is rejected. */
+function parseRecipeAdapterRank(item: Record<string, unknown>): RecipeOptionalNumberResult {
+  if (!("rank" in item)) return { ok: true, value: undefined };
+  const value = item.rank;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "rank must be a positive integer" };
+}
+
+/** Absent alpha is omitted. Present-but-invalid alpha is rejected. */
+function parseRecipeAdapterAlpha(item: Record<string, unknown>): RecipeOptionalNumberResult {
+  if (!("alpha" in item)) return { ok: true, value: undefined };
+  const value = item.alpha;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { ok: true, value };
+  }
+  return { ok: false, reason: "alpha must be a positive finite number" };
+}
+
+/**
+ * Parse one recipe `adapters[]` entry into UIState MultiLoRA shape.
+ * Absent rank/alpha/targetModules stay omitted (builder defaults). Present-but-invalid
+ * values are rejected so import cannot silently rewrite adapter parameters.
+ */
+function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterParseResult {
+  const path = readNonEmptyString(item.path);
+  if (!path) return { ok: false, reason: "path must be a non-empty string" };
+
+  const name = readNonEmptyString(item.name);
+  const rankResult = parseRecipeAdapterRank(item);
+  if (!rankResult.ok) return rankResult;
+  const alphaResult = parseRecipeAdapterAlpha(item);
+  if (!alphaResult.ok) return alphaResult;
+  const targetModulesResult = parseRecipeAdapterTargetModules(item);
+  if (!targetModulesResult.ok) return targetModulesResult;
+
+  return {
+    ok: true,
+    adapter: {
+      path,
+      ...(name ? { name } : {}),
+      ...(rankResult.value !== undefined ? { rank: rankResult.value } : {}),
+      ...(alphaResult.value !== undefined ? { alpha: alphaResult.value } : {}),
+      ...(targetModulesResult.modules ? { targetModules: targetModulesResult.modules } : {}),
+    },
+  };
+}
+
+function legacyAdapterPathFromInput(
+  inputConfig: Record<string, unknown>,
+): UIState["multiLoraAdapters"] | undefined {
+  const adapterPath = readNonEmptyString(inputConfig.adapter_path);
+  return adapterPath ? [{ path: adapterPath }] : undefined;
+}
+
+/**
+ * Parse recipe-level multi-LoRA adapters (or legacy adapter_path) into UIState shape.
+ */
+function parseMultiLoraAdaptersFromRecipe(
+  recipe: Record<string, unknown> | undefined,
+  inputConfig: Record<string, unknown>,
+): RecipeAdaptersParseResult {
+  const rawAdapters = recipe?.adapters;
+  if (Array.isArray(rawAdapters) && rawAdapters.length > 0) {
+    const out: NonNullable<UIState["multiLoraAdapters"]> = [];
+    for (const item of rawAdapters) {
+      if (!isRecord(item)) {
+        return { ok: false, reason: "each adapter must be a non-null object" };
+      }
+      const parsed = parseRecipeAdapterEntry(item);
+      if (!parsed.ok) return parsed;
+      if (parsed.adapter) out.push(parsed.adapter);
+    }
+    if (out.length > 0) return { ok: true, adapters: out };
+  }
+
+  return { ok: true, adapters: legacyAdapterPathFromInput(inputConfig) };
 }
 
 /**
@@ -183,7 +313,8 @@ export async function fetchOliveRecipesCatalogItem(
   repo = OLIVE_RECIPES_REPO,
   branch = getRecipesBranch(),
 ): Promise<unknown> {
-  const { json } = await fetchGitHubRecipeJson(repo, branch, item.repoPath);
+  const ref = item.commitSha || branch;
+  const { json } = await fetchGitHubRecipeJson(repo, ref, item.repoPath);
   return json;
 }
 
@@ -554,6 +685,12 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
       continue;
     }
 
+    if (lowerType.includes("extractadapters") || key === "extract_adapters") {
+      next.peft = true;
+      if (!next.peftMethod) next.peftMethod = "lora";
+      continue;
+    }
+
     if (lowerType.includes("lora") || key === "peft") {
       next.peft = true;
       next.peftMethod = "lora";
@@ -589,6 +726,7 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
  * @param parsed - The parsed Olive recipe.
  * @param options - Options controlling whether mapped passes replace or merge with existing passes.
  * @returns The UI state values derived from the recipe.
+ * @throws {Error} When recipe adapters include present-but-invalid rank, alpha, or targetModules.
  */
 export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUiStateOptions): Partial<UIState> {
   const recipe = isRecord(parsed) ? parsed : undefined;
@@ -664,6 +802,20 @@ export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUi
       const base = options?.basePasses ?? DEFAULT_PASSES;
       incomingState.passes = { ...base, ...mapped };
     }
+  }
+
+  const adaptersResult = parseMultiLoraAdaptersFromRecipe(recipe, icfg);
+  if (!adaptersResult.ok) {
+    throw new Error(`Multi-LoRA adapter import rejected: ${adaptersResult.reason}`);
+  }
+  if (adaptersResult.adapters) {
+    incomingState.multiLoraAdapters = adaptersResult.adapters;
+    const basePasses = incomingState.passes ?? options?.basePasses ?? DEFAULT_PASSES;
+    incomingState.passes = {
+      ...basePasses,
+      peft: true,
+      peftMethod: basePasses.peftMethod || "lora",
+    };
   }
 
   return incomingState;

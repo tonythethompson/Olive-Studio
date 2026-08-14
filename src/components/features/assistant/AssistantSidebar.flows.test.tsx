@@ -14,6 +14,9 @@ vi.mock("@/lib/aiWorkspaceContext", () => ({
 vi.mock("./LocalModelManager", () => ({
   LocalModelManager: () => <div data-testid="lmm" />,
 }));
+vi.mock("./PipelineReview", () => ({
+  PipelineReview: () => <div data-testid="pipeline-review">PipelineReview</div>,
+}));
 
 import { AssistantSidebar } from "./AssistantSidebar";
 
@@ -55,12 +58,12 @@ describe("AssistantSidebar flows", () => {
 
     renderWithProviders(<AssistantSidebar isOpen onClose={vi.fn()} />);
 
-    // Header reflects the active provider and the audit auto-runs
+    // Header reflects the active provider and the assistant auto-runs analysis
     await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-2.5-flash/)).toBeTruthy());
-    await waitFor(() => expect(screen.getByText("Looks fine")).toBeTruthy());
+    expect(screen.getByTestId("pipeline-review")).toBeTruthy();
 
     // Chat tab: preset query round-trips through /api/ai/chat
-    fireEvent.click(screen.getByRole("tab", { name: /^Chat$/ }));
+    // In unified assistant tab, chat is always visible below PipelineReview
     fireEvent.click(screen.getByRole("button", { name: /Why is my model slow\?/ }));
     await waitFor(() => expect(screen.getByText(/quantization is off/)).toBeTruthy());
 

@@ -64,16 +64,24 @@ function formatAgentAccessError(status: number, serverError: string | undefined)
 }
 
 /**
- * Header control: Studio-owned agent/MCP access policy (Phase 3).
+ * Studio-owned agent/MCP access policy controls.
+ * - `control` (default): compact header button with a dropdown.
+ * - `panel`: full panel suitable for embedding as a sidebar tab.
  * Reads GET /api/olive/agent-access from any Studio session; writes (PUT) are
  * loopback-only on the server. Env overrides (e.g. OLIVE_MCP_ALLOW_JOBS) may
  * still force submit/cancel — UI shows when that is active.
  */
 interface AgentAccessControlsProps {
   compact?: boolean;
+  variant?: "control" | "panel";
 }
 
-export const AgentAccessControls = memo(function AgentAccessControls({ compact = false }: AgentAccessControlsProps) {
+export const AgentAccessControls = memo(function AgentAccessControls({
+  compact = false,
+  variant = "control",
+}: AgentAccessControlsProps) {
+  const isPanel = variant === "panel";
+
   const [policy, setPolicy] = useState<AgentAccessPolicyState | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -115,6 +123,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({ compact =
   }, []);
 
   useEffect(() => {
+    if (isPanel) return;
     if (!open) {
       setMenuPos(null);
       setMessage(null);
@@ -151,7 +160,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({ compact =
       // Restore focus to the opener when the dialog unmounts/closes.
       triggerEl?.focus();
     };
-  }, [open, updateMenuPos]);
+  }, [isPanel, open, updateMenuPos]);
 
   const patchPolicy = async (key: PolicyKey, value: boolean) => {
     if (!canMutatePolicy) {
@@ -191,6 +200,90 @@ export const AgentAccessControls = memo(function AgentAccessControls({ compact =
     ? "Agent access: job submission or cancellation is enabled"
     : "Agent / MCP access policy";
 
+  const content = (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-200 font-sans">Agent / MCP access</div>
+          <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-sans">
+            Controls what coding agents may do through Olive MCP. Studio always owns execution;
+            agents never spawn Olive directly.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className="text-slate-500 hover:text-electric-blue p-0.5 shrink-0"
+          title="Refresh"
+          aria-label="Refresh agent access policy"
+        >
+          <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {!canMutatePolicy ? (
+        <p className="text-[11px] text-slate-300 font-sans rounded border border-slate-600/50 bg-slate-800/60 px-2 py-1.5">
+          Read-only here. Open Studio on <code className="font-mono">http://127.0.0.1:3000</code> to
+          change these toggles.
+        </p>
+      ) : null}
+
+      {policy?.envOverrideActive ? (
+        <p className="text-[11px] text-amber-300/90 font-sans rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
+          Server env override active (e.g. <code className="font-mono">OLIVE_MCP_ALLOW_JOBS</code>
+          ). Effective permissions may be higher than these toggles.
+        </p>
+      ) : null}
+
+      <ul className="space-y-2">
+        {TOGGLES.map(({ key, label, hint, danger }, index) => {
+          const checked = Boolean(policy?.[key]);
+          const disabled =
+            busy ||
+            !policy ||
+            !canMutatePolicy ||
+            (key !== "mcpAccess" && policy.mcpAccess === false);
+          return (
+            <li key={key} className="flex items-start gap-2">
+              <input
+                ref={index === 0 ? firstToggleRef : undefined}
+                id={`agent-access-${key}`}
+                type="checkbox"
+                className="mt-0.5 rounded border-slate-600 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
+                checked={checked}
+                disabled={disabled}
+                onChange={(e) => void patchPolicy(key, e.target.checked)}
+              />
+              <label htmlFor={`agent-access-${key}`} className="min-w-0 font-sans cursor-pointer">
+                <span
+                  className={`text-xs font-medium ${
+                    danger && checked ? "text-amber-300" : "text-slate-200"
+                  }`}
+                >
+                  {label}
+                </span>
+                <span className="block text-[11px] text-slate-500 leading-snug">{hint}</span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+
+      {message ? <p className="text-[11px] text-emerald-400 font-sans">{message}</p> : null}
+      {error ? <p className="text-[11px] text-rose-400 font-sans">{error}</p> : null}
+
+      <p className="text-[11px] text-slate-500 font-sans leading-relaxed border-t border-slate-800 pt-2">
+        External agents need <code className="font-mono text-slate-400">OLIVE_STUDIO_API_URL</code>{" "}
+        pointing at this Studio (e.g. <code className="font-mono text-slate-400">http://127.0.0.1:3000</code>
+        ).
+      </p>
+    </div>
+  );
+
+  if (isPanel) {
+    return <div className="space-y-3 text-sm">{content}</div>;
+  }
+
   return (
     <div ref={rootRef} className="relative text-[clamp(0.625rem,0.55rem+0.3vw,0.75rem)] font-mono overflow-visible">
       <button
@@ -222,81 +315,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({ compact =
           style={{ top: menuPos.top, left: menuPos.left }}
           className="fixed z-50 w-[min(100vw-2rem,22rem)] rounded border border-slate-700 bg-slate-900 shadow-xl p-3 space-y-3 text-left"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-sm font-semibold text-slate-200 font-sans">Agent / MCP access</div>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-sans">
-                Controls what coding agents may do through Olive MCP. Studio always owns execution;
-                agents never spawn Olive directly.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="text-slate-500 hover:text-electric-blue p-0.5"
-              title="Refresh"
-              aria-label="Refresh agent access policy"
-            >
-              <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-
-          {!canMutatePolicy ? (
-            <p className="text-[11px] text-slate-300 font-sans rounded border border-slate-600/50 bg-slate-800/60 px-2 py-1.5">
-              Read-only here. Open Studio on <code className="font-mono">http://127.0.0.1:3000</code> to
-              change these toggles.
-            </p>
-          ) : null}
-
-          {policy?.envOverrideActive ? (
-            <p className="text-[11px] text-amber-300/90 font-sans rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
-              Server env override active (e.g. <code className="font-mono">OLIVE_MCP_ALLOW_JOBS</code>
-              ). Effective permissions may be higher than these toggles.
-            </p>
-          ) : null}
-
-          <ul className="space-y-2">
-            {TOGGLES.map(({ key, label, hint, danger }, index) => {
-              const checked = Boolean(policy?.[key]);
-              const disabled =
-                busy ||
-                !policy ||
-                !canMutatePolicy ||
-                (key !== "mcpAccess" && policy.mcpAccess === false);
-              return (
-                <li key={key} className="flex items-start gap-2">
-                  <input
-                    ref={index === 0 ? firstToggleRef : undefined}
-                    id={`agent-access-${key}`}
-                    type="checkbox"
-                    className="mt-0.5 rounded border-slate-600 bg-slate-950 text-electric-blue focus:ring-electric-blue/40"
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={(e) => void patchPolicy(key, e.target.checked)}
-                  />
-                  <label htmlFor={`agent-access-${key}`} className="min-w-0 font-sans cursor-pointer">
-                    <span
-                      className={`text-xs font-medium ${
-                        danger && checked ? "text-amber-300" : "text-slate-200"
-                      }`}
-                    >
-                      {label}
-                    </span>
-                    <span className="block text-[11px] text-slate-500 leading-snug">{hint}</span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-
-          {message ? <p className="text-[11px] text-emerald-400 font-sans">{message}</p> : null}
-          {error ? <p className="text-[11px] text-rose-400 font-sans">{error}</p> : null}
-
-          <p className="text-[11px] text-slate-500 font-sans leading-relaxed border-t border-slate-800 pt-2">
-            External agents need <code className="font-mono text-slate-400">OLIVE_STUDIO_API_URL</code>{" "}
-            pointing at this Studio (e.g. <code className="font-mono text-slate-400">http://127.0.0.1:3000</code>
-            ).
-          </p>
+          {content}
         </div>
       )}
     </div>
