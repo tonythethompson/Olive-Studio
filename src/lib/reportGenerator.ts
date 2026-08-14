@@ -6,10 +6,25 @@
 
 import type { JobHistoryRecord } from "@/lib/jobHistoryStore";
 
+/** Shared default report title used by both metadata and report body. */
+const DEFAULT_REPORT_TITLE = "Olive Studio Optimization Report";
+
+/** Centralized UTC timestamp formatter: "YYYY-MM-DD HH:mm:ss". */
+function utcTimestamp(): string {
+  return new Date().toISOString().slice(0, 19).replace("T", " ");
+}
+
 export interface ReportOptions {
   title?: string;
   includeRecipeJson?: boolean;
   includeLogSummary?: boolean;
+  format?: "markdown" | "pdf";
+}
+
+export interface ReportMetadata {
+  title: string;
+  generatedAt: string; // UTC YYYY-MM-DD HH:mm:ss
+  jobCount: number;
 }
 
 function formatDuration(ms: number): string {
@@ -39,11 +54,11 @@ function statusEmoji(status: string): string {
  */
 export function generateMarkdownReport(records: JobHistoryRecord[], options: ReportOptions = {}): string {
   const {
-    title = "Olive Studio Optimization Report",
+    title = DEFAULT_REPORT_TITLE,
     includeRecipeJson = false,
     includeLogSummary = true,
   } = options;
-  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const now = utcTimestamp();
   const lines: string[] = [];
 
   lines.push(`# ${title}`);
@@ -110,29 +125,27 @@ export function generateMarkdownReport(records: JobHistoryRecord[], options: Rep
     lines.push("");
   });
 
-  // Comparison section (if multiple records)
-  if (records.length > 1) {
+  // Comparison section (only when 2+ completed jobs exist)
+  const completed = records.filter((r) => r.status === "completed");
+  if (completed.length >= 2) {
     lines.push("## Comparison");
     lines.push("");
 
-    const completed = records.filter((r) => r.status === "completed");
-    if (completed.length > 1) {
-      const fastest = completed.reduce((a, b) => (a.durationMs < b.durationMs ? a : b));
-      const smallest = completed
-        .filter((r) => r.vramEstimateGb != null)
-        .reduce(
-          (a, b) => ((a.vramEstimateGb ?? Infinity) < (b.vramEstimateGb ?? Infinity) ? a : b),
-          completed[0],
-        );
+    const fastest = completed.reduce((a, b) => (a.durationMs < b.durationMs ? a : b));
+    lines.push(`- **Fastest:** ${fastest.modelId} (${formatDuration(fastest.durationMs)})`);
 
-      lines.push(`- **Fastest:** ${fastest.modelId} (${formatDuration(fastest.durationMs)})`);
-      if (smallest.vramEstimateGb != null) {
-        lines.push(`- **Lowest VRAM:** ${smallest.modelId} (${smallest.vramEstimateGb.toFixed(2)} GB)`);
+    const withVram = completed.filter((r) => r.vramEstimateGb != null);
+    if (withVram.length > 0) {
+      const lowestVram = withVram.reduce(
+        (a, b) => ((a.vramEstimateGb ?? Infinity) < (b.vramEstimateGb ?? Infinity) ? a : b),
+      );
+      if (lowestVram.vramEstimateGb != null) {
+        lines.push(`- **Lowest VRAM:** ${lowestVram.modelId} (${lowestVram.vramEstimateGb.toFixed(2)} GB)`);
       }
-
-      const avgDuration = completed.reduce((sum, r) => sum + r.durationMs, 0) / completed.length;
-      lines.push(`- **Average duration:** ${formatDuration(Math.round(avgDuration))}`);
     }
+
+    const avgDuration = completed.reduce((sum, r) => sum + r.durationMs, 0) / completed.length;
+    lines.push(`- **Average duration:** ${formatDuration(Math.round(avgDuration))}`);
 
     lines.push("");
   }
@@ -145,6 +158,26 @@ export function generateMarkdownReport(records: JobHistoryRecord[], options: Rep
 }
 
 /**
+ * Get the standard report filename using current UTC date.
+ * Format: `olive-report-YYYY-MM-DD.md`
+ */
+export function getReportFilename(): string {
+  const date = new Date().toISOString().slice(0, 10);
+  return `olive-report-${date}.md`;
+}
+
+/**
+ * Extract metadata about a generated report.
+ */
+export function getReportMetadata(records: JobHistoryRecord[], title?: string): ReportMetadata {
+  return {
+    title: title ?? DEFAULT_REPORT_TITLE,
+    generatedAt: utcTimestamp(),
+    jobCount: records.length,
+  };
+}
+
+/**
  * Trigger a browser download of the Markdown report.
  */
 export function downloadMarkdownReport(records: JobHistoryRecord[], options: ReportOptions = {}): void {
@@ -153,7 +186,7 @@ export function downloadMarkdownReport(records: JobHistoryRecord[], options: Rep
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `olive-report-${new Date().toISOString().slice(0, 10)}.md`;
+  anchor.download = getReportFilename();
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -162,18 +195,60 @@ export function downloadMarkdownReport(records: JobHistoryRecord[], options: Rep
 
 /**
  * Open a print-friendly window for PDF export via browser print dialog.
+ * Catches popup-blocked scenario without throwing.
  */
 export function printReportAsPdf(records: JobHistoryRecord[], options: ReportOptions = {}): void {
   const markdown = generateMarkdownReport(records, options);
-  // Convert markdown to basic HTML for print
-  const html = markdownToPrintHtml(markdown);
-  const printWindow = window.open("", "_blank", "width=800,height=600");
-  if (!printWindow) return;
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  // Allow rendering before triggering print
-  setTimeout(() => printWindow.print(), 250);
+  triggerPdfExport(markdown);
+}
+
+/**
+ * Trigger PDF export via a print-friendly browser window.
+ * Opens a new window, renders markdown as HTML, then triggers window.print().
+ * Silently handles popup-blocked scenarios without throwing.
+ */
+export function triggerPdfExport(markdownContent: string): void {
+  const html = markdownToPrintHtml(markdownContent);
+  let printWindow: Window | null = null;
+  try {
+    printWindow = window.open("", "_blank", "width=800,height=600");
+  } catch {
+    // Popup blocked — silently fail per spec
+    return;
+  }
+  if (!printWindow) return; // Popup blocked
+
+  // Close the temporary window after printing (or if printing is cancelled/throws).
+  const closePrintWindow = () => {
+    try {
+      printWindow?.close();
+    } catch {
+      // Silently ignore close errors
+    }
+  };
+
+  // Trigger printing after the generated document loads, then close on completion.
+  printWindow.onload = () => {
+    try {
+      // afterprint fires after the print dialog closes (including cancel).
+      printWindow!.addEventListener("afterprint", closePrintWindow, { once: true });
+      printWindow!.print();
+      // Fallback: if afterprint never fires (e.g. older WebView), close after a delay.
+      setTimeout(closePrintWindow, 60_000);
+    } catch {
+      // Print failed — silently ignore and close
+      closePrintWindow();
+    }
+  };
+
+  try {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+  } catch {
+    // document.write failed (e.g. CSP restrictions) — silently close
+    closePrintWindow();
+  }
 }
 
 function markdownToPrintHtml(markdown: string): string {

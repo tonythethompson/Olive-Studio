@@ -317,7 +317,7 @@ export class CodexAppServerClient extends EventEmitter {
       clientInfo: {
         name: "olive-studio",
         title: "Olive Studio",
-        version: "0.4.0",
+        version: "0.5.0",
       },
       capabilities: null,
     });

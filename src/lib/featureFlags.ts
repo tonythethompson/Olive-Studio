@@ -1,10 +1,15 @@
 /**
  * Feature flag infrastructure for gating experimental features.
- * Flags are read from URL query params (?flagName=1) and localStorage.
- * Zero runtime cost when flags are off — checks are simple boolean reads.
+ * Flags are read from Vite env vars, Node process.env, URL query params (?flagName=1),
+ * and localStorage. Zero runtime cost when flags are off — checks are simple boolean reads.
  */
 
 export type FlagKey = "multiLora" | "lazyCatalog" | "batchComparison" | "reportExport";
+
+// ─── Named Flag Constants ────────────────────────────────────────────────────
+
+/** Constant for the MultiLoRA feature flag key. */
+export const FEATURE_FLAG_MULTI_LORA: FlagKey = "multiLora";
 
 interface FlagDefinition {
   key: FlagKey;
@@ -33,6 +38,45 @@ const FLAG_DEFINITIONS: FlagDefinition[] = [
 
 const STORAGE_PREFIX = "olive:flag:";
 
+/**
+ * Maps FlagKey → Vite env var name (VITE_FEATURE_<SCREAMING_SNAKE>).
+ * Only flags with an env-var mapping are listed here.
+ */
+const FLAG_ENV_VARS: Partial<Record<FlagKey, string>> = {
+  multiLora: "VITE_FEATURE_MULTI_LORA",
+};
+
+function parseFlagEnvValue(val: unknown): boolean | null {
+  if (typeof val === "boolean") return val;
+  if (val === "true" || val === "1") return true;
+  if (val === "false" || val === "0") return false;
+  return null;
+}
+
+function readNodeProcessEnv(envKey: string): unknown {
+  const nodeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process;
+  return nodeProcess?.env?.[envKey];
+}
+
+function readEnvVar(key: FlagKey): boolean | null {
+  try {
+    const envKey = FLAG_ENV_VARS[key];
+    if (!envKey) return null;
+    // Vite exposes env vars on import.meta.env at build time (client bundle).
+    if (typeof import.meta !== "undefined" && import.meta.env) {
+      const fromVite = parseFlagEnvValue(import.meta.env[envKey]);
+      if (fromVite !== null) return fromVite;
+    }
+    // Node / MCP / esbuild server: same VITE_* key via process.env.
+    const fromProcess = parseFlagEnvValue(readNodeProcessEnv(envKey));
+    if (fromProcess !== null) return fromProcess;
+  } catch {
+    // SSR / non-browser / env not available
+  }
+  return null;
+}
+
 function readUrlParam(key: string): boolean | null {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -58,7 +102,11 @@ function readStorage(key: string): boolean | null {
 
 /**
  * Check if a feature flag is enabled.
- * Priority: URL param > localStorage > default.
+ * Priority: URL param > localStorage > env var (Vite or Node) > default.
+ *
+ * The env var is the lowest-priority fallback so that runtime overrides
+ * (URL param, localStorage) take precedence over build-time settings,
+ * preserving runtime overrides when the environment flag is false.
  */
 export function isFeatureEnabled(key: FlagKey): boolean {
   const urlVal = readUrlParam(key);
@@ -67,8 +115,25 @@ export function isFeatureEnabled(key: FlagKey): boolean {
   const storageVal = readStorage(key);
   if (storageVal !== null) return storageVal;
 
+  const envVal = readEnvVar(key);
+  if (envVal !== null) return envVal;
+
   const def = FLAG_DEFINITIONS.find((d) => d.key === key);
   return def?.defaultEnabled ?? false;
+}
+
+/**
+ * Convenience check for the MultiLoRA feature flag.
+ *
+ * Enabled via:
+ * - Env var: `VITE_FEATURE_MULTI_LORA=true` (Vite `import.meta.env` or Node `process.env`)
+ * - URL param: `?multiLora=1`
+ * - localStorage key: `olive:flag:multiLora` set to `"1"`
+ *
+ * Defaults to `false` (disabled).
+ */
+export function isMultiLoraEnabled(): boolean {
+  return isFeatureEnabled(FEATURE_FLAG_MULTI_LORA);
 }
 
 /**

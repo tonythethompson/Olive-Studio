@@ -8,7 +8,7 @@
 
 ## Package Preparation
 
-- [ ] MSIX bundle produced by CI (`tauri-build.yml` on `v*` tags)
+- [ ] MSIX bundle produced by CI (`desktop-release.yml` on `v*` tags)
 - [ ] Package identity: `com.tonythethompson.olive-studio`
 - [ ] Publisher: `CN=TonyThompson` (must match Partner Center certificate)
 - [ ] Minimum OS version: Windows 10 1809 (10.0.17763.0)

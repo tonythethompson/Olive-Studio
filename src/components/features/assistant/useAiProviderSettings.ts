@@ -402,6 +402,31 @@ export function useAiProviderSettings({
     }
   };
 
+  /**
+   * Codex/Devin logout clears auth cookies/tokens but leaves `/api/ai/provider`
+   * pointing at that provider. Drop the runtime selection when it matches so
+   * pipeline review results are not left displayed as current.
+   */
+  const clearReviewAfterAuthLogout = async (providerId: "codex" | "devin") => {
+    const status = await fetchProviderStatus();
+    const activeId = normalizeUiProviderId(status.provider ?? "") ?? status.provider;
+    const shouldClearReview = status.source === "none" || activeId === providerId;
+    if (status.source !== "none" && activeId === providerId) {
+      try {
+        const r = await fetch("/api/ai/provider", { method: "DELETE" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        await fetchProviderStatus();
+      } catch {
+        // Auth is already gone. Drop local selection so reopening the sidebar
+        // does not re-trigger analysis against the logged-out provider.
+        setProviderStatus({ source: "none" });
+      }
+    }
+    if (shouldClearReview) {
+      onProviderCleared();
+    }
+  };
+
   const handleCodexLogin = async () => {
     setCodexBusy(true);
     setCodexMessage(null);
@@ -451,7 +476,8 @@ export function useAiProviderSettings({
       await fetch("/api/codex/logout", { method: "POST" });
       await refreshCodexAccount();
       setCodexMessage("Signed out of Codex.");
-      await fetchProviderStatus();
+      // Logout clears Codex auth only; runtime /ai/provider can still be "codex".
+      await clearReviewAfterAuthLogout("codex");
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -497,6 +523,7 @@ export function useAiProviderSettings({
         body: JSON.stringify({ provider: "devin", model: settingsModel || "swe-1-6" }),
       });
       await fetchProviderStatus();
+      onProviderActivated();
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -510,7 +537,8 @@ export function useAiProviderSettings({
       await fetch("/api/devin/logout", { method: "POST" });
       setDevinStatus({ signedIn: false });
       setDevinMessage("Signed out of Devin.");
-      await fetchProviderStatus();
+      // Logout clears Devin auth only; runtime /ai/provider can still be "devin".
+      await clearReviewAfterAuthLogout("devin");
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {

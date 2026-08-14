@@ -1,3 +1,6 @@
+packages:
+  - '.'
+
 allowBuilds:
   '@google/genai': true
   '@mendable/firecrawl-js': set this to true or false

@@ -31,6 +31,10 @@ vi.mock("./AuditPanel", () => ({
   AuditPanel: () => <div data-testid="audit-panel">AuditPanel</div>,
 }));
 
+vi.mock("./PipelineReview", () => ({
+  PipelineReview: () => <div data-testid="pipeline-review">PipelineReview</div>,
+}));
+
 import { AssistantSidebar } from "./AssistantSidebar";
 
 const defaultProps = {
@@ -53,15 +57,16 @@ describe("AssistantSidebar", () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
     // Sidebar should be visible with tab content
-    expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: /^Assistant$/ })).toBeTruthy();
+    expect(screen.getByTestId("pipeline-review")).toBeTruthy();
   });
 
-  it("renders tab navigation (audit, chat, settings)", async () => {
+  it("renders tab navigation (assistant, settings)", async () => {
     await act(async () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} />);
     });
-    expect(screen.getAllByText(/chat/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/settings/i).length).toBeGreaterThan(0);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual(["Assistant", "Settings"]);
   });
 
   it("calls onClose when close button is clicked", async () => {
@@ -79,7 +84,8 @@ describe("AssistantSidebar", () => {
     await act(async () => {
       renderWithProviders(<AssistantSidebar {...defaultProps} state={state} setState={mockSetState} />);
     });
-    expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: /^Assistant$/ })).toBeTruthy();
+    expect(screen.getByTestId("pipeline-review")).toBeTruthy();
   });
 
   it("sets aria-hidden when isOpen is false", async () => {
