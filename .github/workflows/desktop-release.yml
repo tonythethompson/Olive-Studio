@@ -86,6 +86,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          # Publishes installers + updater latest.json to this GitHub Release.
+          # Packaged clients read:
+          # https://github.com/tonythethompson/Olive-Studio/releases/latest/download/latest.json
+          # (Draft releases are invisible to /latest until published.)
           tagName: ${{ github.ref_name }}
           releaseName: "Olive Studio ${{ github.ref_name }}"
           releaseBody: "See CHANGELOG.md for details."

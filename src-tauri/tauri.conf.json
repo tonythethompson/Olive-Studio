@@ -47,7 +47,7 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://releases.olive-studio.dev/{{target}}/{{arch}}/{{current_version}}"
+        "https://github.com/tonythethompson/Olive-Studio/releases/latest/download/latest.json"
       ],
       "dialog": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRGNDU4OEY4N0Q2REVDRTQKUldUazdHMTkrSWhGVDFRRGg2MjJYa3lVWlQ0ajdpUHZDNnZtNHZENVhkWmIyQlFlRVJwTVZ2bTQK"
