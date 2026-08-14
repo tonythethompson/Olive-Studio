@@ -90,11 +90,19 @@ jobs:
             ldd "$NODE" || true
             exit 1
           fi
-          PORT=31415 "$NODE" "$PWD/dist/server.mjs" &
+          SERVER_MJS="$(find "$EXTRACT_DIR" -type f -path '*/dist/server.mjs' -print -quit)"
+          test -n "$SERVER_MJS"
+          SERVER_ROOT="$(dirname "$(dirname "$SERVER_MJS")")"
+          echo "Packaged server entry: $SERVER_MJS"
+          if [ ! -d "$SERVER_ROOT/node_modules" ] && [ ! -d "$SERVER_ROOT/dist/node_modules" ]; then
+            echo "ERROR: Packaged server dependencies (node_modules) not found next to $SERVER_MJS"
+            exit 1
+          fi
+          (cd "$SERVER_ROOT" && PORT=31415 "$NODE" "dist/server.mjs") &
           SERVER_PID=$!
           for _ in $(seq 1 20); do
             curl -fsS http://127.0.0.1:31415/api/health >/dev/null && exit 0
             sleep 1
           done
-          echo "Bundled Node runtime did not start the production server"
+          echo "Bundled Node runtime did not start the packaged production server"
           exit 1
