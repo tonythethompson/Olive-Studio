@@ -96,7 +96,8 @@ export function importPresetsJSON(
       typeof item === "object" &&
       item !== null &&
       typeof (item as CustomQuantPreset).label === "string" &&
-      typeof (item as CustomQuantPreset).fields === "object"
+      typeof (item as CustomQuantPreset).fields === "object" &&
+      (item as CustomQuantPreset).fields !== null
     ) {
       // Filter to known quantization field keys to prevent storing invalid data
       const rawFields = (item as CustomQuantPreset).fields as Record<string, unknown>;

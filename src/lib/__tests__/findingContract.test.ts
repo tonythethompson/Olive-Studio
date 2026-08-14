@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import fc from "fast-check";
 import { sanitizeChatActionPatch, chatPatchToUiState, type ChatActionPatch } from "@/lib/chatActions";
-import { commitUiStateUpdate, mergeUiState } from "@/lib/pipelineStateCommit";
+import { commitUiStateUpdateShallow as commitUiStateUpdate, mergeUiState } from "@/lib/pipelineStateCommit";
 import { usePipelineStore, createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import {
   executeNavigateAction,

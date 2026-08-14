@@ -8,6 +8,19 @@ describe("closeTruncatedJson", () => {
     expect(() => JSON.parse(closed)).not.toThrow();
     expect(JSON.parse(closed).score).toBe(55);
   });
+
+  it("drops a trailing lone backslash before closing the string", () => {
+    const raw = `{"score":55,"summary":"path C:\\`;
+    const closed = closeTruncatedJson(raw);
+    expect(() => JSON.parse(closed)).not.toThrow();
+    expect(JSON.parse(closed).score).toBe(55);
+  });
+
+  it("keeps a completed escape pair intact", () => {
+    const raw = `{"score":55,"summary":"path C:\\\\`;
+    const closed = closeTruncatedJson(raw);
+    expect(JSON.parse(closed).summary).toBe("path C:\\");
+  });
 });
 
 describe("parseAuditAnalysisReply", () => {

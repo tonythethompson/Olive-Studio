@@ -220,7 +220,12 @@ export function closeTruncatedJson(text: string): string {
     }
   }
 
-  if (unterminatedString) s += '"';
+  if (unterminatedString) {
+    // A trailing odd backslash would escape the quote we are about to append.
+    const trailingBackslashes = /\\+$/.exec(s);
+    if (trailingBackslashes && trailingBackslashes[0].length % 2 === 1) s = s.slice(0, -1);
+    s += '"';
+  }
   // Drop a dangling trailing comma before we close.
   s = s.replace(/,\s*$/, "");
   while (stack.length > 0) s += stack.pop();

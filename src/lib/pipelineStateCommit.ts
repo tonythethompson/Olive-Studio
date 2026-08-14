@@ -142,7 +142,10 @@ export const AUTO_COERCE_RULES: CrossPassCoercion[] = [
   {
     // QairtPipeline produces no ONNX graph → disable discrepancy check
     id: "qairt-discrepancy-incompatible",
-    applies: (passes) => passes.onnxDiscrepancyCheck && passes.qairtPipeline,
+    applies: (passes, provider) =>
+      passes.onnxDiscrepancyCheck &&
+      passes.qairtPipeline &&
+      (provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider"),
     fix: { onnxDiscrepancyCheck: false },
   },
   {
@@ -192,9 +195,8 @@ export function coercePassFields(passes: UIState["passes"], provider: IHVProvide
     next.peftMethod = "lora";
   }
 
-  if (next.trustRemoteCode === undefined) {
-    next.trustRemoteCode = false;
-  }
+  // Persisted state may carry non-boolean values; consent is boolean-only.
+  next.trustRemoteCode = next.trustRemoteCode === true;
 
   if (isReplacementExportPipeline(next)) {
     Object.assign(next, REPLACEMENT_PIPELINE_SUPPRESSED_PASSES);
@@ -233,7 +235,7 @@ export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
  * Sanitize pipeline state: enforce structural invariants without requiring
  * the heavy validation pipeline. Applies EP coercion + cross-pass auto-fixes.
  */
-export function sanitizePipelineState(state: UIState): UIState {
+export function sanitizePipelineStateShallow(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
       state.openvinoTargetDevice === "GPU" ||
@@ -251,9 +253,9 @@ export function sanitizePipelineState(state: UIState): UIState {
 }
 
 /**
- * The single state-commit entry point: merge + sanitize.
- * Used by pipelineStore.ts on every setState/replaceState/resetState.
+ * Shallow merge + sanitize. `commitUiStateUpdate` in pipelineValidation.ts stays
+ * the state-mutation entry point used by pipelineStore.ts.
  */
-export function commitUiStateUpdate(prev: UIState, partial: Partial<UIState>): UIState {
-  return sanitizePipelineState(mergeUiState(prev, partial));
+export function commitUiStateUpdateShallow(prev: UIState, partial: Partial<UIState>): UIState {
+  return sanitizePipelineStateShallow(mergeUiState(prev, partial));
 }

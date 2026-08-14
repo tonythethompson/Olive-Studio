@@ -25,7 +25,7 @@ import {
   hasSelectedModel,
 } from "@/lib/pipelineValidation";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
-import { commitUiStateUpdate as commitLight } from "@/lib/pipelineStateCommit";
+import { commitUiStateUpdateShallow as commitLight } from "@/lib/pipelineStateCommit";
 import type { UIState, IHVProvider } from "@/types";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -1068,6 +1068,21 @@ describe("commit-path auto-coercion parity", () => {
   it("disables QairtPipeline on non-QNN providers on commit", () => {
     const next = commitLight(baseState(), { passes: basePasses({ qairtPipeline: true }) });
     expect(next.passes.qairtPipeline).toBe(false);
+  });
+
+  it("keeps OnnxDiscrepancyCheck when QairtPipeline is cleared for a non-QNN provider", () => {
+    const next = commitLight(baseState(), {
+      passes: basePasses({ onnxDiscrepancyCheck: true, qairtPipeline: true }),
+    });
+    expect(next.passes.qairtPipeline).toBe(false);
+    expect(next.passes.onnxDiscrepancyCheck).toBe(true);
+  });
+
+  it("normalizes a persisted non-boolean trustRemoteCode to false", () => {
+    const next = commitLight(baseState(), {
+      passes: basePasses({ trustRemoteCode: "false" as unknown as boolean }),
+    });
+    expect(next.passes.trustRemoteCode).toBe(false);
   });
 
   it("keeps QairtPipeline on QNN and QNN ABI providers", () => {
