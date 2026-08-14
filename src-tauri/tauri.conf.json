@@ -66,7 +66,11 @@
     ],
     "resources": {
       "../dist": "dist",
-      "../scripts": "scripts"
+      "../scripts": "scripts",
+      "../olive-mcp-server/olive_mcp_server": "olive-mcp-server/olive_mcp_server",
+      "../olive-mcp-server/schemas": "olive-mcp-server/schemas",
+      "../olive-mcp-server/run.py": "olive-mcp-server/run.py",
+      "../olive-mcp-server/pyproject.toml": "olive-mcp-server/pyproject.toml"
     },
     "windows": {
       "certificateThumbprint": null,
