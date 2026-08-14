@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Settings, Monitor, Sun, Moon } from "lucide-react";
+import { Settings, Monitor, Sun, Moon, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore, type ThemePreference } from "@/lib/stores/preferencesStore";
 
@@ -9,7 +9,12 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; Icon: typeof Monit
   { value: "dark", label: "Dark", Icon: Moon },
 ];
 
-export function SettingsMenu() {
+interface SettingsMenuProps {
+  /** Replays the guided tour. The tour marks itself seen, so this is the anytime entry point. */
+  onTakeTour?: () => void;
+}
+
+export function SettingsMenu({ onTakeTour }: SettingsMenuProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -26,6 +31,12 @@ export function SettingsMenu() {
     },
     [setThemePreference],
   );
+
+  const handleTakeTour = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+    onTakeTour?.();
+  }, [onTakeTour]);
 
   // Focus first menu item when menu opens
   useEffect(() => {
@@ -105,6 +116,7 @@ export function SettingsMenu() {
         aria-label="Settings"
         aria-expanded={open}
         aria-haspopup="true"
+        data-tour="settings"
         className={cn(
           "p-1.5 rounded text-slate-500 hover:text-slate-200 transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric-blue",
@@ -118,7 +130,7 @@ export function SettingsMenu() {
         <div
           ref={menuRef}
           role="menu"
-          aria-label="Theme selection"
+          aria-label="Settings"
           className={cn(
             "absolute right-0 top-full mt-1 z-50 min-w-[160px]",
             "rounded border border-slate-700 bg-slate-900 shadow-lg py-1",
@@ -158,6 +170,31 @@ export function SettingsMenu() {
               )}
             </button>
           ))}
+          {onTakeTour && (
+            <>
+              <div className="my-1 border-t border-slate-700" role="separator" />
+              <button
+                ref={(el) => { itemRefs.current[THEME_OPTIONS.length] = el; }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-slate-300",
+                  "hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none",
+                )}
+                onClick={handleTakeTour}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleTakeTour();
+                  }
+                }}
+              >
+                <GraduationCap className="h-3.5 w-3.5" />
+                <span>Take the tour</span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

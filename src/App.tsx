@@ -205,6 +205,25 @@ function Dashboard() {
     setTriggerAiAudit(true);
   };
 
+  // Lazy-load driver.js so the tour (and its CSS) stays out of the main bundle.
+  const startTour = useCallback(() => {
+    void import("@/lib/tour").then(({ startGuidedTour }) =>
+      startGuidedTour(() => usePreferencesStore.getState().markTourSeen()),
+    );
+  }, []);
+
+  // Auto-offer the guided tour once: on a true first run it starts right after
+  // the welcome modal closes; on installs that already dismissed the welcome
+  // screen it starts on the first launch that includes the tour. Either way it
+  // only happens until the tour has been seen (finished or skipped) — after
+  // that it is replayable from Settings → Take the tour.
+  useEffect(() => {
+    if (welcomeOpen) return;
+    if (usePreferencesStore.getState().tourSeen) return;
+    const timer = window.setTimeout(startTour, 600);
+    return () => window.clearTimeout(timer);
+  }, [welcomeOpen, startTour]);
+
   const scrollToSection = useCallback(
     (id: ActiveView) => {
       if (isOliveRunning && id !== "execute" && id !== "playground") return;
@@ -476,9 +495,10 @@ function Dashboard() {
                   <AgentAccessControls compact={headerCompact} />
                 </div>
                 <div ref={headerRightRef} className="justify-self-end flex items-center gap-2">
-                  <SettingsMenu />
+                  <SettingsMenu onTakeTour={startTour} />
                   <button
                     type="button"
+                    data-tour="assistant"
                     onClick={() => setIsAiSidebarOpen((open) => !open)}
                     aria-label={isAiSidebarOpen ? "Close Assistant" : "Open Assistant"}
                     aria-expanded={isAiSidebarOpen}
