@@ -4,7 +4,6 @@
  * outside the supported range (3.10-3.13; 3.14+ is unsupported), mcp is not
  * installed, or the installed mcp major version is >= 2 (2.x removes
  * mcp.server.fastmcp). Warn-only — never fails the session.
->>>>>>> c16113f (Improve MCP setup Python/index handling)
  */
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -35,7 +34,6 @@ if (minor === null || minor < 10 || minor > 13) {
 }
 
 const r = spawnSync(python, ["-c", "import importlib.metadata; print(importlib.metadata.version('mcp'))"], {
->>>>>>> c16113f (Improve MCP setup Python/index handling)
   encoding: "utf8",
   env: { ...process.env, PYTHONPATH: mcpDir },
 });
