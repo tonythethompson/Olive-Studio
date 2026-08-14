@@ -43,7 +43,6 @@ def _headers() -> dict[str, str]:
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    return headers
 
 
 def _request_error(response: requests.Response) -> None:
