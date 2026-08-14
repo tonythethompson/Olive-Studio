@@ -79,6 +79,35 @@ export async function consumeInstallNdjson(
     throw new Error(data.error ?? (res.status === 404 ? "API route not found." : `HTTP ${res.status}`));
   }
 
+  // For non-2xx responses, attempt to parse as a single JSON error object before streaming
+  if (!res.ok) {
+    const bodyText = await res.text();
+    try {
+      const data = JSON.parse(bodyText) as { ok?: boolean; error?: string };
+      if (data.ok === false && data.error) {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      // If it's already an Error from the JSON parse above, rethrow
+      if (err instanceof Error && err.message !== "Unexpected token" && err.message !== "Unexpected end of JSON input") {
+        throw err;
+      }
+      // Otherwise fall through to NDJSON parsing below
+    }
+    // If we didn't throw above, create a new response with the body text for NDJSON parsing
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(bodyText));
+        controller.close();
+      },
+    });
+    res = new Response(stream, { status: res.status, headers: res.headers });
+  }
+
+  if (!res.body) {
+    throw new Error("Response body is missing after stream creation");
+  }
+
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   const acc: InstallStreamAcc = { finalOk: null, lastLog: fallbackError };

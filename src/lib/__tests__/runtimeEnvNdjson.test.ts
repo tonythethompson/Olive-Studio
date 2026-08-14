@@ -80,4 +80,43 @@ describe("runtimeEnvNdjson", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBe("pip failed");
   });
+
+  it("parses non-2xx non-NDJSON JSON error response", async () => {
+    const body = JSON.stringify({ ok: false, error: "Rate limit exceeded" });
+    const res = new Response(body, {
+      status: 429,
+      headers: { "content-type": "application/json" },
+    });
+    await expect(consumeInstallNdjson(res, "Could not install Python.")).rejects.toThrow("Rate limit exceeded");
+  });
+
+  it("parses non-2xx non-NDJSON JSON error response with 403", async () => {
+    const body = JSON.stringify({ ok: false, error: "Forbidden: insufficient permissions" });
+    const res = new Response(body, { status: 403 });
+    await expect(consumeInstallNdjson(res, "Could not install Python.")).rejects.toThrow(
+      "Forbidden: insufficient permissions",
+    );
+  });
+
+  it("delivers trailing log/event when stream ends with unterminated final NDJSON line", async () => {
+    const logs: string[] = [];
+    const body = '{"type":"log","message":"Installing…"}\n{"type":"done","ok":true,"message":"ready"}';
+    const res = new Response(body, { status: 200 });
+    const result = await consumeInstallNdjson(res, "Could not install Python.", (m) => logs.push(m));
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe("ready");
+    expect(logs).toEqual(["Installing…"]);
+  });
+
+  it("preserves downloadUrl metadata on a failing done event", async () => {
+    const body = [
+      '{"type":"log","message":"Installing…"}\n',
+      '{"type":"done","ok":false,"error":"winget missing","downloadUrl":"https://example.com/python.exe"}\n',
+    ].join("");
+    const res = new Response(body, { status: 200 });
+    const result = await consumeInstallNdjson(res, "Could not install Python.");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("winget missing");
+    expect(result.downloadUrl).toBe("https://example.com/python.exe");
+  });
 });
