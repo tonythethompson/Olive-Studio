@@ -4,7 +4,7 @@ import { validatePassParameters } from "@/lib/passParameterValidation";
 import { validateMcpParams, clearParamCache, type McpParamWarning } from "@/lib/mcpParamValidation";
 import { useMcpDiagnostic } from "@/lib/hooks/useMcpDiagnostic";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
-import { OLIVE_EXPAND_VALIDATION, OLIVE_EMPHASIZE_VALIDATION } from "@/lib/pipelineNavigation";
+import { OLIVE_EXPAND_VALIDATION, OLIVE_EMPHASIZE_VALIDATION, takePendingExpandValidation, takePendingEmphasizeValidation } from "@/lib/pipelineNavigation";
 import { buildPipelineSteps } from "./graphLayout";
 import { UIState, type IHVProvider } from "@/types";
 import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Info, RefreshCw, Zap } from "lucide-react";
@@ -97,19 +97,30 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const [showCompatDetails, setShowCompatDetails] = useState(false);
 
   useEffect(() => {
-    const handleExpand = () => setExpanded(true);
+    const handleExpand = () => {
+      takePendingExpandValidation();
+      setExpanded(true);
+    };
     window.addEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
+    // Catch expand requests that fired before this listener registered
+    // (common when Resolve Issues races a lazy Execute mount).
+    if (takePendingExpandValidation()) setExpanded(true);
     return () => window.removeEventListener(OLIVE_EXPAND_VALIDATION, handleExpand);
   }, []);
 
   useEffect(() => {
     let emphasizeTimer: number | undefined;
     const handleEmphasize = () => {
+      takePendingEmphasizeValidation();
       if (emphasizeTimer !== undefined) window.clearTimeout(emphasizeTimer);
       setEmphasized(true);
       emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
     };
     window.addEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
+    if (takePendingEmphasizeValidation()) {
+      setEmphasized(true);
+      emphasizeTimer = window.setTimeout(() => setEmphasized(false), 1200);
+    }
     return () => {
       window.removeEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
       if (emphasizeTimer !== undefined) window.clearTimeout(emphasizeTimer);

@@ -2,16 +2,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   attemptPipelineNavigate,
+  expandPipelineValidation,
+  emphasizeValidationPanel,
   isPipelineViewId,
   navigatePipeline,
   OLIVE_PIPELINE_NAV_BLOCKED,
   OLIVE_PIPELINE_NAVIGATE,
+  OLIVE_EXPAND_VALIDATION,
+  OLIVE_EMPHASIZE_VALIDATION,
   PIPELINE_NAV_BLOCKED_MESSAGE,
   setPipelineOliveRunning,
+  takePendingExpandValidation,
+  takePendingEmphasizeValidation,
 } from "@/lib/pipelineNavigation";
 
 afterEach(() => {
   setPipelineOliveRunning(false);
+  takePendingExpandValidation();
+  takePendingEmphasizeValidation();
 });
 
 describe("pipelineNavigation", () => {
@@ -88,5 +96,27 @@ describe("pipelineNavigation", () => {
 
     window.removeEventListener(OLIVE_PIPELINE_NAVIGATE, navigate);
     window.removeEventListener(OLIVE_PIPELINE_NAV_BLOCKED, blocked);
+  });
+
+  it("keeps expand requests pending when no listener is registered yet", () => {
+    expandPipelineValidation();
+    expect(takePendingExpandValidation()).toBe(true);
+    expect(takePendingExpandValidation()).toBe(false);
+  });
+
+  it("clears pending expand when a live listener handles the event", () => {
+    const listener = () => {
+      takePendingExpandValidation();
+    };
+    window.addEventListener(OLIVE_EXPAND_VALIDATION, listener);
+    expandPipelineValidation();
+    expect(takePendingExpandValidation()).toBe(false);
+    window.removeEventListener(OLIVE_EXPAND_VALIDATION, listener);
+  });
+
+  it("keeps emphasize requests pending when no listener is registered yet", () => {
+    emphasizeValidationPanel();
+    expect(takePendingEmphasizeValidation()).toBe(true);
+    expect(takePendingEmphasizeValidation()).toBe(false);
   });
 });

@@ -88,12 +88,37 @@ export const navigatePipeline = (id: PipelineViewId) => {
   window.dispatchEvent(new CustomEvent(OLIVE_PIPELINE_NAVIGATE, { detail: id }));
 };
 
+let pendingExpandValidation = false;
+let pendingEmphasizeValidation = false;
+
 /** Expand the recipe validation issue panel from a global status surface. */
 export function expandPipelineValidation(): void {
+  pendingExpandValidation = true;
   window.dispatchEvent(new CustomEvent(OLIVE_EXPAND_VALIDATION));
 }
 
 /** Trigger a brief in-place highlight on the recipe validation panel. */
 export function emphasizeValidationPanel(): void {
+  pendingEmphasizeValidation = true;
   window.dispatchEvent(new CustomEvent(OLIVE_EMPHASIZE_VALIDATION));
+}
+
+/**
+ * Consumes a pending expand request that may have fired before the panel
+ * registered its event listener (e.g. MutationObserver on lazy mount).
+ */
+export function takePendingExpandValidation(): boolean {
+  if (!pendingExpandValidation) return false;
+  pendingExpandValidation = false;
+  return true;
+}
+
+/**
+ * Consumes a pending emphasize request that may have fired before the panel
+ * registered its event listener.
+ */
+export function takePendingEmphasizeValidation(): boolean {
+  if (!pendingEmphasizeValidation) return false;
+  pendingEmphasizeValidation = false;
+  return true;
 }
