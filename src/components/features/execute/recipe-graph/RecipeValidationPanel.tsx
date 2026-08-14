@@ -105,7 +105,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   useEffect(() => {
     const handleEmphasize = () => {
       setEmphasized(true);
-      window.setTimeout(() => setEmphasized(false), 900);
+      window.setTimeout(() => setEmphasized(false), 1200);
     };
     window.addEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
     return () => window.removeEventListener(OLIVE_EMPHASIZE_VALIDATION, handleEmphasize);
@@ -360,7 +360,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
       data-testid="recipe-validation-panel"
       className={`rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden transition-all duration-300 ease-out ${
         emphasized
-          ? "ring-2 ring-electric-blue ring-offset-4 ring-offset-slate-950 bg-electric-blue/20 border-electric-blue"
+          ? "ring-2 ring-sky-400 ring-offset-4 ring-offset-slate-950 bg-sky-400/15 border-sky-400 shadow-[0_0_24px_rgba(56,189,248,0.35)]"
           : ""
       }`}
     >

@@ -226,21 +226,25 @@ function Dashboard() {
   const handleResolveIssues = useCallback(() => {
     const panel = document.getElementById("recipe-validation-panel");
     const main = mainRef.current;
-    if (panel && main) {
+    const isVisible = (() => {
+      if (!panel || !main) return false;
       const mainRect = main.getBoundingClientRect();
       const panelRect = panel.getBoundingClientRect();
       const visibleHeight = Math.max(0, Math.min(panelRect.bottom, mainRect.bottom) - Math.max(panelRect.top, mainRect.top));
-      if (visibleHeight > panelRect.height * 0.5) {
-        expandPipelineValidation();
-        emphasizeValidationPanel();
-        return;
-      }
+      return visibleHeight > panelRect.height * 0.5;
+    })();
+
+    if (isVisible) {
+      expandPipelineValidation();
+      emphasizeValidationPanel();
+      return;
     }
+
     scrollToSection("execute");
     window.setTimeout(() => {
       expandPipelineValidation();
-      emphasizeValidationPanel();
       document.getElementById("recipe-validation-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => emphasizeValidationPanel(), 600);
     }, 400);
   }, [scrollToSection]);
 
