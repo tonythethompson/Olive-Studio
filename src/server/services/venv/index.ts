@@ -11,6 +11,8 @@ import {
 import { isGpuExecutionProvider } from "../../../lib/oliveGpuRuntime.ts";
 import { envWithPrependedPaths } from "../../../lib/tensorrtDeps.ts";
 import { getNativeGpuLibPaths } from "./gpu.ts";
+import { pythonInstallGuidance } from "../../../lib/pythonPrerequisite.ts";
+import { brewExecutable, readOsReleaseText } from "./installPython.ts";
 import { findSystemPython, getPythonVersion, isSupportedOlivePython } from "./systemPython.ts";
 import {
   detachAnyFamilyVenvListener,
@@ -95,6 +97,12 @@ export async function getRuntimeEnvStatus() {
     venvOnUserPath,
   });
   const def = dual.families.default;
+  const pythonPrerequisite = systemPython
+    ? null
+    : pythonInstallGuidance(process.platform, {
+        brewPresent: Boolean(brewExecutable()),
+        osReleaseText: process.platform === "linux" ? readOsReleaseText() : "",
+      });
 
   return {
     // Legacy single-venv fields (default family) — keep for existing UI.
@@ -108,6 +116,7 @@ export async function getRuntimeEnvStatus() {
     venvOnUserPath,
     platform: process.platform,
     hint: dual.hint,
+    pythonPrerequisite,
     // Additive dual-family status (PR1).
     families: dual.families,
   };

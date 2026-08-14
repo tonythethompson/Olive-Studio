@@ -20,6 +20,7 @@ import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-r
 import { probeOpenVino } from "./src/server/services/olive/openvino.ts";
 import { probeQnn } from "./src/server/services/olive/qnn.ts";
 import { staticServeRateLimit } from "./src/server/middleware/rateLimit.ts";
+import { corsMiddleware } from "./src/server/middleware/cors.ts";
 
 // After imports: hydrate .env / .env.local / Windows User+Machine API keys into process.env.
 loadStudioEnv();
@@ -67,41 +68,7 @@ export function isServerReady(): boolean {
 }
 
 // CORS early — browser + Tauri webviews (same-origin normally; helps desktop edge cases)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  let allowed = false;
-
-  if (!origin) {
-    allowed = true;
-  } else if (origin === "tauri://localhost" || origin === "https://tauri.localhost") {
-    // Exact match for Tauri origins
-    allowed = true;
-  } else {
-    // Parse URL to validate hostname for http origins (any port allowed for local/Tauri)
-    try {
-      const url = new URL(origin);
-      const hostname = url.hostname;
-
-      // Allow localhost and 127.0.0.1 with any port for dev/Tauri
-      if (hostname === "localhost" || hostname === "127.0.0.1") {
-        allowed = true;
-      }
-    } catch {
-      // Invalid URL, reject
-      allowed = false;
-    }
-  }
-
-  if (allowed) {
-    res.setHeader("Access-Control-Allow-Origin", origin || "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  }
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  next();
-});
+app.use(corsMiddleware);
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10) || 3000;
 

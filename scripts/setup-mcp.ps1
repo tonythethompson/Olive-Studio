@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     Creates the venv, installs core + dev + semantic dependencies, verifies the
-    server starts cleanly, and optionally rebuilds the semantic search indexes.
+    server starts cleanly, and rebuilds semantic search indexes when stale
+    (set OLIVE_MCP_REBUILD_INDEX=1 or pass -RebuildIndex to force).
 
     Run from the repo root:
       .\scripts\setup-mcp.ps1
@@ -34,25 +35,107 @@ Write-Host ""
 
 # ── Step 1: Check Python is available ──────────────────────────────────────────
 Write-Host "[1/5] Checking Python..." -ForegroundColor Yellow
+$pythonMinMinor = 10
+$pythonMaxMinor = 13
 $pythonCmd = $null
-foreach ($cmd in @("python", "python3")) {
+$pythonPrefixArgs = @()
+
+function Test-SupportedPython {
+    param(
+        [Parameter(Mandatory = $true)][string]$Command,
+        [string[]]$PrefixArgs = @()
+    )
     try {
-        $ver = & $cmd --version 2>&1
+        $ver = & $Command @PrefixArgs --version 2>&1 | Out-String
         if ($ver -match "Python 3\.(\d+)") {
             $minor = [int]$Matches[1]
-            if ($minor -ge 10) {
-                $pythonCmd = $cmd
-                Write-Host "      Found: $ver" -ForegroundColor Green
-                break
-            }
+            return ($minor -ge $script:pythonMinMinor -and $minor -le $script:pythonMaxMinor)
         }
     } catch {
-        Write-Debug "Python candidate '$cmd' check failed: $_"
+        Write-Debug "Python candidate '$Command' check failed: $_"
+    }
+    return $false
+}
+
+function New-McpVenv {
+    & $pythonCmd @pythonPrefixArgs -m venv $VenvDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "      ERROR: Failed to create venv." -ForegroundColor Red
+        exit 1
     }
 }
+
+if ($env:OLIVE_STUDIO_PYTHON) {
+    $envArgs = @()
+    if ($env:OLIVE_STUDIO_PYTHON_ARGS) {
+        $envArgs = @($env:OLIVE_STUDIO_PYTHON_ARGS -split "`n" | Where-Object { $_ })
+    }
+    if (Test-SupportedPython -Command $env:OLIVE_STUDIO_PYTHON -PrefixArgs $envArgs) {
+        $pythonCmd = $env:OLIVE_STUDIO_PYTHON
+        $pythonPrefixArgs = $envArgs
+        $ver = & $pythonCmd @pythonPrefixArgs --version 2>&1 | Out-String
+        Write-Host "      Found: $($ver.Trim())" -ForegroundColor Green
+    }
+}
+
 if (-not $pythonCmd) {
-    Write-Host "      ERROR: Python >= 3.10 not found on PATH." -ForegroundColor Red
-    Write-Host "      Install Python 3.10+ and ensure 'python' is on PATH." -ForegroundColor Red
+    foreach ($cmd in @("python", "python3.13", "python3.12", "python3.11", "python3.10", "python3")) {
+        if (Test-SupportedPython -Command $cmd) {
+            $pythonCmd = $cmd
+            $ver = & $cmd --version 2>&1 | Out-String
+            Write-Host "      Found: $($ver.Trim())" -ForegroundColor Green
+            break
+        }
+    }
+}
+
+if (-not $pythonCmd) {
+    foreach ($flag in @("-3.13", "-3.12", "-3.11", "-3.10")) {
+        if (Test-SupportedPython -Command "py" -PrefixArgs @($flag)) {
+            $pythonCmd = "py"
+            $pythonPrefixArgs = @($flag)
+            $ver = & py $flag --version 2>&1 | Out-String
+            Write-Host "      Found: $($ver.Trim())" -ForegroundColor Green
+            break
+        }
+    }
+}
+
+if (-not $pythonCmd) {
+    $uvBases = @()
+    if ($env:LOCALAPPDATA) { $uvBases += Join-Path $env:LOCALAPPDATA "uv\python" }
+    if ($HOME) {
+        $uvBases += Join-Path $HOME ".local\share\uv\python"
+        $uvBases += Join-Path $HOME "Library/Application Support/uv/python"
+    }
+    foreach ($base in $uvBases) {
+        if (-not (Test-Path $base)) { continue }
+        foreach ($minor in @(13, 12, 11, 10)) {
+            $dirs = Get-ChildItem -Path $base -Directory -Filter "cpython-3.$minor.*" -ErrorAction SilentlyContinue |
+                Sort-Object -Property Name -Descending
+            foreach ($dir in $dirs) {
+                $bin = Join-Path $dir.FullName "python.exe"
+                if (-not (Test-Path $bin)) {
+                    $bin = Join-Path $dir.FullName (Join-Path "bin" "python3.$minor")
+                }
+                if ((Test-Path $bin) -and (Test-SupportedPython -Command $bin)) {
+                    $pythonCmd = $bin
+                    $ver = & $bin --version 2>&1 | Out-String
+                    Write-Host "      Found: $($ver.Trim()) ($bin)" -ForegroundColor Green
+                    break
+                }
+            }
+            if ($pythonCmd) { break }
+        }
+        if ($pythonCmd) { break }
+    }
+}
+
+if (-not $pythonCmd) {
+    Write-Host "      ERROR: Python 3.10-3.13 not found on PATH." -ForegroundColor Red
+    Write-Host "      Install Python 3.10-3.13 (3.12 recommended) and ensure 'python' is on PATH." -ForegroundColor Red
+    Write-Host "      Download: https://www.python.org/downloads/windows/" -ForegroundColor DarkGray
+    Write-Host "      Or:       winget install -e --id Python.Python.3.12" -ForegroundColor DarkGray
     exit 1
 }
 
@@ -69,8 +152,9 @@ if (Test-Path $VenvDir) {
     } else {
         $ver = & $existingPy --version 2>&1
         if ($ver -match "Python 3\.(\d+)") {
-            if ([int]$Matches[1] -lt 10) {
-                Write-Host "      Existing venv is $ver (< 3.10); recreating..." -ForegroundColor Yellow
+            $existingMinor = [int]$Matches[1]
+            if ($existingMinor -lt $pythonMinMinor -or $existingMinor -gt $pythonMaxMinor) {
+                Write-Host "      Existing venv is $ver (need 3.10-3.13); recreating..." -ForegroundColor Yellow
                 $recreate = $true
             }
         } else {
@@ -80,22 +164,14 @@ if (Test-Path $VenvDir) {
     if ($recreate) {
         Remove-Item -Recurse -Force $VenvDir
         Write-Host "      Creating venv at: $VenvDir"
-        & $pythonCmd -m venv $VenvDir
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "      ERROR: Failed to create venv." -ForegroundColor Red
-            exit 1
-        }
+        New-McpVenv
         Write-Host "      Created." -ForegroundColor Green
     } else {
         Write-Host "      Venv already exists at: $VenvDir" -ForegroundColor DarkGray
     }
 } else {
     Write-Host "      Creating venv at: $VenvDir"
-    & $pythonCmd -m venv $VenvDir
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "      ERROR: Failed to create venv." -ForegroundColor Red
-        exit 1
-    }
+    New-McpVenv
     Write-Host "      Created." -ForegroundColor Green
 }
 
@@ -148,22 +224,29 @@ if (-not $SkipVerify) {
     Write-Host "[4/5] Skipping verification (--SkipVerify)." -ForegroundColor DarkGray
 }
 
-# ── Step 5: Optionally rebuild semantic indexes ────────────────────────────────
+# ── Step 5: Build semantic search indexes (skip when hashes match) ─────────────
+Write-Host "[5/5] Building semantic search indexes (skipped when already up to date)..." -ForegroundColor Yellow
+Write-Host "      (embeds KB docs via sentence-transformers; a fresh build may take a few minutes)" -ForegroundColor DarkGray
+$pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
+if (-not (Test-Path $pythonVenv)) {
+    $pythonVenv = Join-Path $VenvDir "bin\python"
+}
+$indexScript = Join-Path $McpDir (Join-Path "scripts" "build_kb_index.py")
 if ($RebuildIndex) {
-    Write-Host "[5/5] Rebuilding semantic search indexes..." -ForegroundColor Yellow
-    $pythonVenv = Join-Path $VenvDir "Scripts\python.exe"
-    if (-not (Test-Path $pythonVenv)) {
-        $pythonVenv = Join-Path $VenvDir "bin\python"
-    }
-    & $pythonVenv (Join-Path $McpDir "scripts\build_kb_index.py")
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "      WARNING: Index rebuild failed. Shipped indexes will be used." -ForegroundColor Yellow
-    } else {
-        Write-Host "      Indexes rebuilt successfully." -ForegroundColor Green
-    }
+    $env:OLIVE_MCP_REBUILD_INDEX = "1"
+}
+$prevEapIndex = $ErrorActionPreference
+try {
+    $ErrorActionPreference = "Continue"
+    & $pythonVenv $indexScript
+    $indexExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $prevEapIndex
+}
+if ($indexExit -eq 0) {
+    Write-Host "      Semantic search indexes are up to date." -ForegroundColor Green
 } else {
-    Write-Host "[5/5] Skipping index rebuild (use -RebuildIndex to regenerate)." -ForegroundColor DarkGray
-    Write-Host "      Pre-built indexes ship with the repo and work out of the box." -ForegroundColor DarkGray
+    Write-Host "      WARNING: Index build failed. Shipped indexes will be used." -ForegroundColor Yellow
 }
 
 Write-Host ""
