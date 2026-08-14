@@ -26,7 +26,10 @@ export async function getInstalledModuleVersion(
   try {
     const { stdout } = await execFileAsync(
       python,
-      ["-c", `import ${moduleName}; print(${moduleName}.${attr})`],
+      [
+        "-c",
+        `import importlib; m = importlib.import_module(${JSON.stringify(moduleName)}); print(getattr(m, ${JSON.stringify(attr)}))`,
+      ],
       { timeout: PROBE_TIMEOUT_MS },
     );
     return stdout.trim() || null;
