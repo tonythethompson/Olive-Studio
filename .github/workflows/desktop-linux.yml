@@ -78,8 +78,18 @@ jobs:
           NODE_REL="$(dpkg-deb -c "$DEB" | awk '$NF ~ /resources\/node-runtime\/node$/ { sub(/^\.\//, "", $NF); print $NF; exit }')"
           test -n "$NODE_REL"
           NODE="$EXTRACT_DIR/$NODE_REL"
+          echo "Packaged Node path: $NODE"
+          ls -l "$NODE"
           test -x "$NODE"
-          "$NODE" --version
+          if NODE_VERSION="$("$NODE" --version 2>&1)"; then
+            echo "Packaged Node version: $NODE_VERSION"
+          else
+            STATUS=$?
+            echo "Packaged Node failed to execute (status $STATUS): $NODE_VERSION"
+            file "$NODE" || true
+            ldd "$NODE" || true
+            exit 1
+          fi
           PORT=31415 "$NODE" "$PWD/dist/server.mjs" &
           SERVER_PID=$!
           for _ in $(seq 1 20); do
