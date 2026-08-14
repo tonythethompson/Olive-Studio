@@ -203,7 +203,12 @@ function parseBridgeAdapters(raw: unknown): BridgeAdaptersParseResult {
     if (!parsed.ok) return parsed;
     if (parsed.adapter) {
       out.push(parsed.adapter);
-      if (out.length >= MAX_BRIDGE_ADAPTERS) break;
+      if (out.length > MAX_BRIDGE_ADAPTERS) {
+        return {
+          ok: false,
+          reason: `Adapter count exceeds maximum of ${MAX_BRIDGE_ADAPTERS}`,
+        };
+      }
     }
   }
   return { ok: true, adapters: out.length > 0 ? out : undefined };
