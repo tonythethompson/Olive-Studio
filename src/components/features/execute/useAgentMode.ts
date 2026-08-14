@@ -10,7 +10,7 @@
  * Requirements: 6.1, 6.3, 6.4, 6.6, 7.5
  */
 
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import {
   appendEntry as appendEntryFIFO,
@@ -116,11 +116,11 @@ interface SubmitResolutionCtx {
   thisGen: number;
   resp: Response;
   data: { jobId?: string; error?: string };
-  runGenerationRef: MutableRefObject<number>;
-  stopRequestedRef: MutableRefObject<boolean>;
-  jobIdRef: MutableRefObject<string | undefined>;
-  stepCountRef: MutableRefObject<number>;
-  startedAtRef: MutableRefObject<string | undefined>;
+  runGenerationRef: RefObject<number>;
+  stopRequestedRef: RefObject<boolean>;
+  jobIdRef: RefObject<string | undefined>;
+  stepCountRef: RefObject<number>;
+  startedAtRef: RefObject<string | undefined>;
   setJobId: (id: string | undefined) => void;
   setAgentRunning: (running: boolean) => void;
   setOutcome: (outcome: AgentOutcome) => void;
@@ -163,7 +163,7 @@ async function resolveAgentSubmitResponse(ctx: SubmitResolutionCtx): Promise<voi
       resolvePendingStop(true, thisGen);
       return;
     }
-    let cancelOk = false;
+    let cancelOk: boolean;
     try {
       cancelOk = (await requestAgentCancelWithTimeout(data.jobId)).ok;
     } catch {
@@ -205,7 +205,7 @@ async function resolveAgentSubmitResponse(ctx: SubmitResolutionCtx): Promise<voi
       resolvePendingStop(true, thisGen);
       return;
     }
-    let cancelOk = false;
+    let cancelOk: boolean;
     try {
       cancelOk = (await requestAgentCancelWithTimeout(data.jobId)).ok;
     } catch {

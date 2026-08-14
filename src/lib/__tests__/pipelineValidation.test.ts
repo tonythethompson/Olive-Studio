@@ -25,6 +25,7 @@ import {
   hasSelectedModel,
 } from "@/lib/pipelineValidation";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import { commitUiStateUpdate as commitLight } from "@/lib/pipelineStateCommit";
 import type { UIState, IHVProvider } from "@/types";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -1020,5 +1021,82 @@ describe("0.13.0 validation rules", () => {
       const result = getPipelineValidation(state);
       expect(result.issues.some((i) => i.id === "model-source-not-set")).toBe(false);
     });
+  });
+});
+
+// ─── Commit-path coercion parity ─────────────────────────────────────────────
+
+// Guards against drift between the lightweight commit path
+// (pipelineStateCommit.AUTO_COERCE_RULES) and the autoCoerce entries of
+// CROSS_PASS_RULES: every silent coercion must fire on commitUiStateUpdate.
+describe("commit-path auto-coercion parity", () => {
+  it("coerces LoRA + base quant to QLoRA on commit", () => {
+    const next = commitLight(baseState(), {
+      passes: basePasses({ peft: true, peftMethod: "lora", quantization: true, quantPrecision: "int8" }),
+    });
+    expect(next.passes.peftMethod).toBe("qlora");
+  });
+
+  it("coerces INT4 + pruning to INT8 on commit", () => {
+    const next = commitLight(baseState(), {
+      passes: basePasses({ pruning: true, quantization: true, quantPrecision: "int4" }),
+    });
+    expect(next.passes.quantPrecision).toBe("int8");
+  });
+
+  it("disables ONNX transforms for OpenVINO conversion on commit", () => {
+    const next = commitLight(baseState({ ihvProvider: "OpenVINOExecutionProvider" }), {
+      passes: basePasses({ conversion: true, conversionFormat: "openvino", onnxTransforms: true }),
+    });
+    expect(next.passes.onnxTransforms).toBe(false);
+  });
+
+  it("disables splitting when QAT is selected on commit", () => {
+    const next = commitLight(baseState(), {
+      passes: basePasses({ splitting: true, quantization: true, quantMethod: "qat" }),
+    });
+    expect(next.passes.splitting).toBe(false);
+  });
+
+  it("disables OnnxDiscrepancyCheck alongside QairtPipeline on commit", () => {
+    const next = commitLight(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      passes: basePasses({ onnxDiscrepancyCheck: true, qairtPipeline: true }),
+    });
+    expect(next.passes.onnxDiscrepancyCheck).toBe(false);
+  });
+
+  it("disables QairtPipeline on non-QNN providers on commit", () => {
+    const next = commitLight(baseState(), { passes: basePasses({ qairtPipeline: true }) });
+    expect(next.passes.qairtPipeline).toBe(false);
+  });
+
+  it("keeps QairtPipeline on QNN and QNN ABI providers", () => {
+    for (const provider of ["QNNExecutionProvider", "QnnAbiExecutionProvider"] as IHVProvider[]) {
+      const next = commitLight(baseState({ ihvProvider: provider }), {
+        passes: basePasses({ qairtPipeline: true }),
+      });
+      expect(next.passes.qairtPipeline).toBe(true);
+    }
+  });
+
+  it("disables SimplifiedLayerNormToRMSNorm on non-QNN providers on commit", () => {
+    const next = commitLight(baseState(), { passes: basePasses({ simplifiedLayerNormToRMSNorm: true }) });
+    expect(next.passes.simplifiedLayerNormToRMSNorm).toBe(false);
+  });
+
+  it("disables MobiusBuilder on QNN providers on commit", () => {
+    const next = commitLight(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      passes: basePasses({ mobiusBuilder: true }),
+    });
+    expect(next.passes.mobiusBuilder).toBe(false);
+  });
+
+  it("keeps MobiusBuilder on CPU/CUDA providers", () => {
+    for (const provider of ["CPUExecutionProvider", "CUDAExecutionProvider"] as IHVProvider[]) {
+      const next = commitLight(baseState({ ihvProvider: provider }), {
+        passes: basePasses({ mobiusBuilder: true }),
+      });
+      expect(next.passes.mobiusBuilder).toBe(true);
+    }
   });
 });

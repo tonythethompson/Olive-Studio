@@ -1,4 +1,5 @@
 import { UIState } from "@/types";
+import { parsePresetEnvelope } from "@/lib/presetEnvelope";
 
 const STORAGE_KEY = "olive-pruning-custom-presets";
 
@@ -63,22 +64,9 @@ export function importPresetsJSON(
 ):
   | { ok: true; presets: CustomPruningPreset[]; importedPresets: CustomPruningPreset[]; collisions: string[] }
   | { ok: false; error: string } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return { ok: false, error: "Invalid JSON — could not parse file." };
-  }
-
-  // Accept both { version, presets } envelope and bare array
-  const raw: unknown =
-    parsed && typeof parsed === "object" && "presets" in (parsed as Record<string, unknown>)
-      ? (parsed as { presets: unknown }).presets
-      : parsed;
-
-  if (!Array.isArray(raw)) {
-    return { ok: false, error: "File does not contain a preset array." };
-  }
+  const envelope = parsePresetEnvelope(json);
+  if (!envelope.ok) return { ok: false, error: envelope.error };
+  const raw = envelope.raw;
 
   const validated: CustomPruningPreset[] = [];
   for (const item of raw) {

@@ -378,6 +378,8 @@ function RecordsTable({
  * @param onClose - Optional callback invoked when the comparison panel is closed.
  * @param compareResults - Optional MCP compare_results output for metric display.
  * @param onCompare - Optional callback to trigger comparison with scoring preference.
+ * @param comparing - Indicates that a comparison request is in flight.
+ * @param compareError - Optional error message from the last comparison attempt.
  * @returns The comparison panel element.
  */
 export function BatchComparisonView({

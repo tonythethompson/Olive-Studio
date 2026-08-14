@@ -10,7 +10,7 @@ import {
   fetchGitHubRecipeJson,
   fetchOliveRecipesCatalogItem,
   getCatalogDeviceFromRecipe,
-  OLIVE_RECIPES_BRANCH,
+  getRecipesBranch,
   OLIVE_RECIPES_REPO,
   type RecipeCatalogItem,
 } from "@/lib/oliveRecipeHub";
@@ -35,7 +35,7 @@ export function useRecipeHub({ setState, hardwareProbe }: UseRecipeHubOpts) {
   const [syncStatus, setSyncStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [syncError, setSyncError] = useState("");
   const [repoUrl, setRepoUrl] = useState(`https://github.com/${OLIVE_RECIPES_REPO}`);
-  const [repoBranch, setRepoBranch] = useState(OLIVE_RECIPES_BRANCH);
+  const [repoBranch, setRepoBranch] = useState(getRecipesBranch);
   const [repoPath, setRepoPath] = useState(
     "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
   );

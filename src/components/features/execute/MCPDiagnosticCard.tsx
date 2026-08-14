@@ -213,8 +213,12 @@ function DiagnosticFeedbackButtons({
  * (when a matched KB entry is present), and diagnosis retry actions.
  *
  * @param diagnostic - The diagnostic result to display, or `null` when no result is available
+ * @param isDiagnosing - Indicates that a diagnosis request is in flight
  * @param error - An error message to display when diagnosis fails
  * @param fixApplied - Indicates that the recommended fix has been applied
+ * @param onApplyFix - Called when the user applies the recommended fix
+ * @param onRunDiagnosis - Called when the user requests a new diagnosis
+ * @param onFeedbackSubmitted - Called after the user submits thumbs-up/down feedback
  */
 export function MCPDiagnosticCard({
   diagnostic,

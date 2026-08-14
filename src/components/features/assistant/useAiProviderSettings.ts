@@ -20,7 +20,7 @@ export type AiProviderSettings = ReturnType<typeof useAiProviderSettings>;
 function isLocalAllowEmptyKey(baseUrl: string | undefined): boolean {
   if (!baseUrl) return false;
   try {
-    const host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    const host = new URL(baseUrl).hostname.replace(/^\[|]$/g, "").toLowerCase();
     return host === "localhost" || host === "127.0.0.1" || host === "::1";
   } catch {
     return false;

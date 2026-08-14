@@ -38,17 +38,10 @@ function stableStringify(value: unknown): string {
 // ─── Fingerprint Computation ─────────────────────────────────────────────────
 
 /**
- * Computes a SHA-256 fingerprint of the UIState, excluding transient fields.
- *
- * The result is a 64-character lowercase hex string that changes only when
- * pipeline-relevant state is modified. Two deeply-equal UIState objects
- * (after transient field exclusion) always produce identical fingerprints.
- *
- * @param state - The full UIState from the pipeline store
- * @returns A 64-character lowercase hex SHA-256 digest
+ * Builds the fingerprint input: a copy of the state with transient keys
+ * removed and transient collections reduced to their stable projections.
  */
-export async function computeFingerprint(state: UIState): Promise<string> {
-  // Build a copy excluding transient keys
+function filteredFingerprintState(state: UIState): Record<string, unknown> {
   const filtered: Record<string, unknown> = {};
   const excludeSet = new Set<string>(FINGERPRINT_EXCLUDED_KEYS as string[]);
 
@@ -67,8 +60,22 @@ export async function computeFingerprint(state: UIState): Promise<string> {
     filtered.batchJobs = sanitizeBatchJobsForFingerprint(state.batchJobs);
   }
 
+  return filtered;
+}
+
+/**
+ * Computes a SHA-256 fingerprint of the UIState, excluding transient fields.
+ *
+ * The result is a 64-character lowercase hex string that changes only when
+ * pipeline-relevant state is modified. Two deeply-equal UIState objects
+ * (after transient field exclusion) always produce identical fingerprints.
+ *
+ * @param state - The full UIState from the pipeline store
+ * @returns A 64-character lowercase hex SHA-256 digest
+ */
+export async function computeFingerprint(state: UIState): Promise<string> {
   // Deterministic serialization with sorted keys
-  const serialized = stableStringify(filtered);
+  const serialized = stableStringify(filteredFingerprintState(state));
 
   // SHA-256 via Web Crypto API (SubtleCrypto)
   const encoder = new TextEncoder();
@@ -91,25 +98,7 @@ export async function computeFingerprint(state: UIState): Promise<string> {
  * @internal
  */
 export function _serializeForFingerprint(state: UIState): string {
-  const filtered: Record<string, unknown> = {};
-  const excludeSet = new Set<string>(FINGERPRINT_EXCLUDED_KEYS as string[]);
-
-  for (const key of Object.keys(state)) {
-    if (!excludeSet.has(key)) {
-      filtered[key] = (state as unknown as Record<string, unknown>)[key];
-    }
-  }
-
-  // File handles and metadata are transient, but selected names affect the recipe.
-  if (Array.isArray(state.localFiles)) {
-    filtered.localFileNames = state.localFiles.map((file) => file.name);
-  }
-
-  if (Array.isArray(state.batchJobs)) {
-    filtered.batchJobs = sanitizeBatchJobsForFingerprint(state.batchJobs);
-  }
-
-  return stableStringify(filtered);
+  return stableStringify(filteredFingerprintState(state));
 }
 
 function sanitizeBatchJobsForFingerprint(jobs: UIState["batchJobs"]) {

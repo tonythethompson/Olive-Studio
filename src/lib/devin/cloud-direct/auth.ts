@@ -35,8 +35,10 @@ const DEFAULT_HOST = "https://server.codeium.com";
  * it the caller's cancel signal silently disappears on older runtimes
  * (chat-cancel during a `GetUserJwt` mint would keep the network request
  * alive for up to the full 30s timeout).
+ *
+ * Shared with chat.ts — do not re-implement locally.
  */
-function anySignal(signals: AbortSignal[]): AbortSignal {
+export function anySignal(signals: AbortSignal[]): AbortSignal {
   const builtin = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
   if (typeof builtin === "function") return builtin(signals);
   const controller = new AbortController();

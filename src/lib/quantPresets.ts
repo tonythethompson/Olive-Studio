@@ -1,4 +1,5 @@
 import { UIState } from "@/types";
+import { parsePresetEnvelope } from "@/lib/presetEnvelope";
 
 const STORAGE_KEY = "olive-custom-quant-presets";
 
@@ -85,22 +86,9 @@ export function importPresetsJSON(
 ):
   | { ok: true; presets: CustomQuantPreset[]; importedPresets: CustomQuantPreset[]; collisions: string[] }
   | { ok: false; error: string } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return { ok: false, error: "Invalid JSON — could not parse file." };
-  }
-
-  // Accept both { version, presets } envelope and bare array for flexibility
-  const raw: unknown =
-    parsed && typeof parsed === "object" && "presets" in (parsed as Record<string, unknown>)
-      ? (parsed as { presets: unknown }).presets
-      : parsed;
-
-  if (!Array.isArray(raw)) {
-    return { ok: false, error: "File does not contain a preset array." };
-  }
+  const envelope = parsePresetEnvelope(json);
+  if (!envelope.ok) return { ok: false, error: envelope.error };
+  const raw = envelope.raw;
 
   const validated: CustomQuantPreset[] = [];
   for (const item of raw) {
@@ -117,13 +105,16 @@ export function importPresetsJSON(
         if (key in rawFields) safeFields[key] = rawFields[key];
       }
       validated.push({
-        ...item,
+        label: (item as CustomQuantPreset).label,
+        description: typeof (item as { description?: unknown }).description === "string"
+          ? (item as { description: string }).description
+          : "",
         fields: safeFields as Partial<UIState["passes"]>,
         createdAt:
           typeof (item as CustomQuantPreset).createdAt === "number"
             ? (item as CustomQuantPreset).createdAt
             : Date.now(),
-      } as CustomQuantPreset);
+      });
     }
   }
 

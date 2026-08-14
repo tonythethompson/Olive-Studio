@@ -16,8 +16,8 @@ export interface RecipeGraphViewProps {
 /**
  * Renders the recipe pipeline graph, validation panel, and selected-step inspector.
  *
- * @param state - Optional UI state override; when omitted, state is read from the pipeline store.
- * @param setState - Optional state update handler; when omitted, the pipeline store handler is used.
+ * @param propState - Optional UI state override (`state`); when omitted, state is read from the pipeline store.
+ * @param propSetState - Optional state update handler (`setState`); when omitted, the pipeline store handler is used.
  */
 export function RecipeGraphView({
   state: propState,

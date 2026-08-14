@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Bot, RefreshCw, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { computeAnchoredMenuPos } from "@/lib/menuPosition";
 
 export type AgentAccessPolicyState = {
   mcpAccess: boolean;
@@ -116,10 +117,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
 
   const updateMenuPos = useCallback(() => {
     if (!rootRef.current) return;
-    const rect = rootRef.current.getBoundingClientRect();
-    const menuWidth = Math.min(window.innerWidth - 32, 22 * 16);
-    const left = Math.min(Math.max(16, rect.left), window.innerWidth - menuWidth - 16);
-    setMenuPos({ top: rect.bottom + 8, left });
+    setMenuPos(computeAnchoredMenuPos(rootRef.current.getBoundingClientRect()));
   }, []);
 
   useEffect(() => {
@@ -241,7 +239,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
             busy ||
             !policy ||
             !canMutatePolicy ||
-            (key !== "mcpAccess" && policy.mcpAccess === false);
+            (key !== "mcpAccess" && !policy.mcpAccess);
           return (
             <li key={key} className="flex items-start gap-2">
               <input

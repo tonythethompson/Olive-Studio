@@ -25,7 +25,7 @@ export function parseLmsGetPercent(line: string): number | null {
   const clean = stripAnsi(line).trim();
   if (!clean) return null;
   // Prefer patterns near a progress bar / size report to avoid matching unrelated numbers.
-  const bar = clean.match(/\]\s*(\d+(?:\.\d+)?)\s*%/);
+  const bar = clean.match(/]\s*(\d+(?:\.\d+)?)\s*%/);
   if (bar) {
     const n = Number(bar[1]);
     return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;

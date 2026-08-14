@@ -741,7 +741,7 @@ export function buildOliveRecipe(state: UIState): Record<string, unknown> {
       inputConfig.dataset = state.hfDataset;
     }
     // Olive 0.13.0 default is false; emit only on explicit user opt-in.
-    if (state.passes.trustRemoteCode === true) {
+    if (state.passes.trustRemoteCode) {
       inputConfig.trust_remote_code = true;
     }
     if (useMemoryOffload) {

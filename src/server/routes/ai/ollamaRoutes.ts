@@ -16,7 +16,7 @@ import {
   verifyInstalledAfterPull,
   OLLAMA_PULL_MAX_MS,
 } from "./localEngines.ts";
-import { trackStreamClient, beginPullSse } from "./streamHelpers.ts";
+import { preparePullStream } from "./streamHelpers.ts";
 import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 
 type PullSend = (evt: Record<string, unknown>) => void;
@@ -153,18 +153,9 @@ export function mountOllamaRoutes(router: Router): void {
   });
 
   router.post("/ai/ollama-pull", heavyCommandRateLimit, async (req, res) => {
-    const body = parseBody<{ modelTag: string }>(req.body, {
-      modelTag: { type: "string", message: "Missing modelTag" },
-    });
-    if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
-    const { modelTag } = body.parsed;
-    const guard = trackStreamClient(req, res);
-    const rawSend = beginPullSse(res);
-    const send = (evt: Record<string, unknown>) => {
-      if (guard.disconnected()) return;
-      rawSend(evt);
-    };
-    const tag = String(modelTag);
+    const stream = preparePullStream(req, res);
+    if (!stream) return;
+    const { tag, guard, send } = stream;
     let ownsBusy = false;
     const releaseBusy = () => {
       if (ownsBusy && localEngineRuntime.ollamaPullBusyTag === tag) {

@@ -321,7 +321,7 @@ function buildTensorRtNotes(input: ProbeDiagnosticInput): {
   // Only warn when there are *actual* GPUs below the floor — `[].some(...)`
   // returning false for an empty GPU list would otherwise print a misleading
   // "all NVIDIA GPUs below TensorRT floor" note on machines with zero GPUs.
-  if (nvidiaTensorRtFamilyCapable === false && (input.nvidia?.gpus.length ?? 0) > 0) {
+  if (!nvidiaTensorRtFamilyCapable && (input.nvidia?.gpus.length ?? 0) > 0) {
     floorNotes.push(
       `NVIDIA GPU(s) below TensorRT 10.x floor (compute capability < ${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.major}.${TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY.minor}); TensorRT / TensorRT-RTX EPs hidden.`,
     );
@@ -624,7 +624,7 @@ async function probeVenvCapabilities(
       if (isCuda && probe.ok) state.cudaVenvLoadable = true;
       if (isDefault && !cudaPythonExists && probe.ok) state.cudaVenvLoadable = true;
       const pinnedLabel = pinnedOrtGpuLabel();
-      const requiredVersionMatch = pinnedLabel.match(/==\s*([\d.]+[^\s]*)/);
+      const requiredVersionMatch = pinnedLabel.match(/==\s*([\d.]+\S*)/);
       const pinnedVersion = requiredVersionMatch?.[1] ?? pinnedLabel;
       state.cuda = {
         loadable: probe.ok,

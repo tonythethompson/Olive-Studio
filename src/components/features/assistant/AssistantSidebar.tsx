@@ -47,6 +47,8 @@ const TABS = [
 /**
  * Renders a sidebar for pipeline auditing, workspace-aware chat, and AI provider configuration.
  *
+ * @param propState - Optional pipeline state override (`state`); defaults to the pipeline store
+ * @param propSetState - Optional state update handler (`setState`); defaults to the pipeline store
  * @param isOpen - Whether the sidebar is visible
  * @param onClose - Callback invoked when the sidebar is closed
  * @param openToAudit - Whether to select the audit tab and restart analysis

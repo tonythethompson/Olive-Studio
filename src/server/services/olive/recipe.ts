@@ -178,5 +178,9 @@ export function inferRequiredPackages(recipe: OliveRecipe, cudaTag: string): Pkg
 
   // Deduplicate by importName
   const seen = new Set<string>();
-  return pkgs.filter((p) => (seen.has(p.importName) ? false : (seen.add(p.importName), true)));
+  return pkgs.filter((p) => {
+    if (seen.has(p.importName)) return false;
+    seen.add(p.importName);
+    return true;
+  });
 }

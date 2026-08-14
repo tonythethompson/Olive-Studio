@@ -176,7 +176,7 @@ function applyBatchStreamDone(
 ): void {
   const { batchJobId, jobsRef, haltRequestedRef, activeSourcesRef, setState, fetchKeyedDiagnostic } =
     handlers;
-  let exitCode = 1;
+  let exitCode: number;
   let serverStatus: string | undefined;
   try {
     const payload = JSON.parse(e.data) as { exitCode?: number; status?: string };
@@ -649,8 +649,8 @@ function BatchJobCard({
 /**
  * Renders the batch-processing workspace for configuring, monitoring, and managing sequential Olive jobs.
  *
- * @param state - Optional pipeline state override.
- * @param setState - Optional state updater override.
+ * @param propState - Optional pipeline state override (`state`).
+ * @param propSetState - Optional state updater override (`setState`).
  */
 export function BatchProcessingPanel({
   state: propState,

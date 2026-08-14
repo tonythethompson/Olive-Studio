@@ -3,6 +3,39 @@
  * client-disconnect tracking).
  */
 
+import { parseBody, isParseBodyError } from "../../middleware/bodyGuard.ts";
+
+export type PullStream = {
+  tag: string;
+  guard: ReturnType<typeof trackStreamClient>;
+  send: (evt: Record<string, unknown>) => void;
+};
+
+/**
+ * Validate the `modelTag` body field and set up a disconnect-guarded NDJSON
+ * stream for a local model pull. Returns null after sending 400 when the body
+ * is invalid. Shared by the LM Studio and Ollama pull routes.
+ */
+export function preparePullStream(
+  req: import("express").Request,
+  res: import("express").Response,
+): PullStream | null {
+  const body = parseBody<{ modelTag: string }>(req.body, {
+    modelTag: { type: "string", message: "Missing modelTag" },
+  });
+  if (isParseBodyError(body)) {
+    res.status(400).json({ error: body.error });
+    return null;
+  }
+  const guard = trackStreamClient(req, res);
+  const rawSend = beginPullSse(res);
+  const send = (evt: Record<string, unknown>) => {
+    if (guard.disconnected()) return;
+    rawSend(evt);
+  };
+  return { tag: String(body.parsed.modelTag), guard, send };
+}
+
 export function beginNdjsonStream(res: import("express").Response): (evt: Record<string, unknown>) => void {
   res.status(200);
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");

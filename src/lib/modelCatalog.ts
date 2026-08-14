@@ -51,9 +51,7 @@ export function openAiCompatRowIsChat(row: OpenAiCompatModelRow): boolean {
   }
 
   const outputs = row.architecture?.output_modalities ?? [];
-  if (outputs.length > 0 && !outputs.some((o) => /text/i.test(o))) return false;
-
-  return true;
+  return outputs.length === 0 || outputs.some((o) => /text/i.test(o));
 }
 
 /**

@@ -75,12 +75,11 @@ import type { ReportArea } from "@/lib/issueReport";
 const RecipeGraphView = lazy(() => import("./recipe-graph/RecipeGraphView").then((m) => ({ default: m.RecipeGraphView })));
 
 /**
- * Renders a centered loading spinner with a descriptive label.
+ * Collects display names for the optimization passes enabled in the pipeline.
  *
- * @param label - The text displayed below the spinner
- * @param minH - The optional minimum height of the loading container
+ * @param passes - The pipeline pass flags to inspect
+ * @returns Human-readable names of the active passes, or the baseline export label when none are enabled
  */
-
 function collectActivePassNames(passes: UIState["passes"]): string[] {
   const names: string[] = [];
   if (passes.conversion) {
@@ -137,6 +136,12 @@ function describeAppliedMcpPatches(
   return appliedParts;
 }
 
+/**
+ * Renders a centered loading spinner with a descriptive label.
+ *
+ * @param label - The text displayed below the spinner
+ * @param minH - The optional minimum height of the loading container
+ */
 function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
   return (
     <div className="flex items-center justify-center w-full" style={minH ? { minHeight: minH } : undefined}>
@@ -151,8 +156,8 @@ function LoadingFallback({ label, minH }: { label: string; minH?: string }) {
 /**
  * Provides a workspace for reviewing, validating, exporting, queuing, and executing an Olive pipeline.
  *
- * @param state - Controlled pipeline state. Must be provided together with `setState`.
- * @param setState - Updates controlled pipeline state. Must be provided together with `state`.
+ * @param propState - Controlled pipeline state (`state`). Must be provided together with `setState`.
+ * @param propSetState - Updates controlled pipeline state (`setState`). Must be provided together with `state`.
  * @param onOpenAiAudit - Called when the AI audit review is opened.
  * @param onRunStateChange - Called when live execution starts or stops.
  * @throws Error if only one of `state` or `setState` is provided.
@@ -210,7 +215,6 @@ export function ExecutionWorkspace({
       });
     });
   };
-  const [_isCopied, setIsCopied] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExportCopied, setIsExportCopied] = useState(false);
   const [justQueued, setJustQueued] = useState(false);
@@ -335,7 +339,6 @@ export function ExecutionWorkspace({
 
   const isUnmountedRef = useRef(false);
   const justQueuedTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const copiedTimerRef = useRef<NodeJS.Timeout | null>(null);
   const exportCopiedTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -343,7 +346,6 @@ export function ExecutionWorkspace({
     return () => {
       isUnmountedRef.current = true;
       if (justQueuedTimerRef.current) clearTimeout(justQueuedTimerRef.current);
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       if (exportCopiedTimerRef.current) clearTimeout(exportCopiedTimerRef.current);
     };
   }, []);
@@ -640,20 +642,6 @@ export function ExecutionWorkspace({
     setJustQueued(true);
     if (justQueuedTimerRef.current) clearTimeout(justQueuedTimerRef.current);
     justQueuedTimerRef.current = setTimeout(() => setJustQueued(false), 3000);
-  };
-
-
-
-  const _handleCopy = () => {
-    // Rebuild from live state — the displayed (deferred) recipe may lag the latest keystroke.
-    void navigator.clipboard
-      .writeText(buildRecipeJsonFromState(state))
-      .then(() => {
-        setIsCopied(true);
-        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-        copiedTimerRef.current = setTimeout(() => setIsCopied(false), 2000);
-      })
-      .catch(() => {});
   };
 
   const handleExportCopy = () => {

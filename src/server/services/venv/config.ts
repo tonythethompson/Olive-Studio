@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { getVenvPython, getVenvPip, getVenvScriptsDir } from "./paths.ts";
+import { getVenvScriptsDir } from "./paths.ts";
 import { execFileAsync } from "../shared/exec.ts";
 import { envWithDefaultVenvOnPath } from "./pathIsolation.ts";
 
@@ -97,8 +97,6 @@ Write-Output 'ADDED'
     return { ok: false, error: msg };
   }
 }
-
-export { getVenvPython, getVenvPip, getVenvScriptsDir };
 
 // Backward-compat re-exports (prefer importing from src/server/config.ts directly)
 export { readStudioConfig, writeStudioConfig } from "../../config.ts";

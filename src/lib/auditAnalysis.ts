@@ -4,7 +4,7 @@
  * gracefully when small models emit truncated or broken JSON.
  */
 
-import { parseJsonFromAiResponse, softRepairJson } from "./aiResponse.ts";
+import { parseJsonFromAiResponse, scanJsonStringEnd, softRepairJson } from "./aiResponse.ts";
 
 export type AuditSuggestion = {
   title: string;
@@ -199,26 +199,18 @@ export function normalizeAuditAnalysis(parsed: unknown): AuditAnalysis | null {
  */
 export function closeTruncatedJson(text: string): string {
   let s = softRepairJson(text.trim());
-  let inString = false;
-  let escape = false;
+  let unterminatedString = false;
   const stack: string[] = [];
 
   for (let i = 0; i < s.length; i++) {
     const ch = s[i]!;
-    if (inString) {
-      if (escape) {
-        escape = false;
-        continue;
-      }
-      if (ch === "\\") {
-        escape = true;
-        continue;
-      }
-      if (ch === '"') inString = false;
-      continue;
-    }
     if (ch === '"') {
-      inString = true;
+      const end = scanJsonStringEnd(s, i + 1);
+      if (end < 0) {
+        unterminatedString = true;
+        break;
+      }
+      i = end;
       continue;
     }
     if (ch === "{") stack.push("}");
@@ -228,7 +220,7 @@ export function closeTruncatedJson(text: string): string {
     }
   }
 
-  if (inString) s += '"';
+  if (unterminatedString) s += '"';
   // Drop a dangling trailing comma before we close.
   s = s.replace(/,\s*$/, "");
   while (stack.length > 0) s += stack.pop();

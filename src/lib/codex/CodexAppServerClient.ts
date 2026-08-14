@@ -66,8 +66,7 @@ type JsonRpcResponse = {
  */
 export function codexSpawnUsesShell(command: string, platform = process.platform): boolean {
   if (platform !== "win32") return false;
-  if (/\.exe$/i.test(command.trim())) return false;
-  return true;
+  return !/\.exe$/i.test(command.trim());
 }
 
 export class CodexAppServerClient extends EventEmitter {

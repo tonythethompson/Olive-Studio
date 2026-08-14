@@ -11,6 +11,7 @@ import {
   Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { computeAnchoredMenuPos } from "@/lib/menuPosition";
 
 export interface RuntimeEnvStatus {
   venvExists: boolean;
@@ -161,10 +162,7 @@ export const RuntimeEnvControls = memo(function RuntimeEnvControls({ compact = f
 
   const updateMenuPos = useCallback(() => {
     if (!rootRef.current) return;
-    const rect = rootRef.current.getBoundingClientRect();
-    const menuWidth = Math.min(window.innerWidth - 32, 22 * 16);
-    const left = Math.min(Math.max(16, rect.left), window.innerWidth - menuWidth - 16);
-    setMenuPos({ top: rect.bottom + 8, left });
+    setMenuPos(computeAnchoredMenuPos(rootRef.current.getBoundingClientRect()));
   }, []);
 
   useEffect(() => {

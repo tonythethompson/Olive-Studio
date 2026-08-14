@@ -413,7 +413,7 @@ export function familyFlagsFromStatus(
     const st = families[family];
     flags[family] = {
       prepared: st.exists && st.oliveInstalled && st.canonicalOrtInstalled,
-      cpuUsable: st.capabilities.cpu.usable === true,
+      cpuUsable: st.capabilities.cpu.usable,
     };
   }
   return flags;

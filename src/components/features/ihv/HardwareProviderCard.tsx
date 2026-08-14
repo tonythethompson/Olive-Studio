@@ -412,9 +412,32 @@ function PluginInstallBlock({
  *
  * @param providerId - The execution provider associated with the card.
  * @param hardwareProbe - Current hardware and runtime detection results.
+ * @param trtRtxNeedsInstall - Whether the TensorRT RTX runtime needs installation.
+ * @param trtNeedsInstall - Whether the TensorRT runtime needs installation.
+ * @param openvinoNeedsInstall - Whether the OpenVINO runtime needs installation.
+ * @param hardwareInstallBusy - Whether any hardware runtime install is in flight.
+ * @param installingTrtRtx - Whether the TensorRT RTX install is currently running.
+ * @param installTrtRtxError - Last TensorRT RTX install error, if any.
+ * @param installTrtRtxLog - TensorRT RTX install log lines.
+ * @param onInstallTensorRtRtx - Starts the TensorRT RTX runtime install.
+ * @param installingTrt - Whether the TensorRT install is currently running.
+ * @param installTrtError - Last TensorRT install error, if any.
+ * @param installTrtLog - TensorRT install log lines.
+ * @param onInstallTensorRt - Starts the TensorRT runtime install.
  * @param openvinoInstall - OpenVINO installation state and action.
  * @param qnnInstall - QNN installation and NPU testing state and actions.
  * @param directMlInstall - DirectML installation state and action.
+ * @param isPreMaxwellBox - Whether the NVIDIA GPU predates Maxwell (no TensorRT RTX support).
+ * @param cudaNeedsOrtGpuInstall - Whether the ONNX Runtime GPU package needs installation for CUDA.
+ * @param cudaToolkitMissingAndEpWorks - CUDA toolkit is missing but the CUDA EP still works.
+ * @param cudaToolkitMissing - Whether the CUDA toolkit is missing entirely.
+ * @param cudaEpInVenv - Whether the CUDA EP packages are available inside the venv.
+ * @param nvidiaGpus - Detected NVIDIA GPUs, used for hardware guidance copy.
+ * @param installingOrtGpu - Whether the ONNX Runtime GPU install is currently running.
+ * @param installOrtGpuError - Last ONNX Runtime GPU install error, if any.
+ * @param installOrtGpuLog - ONNX Runtime GPU install log lines.
+ * @param onInstallOrtGpu - Starts the ONNX Runtime GPU package install.
+ * @param isExpanded - Whether explanatory detail copy is expanded.
  */
 function ProviderPluginInstalls({
   providerId,

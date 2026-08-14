@@ -5,7 +5,7 @@
 import { Input, Label, Button } from "@/components/ui";
 import { SUGGESTED_RECIPES } from "@/data/recipes";
 import {
-  OLIVE_RECIPES_BRANCH,
+  getRecipesBranch,
   OLIVE_RECIPES_REPO,
 } from "@/lib/oliveRecipeHub";
 import {
@@ -48,19 +48,19 @@ export function GitHubRecipeSync({
     {
       label: "Qwen2.5 TRT-RTX FP16",
       repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-      branch: OLIVE_RECIPES_BRANCH,
+      branch: getRecipesBranch(),
       path: "Qwen-Qwen2.5-1.5B-Instruct/NvTensorRtRtx/Qwen2.5-1.5B-Instruct_model_builder_fp16.json",
     },
     {
       label: "Whisper Tiny CPU INT8",
       repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-      branch: OLIVE_RECIPES_BRANCH,
+      branch: getRecipesBranch(),
       path: "openai-whisper-tiny/cpu/whisper-tiny_cpu_int8.json",
     },
     {
       label: "Phi-3.5 Mini DirectML",
       repo: `https://github.com/${OLIVE_RECIPES_REPO}`,
-      branch: OLIVE_RECIPES_BRANCH,
+      branch: getRecipesBranch(),
       path: "microsoft-Phi-3.5-mini-instruct/aitk/phi3_5_dml_config.json",
     },
     {

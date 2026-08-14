@@ -75,6 +75,7 @@ function clientGone(res: Response, clientDisconnected: boolean): boolean {
 /**
  * Ends the response with a rejection status.
  *
+ * @param res - The response to end
  * @param status - The rejection status code, either 400 or 403
  */
 function emptyReject(res: Response, status: 400 | 403): void {

@@ -200,24 +200,7 @@ export function mountEnvRoutes(router: Router): void {
 
   // ─── Venv Install ─────────────────────────────────────────────────────
   router.post("/env/venv-install", async (_req, res) => {
-    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("X-Accel-Buffering", "no");
-    if (typeof res.flushHeaders === "function") res.flushHeaders();
-
-    const onLine = (line: string) => {
-      if (!res.writableEnded) res.write(`${JSON.stringify({ type: "log", message: line })}\n`);
-    };
-
-    try {
-      const result = await ensureVenv(onLine);
-      res.write(`${JSON.stringify({ type: "done", ...result })}\n`);
-      res.end();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.write(`${JSON.stringify({ type: "done", ok: false, error: msg })}\n`);
-      res.end();
-    }
+    await streamNdjsonInstall(res, ensureVenv);
   });
 
   // JSON alias used by RuntimeEnvControls "Install Olive venv"

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import { MODEL_ID_FUZZY_MIN_LEN } from "../../../lib/localEngineStarters";
+import { MODEL_ID_FUZZY_MIN_LEN } from "@/lib/localEngineStarters";
 
 function modelIdsMatch(activeModel: string | undefined, installedId: string): boolean {
   if (!activeModel) return false;
@@ -14,8 +14,7 @@ function modelIdsMatch(activeModel: string | undefined, installedId: string): bo
     : installedId;
   if (activeModel === installedTail) return true;
   // Bare active id may still match a path-qualified install via a long suffix.
-  if (activeModel.length >= MODEL_ID_FUZZY_MIN_LEN && installedId.endsWith(activeModel)) return true;
-  return false;
+  return activeModel.length >= MODEL_ID_FUZZY_MIN_LEN && installedId.endsWith(activeModel);
 }
 
 /**

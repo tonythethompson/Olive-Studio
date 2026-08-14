@@ -92,7 +92,7 @@ const SECRET_PATTERNS: RegExp[] = [
   /\/home\/[^/]+/g,
   /C:\\Users\\[^\\]+/g,
   /\/Users\/[^/]+/g,
-  /~\/[^\s]+/g,
+  /~\/\S+/g,
   /(?:"api_key"|"secret"|"token"|"password"|"credential")["\s:]+["'][^"']{8,}["']/gi,
 ];
 

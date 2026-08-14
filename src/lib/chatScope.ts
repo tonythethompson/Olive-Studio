@@ -8,7 +8,7 @@
  */
 
 const OLIVE_TOPIC =
-  /\b(olive|onnx|ort|tensorrt|cuda|rocm|awq|gptq|ptq|qat|hqq|quant(?:ize|ization|s)?|prun(?:e|ing)?|lora|qlora|peft|huggingface|vram|gpu|execution\s*provider|\bep\b|opset|recipe|pipeline|ihv|nvtensor|openvino|qnn|conversion|calibration|bitsandbytes|transformers?|models?|weights?|checkpoint|safetensors?|gguf|shrink|compress|smaller|footprint|memory|optimiz(?:e|ation)|int(?:4|8)|fp(?:8|16)|bf16|pass(?:es)?)\b/i;
+  /\b(olive|onnx|ort|tensorrt|cuda|rocm|awq|gptq|ptq|qat|hqq|quant(?:ize|ization|s)?|prun(?:e|ing)?|lora|qlora|peft|huggingface|vram|gpu|execution\s*provider|\bep\b|opset|recipe|pipeline|ihv|nvtensor|openvino|qnn|conversion|calibration|bitsandbytes|transformers?|models?|weights?|checkpoint|safetensors?|gguf|shrink|compress|smaller|footprint|memory|optimiz(?:e|ation)|int[48]|fp(?:8|16)|bf16|pass(?:es)?)\b/i;
 
 /** Clear non-Olive intents (trivia, personal, sexual, medical, etc.). */
 const OFF_TOPIC =
@@ -68,11 +68,11 @@ export function normalizeChatForScope(raw: string): string {
     .toLowerCase()
     .replace(/[\u200b-\u200d\ufeff]/g, "")
     .replace(/[@4]/g, "a")
-    .replace(/[0]/g, "o")
+    .replace(/0/g, "o")
     .replace(/[1!|]/g, "i")
-    .replace(/[3]/g, "e")
+    .replace(/3/g, "e")
     .replace(/[5$]/g, "s")
-    .replace(/[7]/g, "t")
+    .replace(/7/g, "t")
     .replace(/(.)\1{2,}/g, "$1$1") // fuuuuck → fuuck (still matches f+u+c+k+)
     // Keep phrase boundaries: kill-myself / how_to_make_a_bomb stay multi-word.
     .replace(/[-_./\\]+/g, " ")

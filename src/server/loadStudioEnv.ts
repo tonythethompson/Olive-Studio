@@ -83,6 +83,8 @@ export function applyDotenvFile(filePath: string, opts?: { overrideUsable?: bool
  * map on unsupported platforms or when the values cannot be read or parsed.
  *
  * @param names - The environment variable names to retrieve
+ * @param exec - Child-process executor (injectable for tests)
+ * @param platform - Target platform; only `win32` reads persisted values
  * @returns A map of variable names to usable persisted values
  */
 export function readWindowsPersistedEnv(
@@ -130,6 +132,7 @@ export function readWindowsPersistedEnv(
  * Fills missing or unusable process environment variables from persisted Windows settings.
  *
  * @param names - The environment variable names to hydrate
+ * @param opts - Optional executor and platform overrides for the persisted-env read
  * @returns The names of the environment variables populated
  */
 export function hydrateProcessEnvFromWindows(

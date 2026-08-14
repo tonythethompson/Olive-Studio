@@ -224,7 +224,7 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     throw new Error(message);
   }
 
-  return response.json() as Promise<T>;
+  return (await response.json()) as T;
 }
 
 /**

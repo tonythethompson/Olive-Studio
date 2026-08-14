@@ -155,8 +155,7 @@ function isValidAgentStreamEvent(data: unknown): data is AgentStreamEvent {
   if (typeof obj.kind !== "string") return false;
   if (!VALID_KINDS.includes(obj.kind as ActivityEntryKind)) return false;
   if (typeof obj.text !== "string") return false;
-  if (obj.stepRef !== undefined && typeof obj.stepRef !== "string") return false;
-  return true;
+  return obj.stepRef === undefined || typeof obj.stepRef === "string";
 }
 
 /**

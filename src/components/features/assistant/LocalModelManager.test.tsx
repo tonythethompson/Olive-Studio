@@ -164,6 +164,24 @@ describe("LocalModelManager — models display", () => {
 // ── 3. Search filtering ─────────────────────────────────────────────────────
 
 describe("LocalModelManager — search filtering", () => {
+  /** Render with the shared 4-model fixture and wait for the list to appear. */
+  async function renderWithSearchFixture(): Promise<void> {
+    mockFetch({
+      lms: {
+        installedModels: ["meta-llama/Alpha", "meta-llama/Beta", "mistralai/Gamma", "google/Delta"],
+        loadedModels: [],
+      },
+    });
+
+    await act(async () => {
+      render(<LocalModelManager isOpen />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Alpha")).toBeDefined();
+    });
+  }
+
   it("shows search input when more than one model is installed", async () => {
     mockFetch({
       lms: {
@@ -182,20 +200,7 @@ describe("LocalModelManager — search filtering", () => {
   });
 
   it("filters models by search query", async () => {
-    mockFetch({
-      lms: {
-        installedModels: ["meta-llama/Alpha", "meta-llama/Beta", "mistralai/Gamma", "google/Delta"],
-        loadedModels: [],
-      },
-    });
-
-    await act(async () => {
-      render(<LocalModelManager isOpen />);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Alpha")).toBeDefined();
-    });
+    await renderWithSearchFixture();
 
     const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.change(input, { target: { value: "Beta" } });
@@ -206,20 +211,7 @@ describe("LocalModelManager — search filtering", () => {
   });
 
   it("shows no-match message when search yields no results", async () => {
-    mockFetch({
-      lms: {
-        installedModels: ["meta-llama/Alpha", "meta-llama/Beta", "mistralai/Gamma", "google/Delta"],
-        loadedModels: [],
-      },
-    });
-
-    await act(async () => {
-      render(<LocalModelManager isOpen />);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Alpha")).toBeDefined();
-    });
+    await renderWithSearchFixture();
 
     const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.change(input, { target: { value: "ZzzNotExist" } });
@@ -228,20 +220,7 @@ describe("LocalModelManager — search filtering", () => {
   });
 
   it("clears search on Escape key", async () => {
-    mockFetch({
-      lms: {
-        installedModels: ["meta-llama/Alpha", "meta-llama/Beta", "mistralai/Gamma", "google/Delta"],
-        loadedModels: [],
-      },
-    });
-
-    await act(async () => {
-      render(<LocalModelManager isOpen />);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Alpha")).toBeDefined();
-    });
+    await renderWithSearchFixture();
 
     const input = screen.getByPlaceholderText("Search installed models…");
     fireEvent.change(input, { target: { value: "Alpha" } });

@@ -32,7 +32,7 @@ import {
   parseConnectFrames,
 } from "./wire.ts";
 import { buildMetadata } from "./metadata.ts";
-import { getCachedUserJwt } from "./auth.ts";
+import { getCachedUserJwt, anySignal } from "./auth.ts";
 import { getCachedCatalog, ModelNotAvailableError } from "./catalog.ts";
 
 /**
@@ -44,32 +44,6 @@ import { getCachedCatalog, ModelNotAvailableError } from "./catalog.ts";
 const CLOUD_STREAM_IDLE_MS = 120_000;
 /** Time-to-first-byte timeout. */
 const CLOUD_STREAM_TTFB_MS = 60_000;
-
-/**
- * Compose multiple AbortSignals into a single signal that aborts when ANY
- * input aborts. Uses `AbortSignal.any` when available (Node ≥20.3 / Bun
- * ≥1.0); falls back to a manual implementation for older runtimes that
- * are still in our `engines` range (Node 18.x and early 20.x). The
- * previous `req.signal ?? ttfbSignal` fallback silently picked one signal
- * and dropped the other, defeating either the caller's cancel or the
- * internal timeout.
- */
-function anySignal(signals: AbortSignal[]): AbortSignal {
-  const builtin = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
-  if (typeof builtin === "function") return builtin(signals);
-  const controller = new AbortController();
-  const onAbort = (reason: unknown): void => {
-    if (!controller.signal.aborted) controller.abort(reason);
-  };
-  for (const s of signals) {
-    if (s.aborted) {
-      onAbort(s.reason);
-      break;
-    }
-    s.addEventListener("abort", () => onAbort(s.reason), { once: true });
-  }
-  return controller.signal;
-}
 
 /**
  * Per-(apiKey, host) session/cascade ID cache. Cloud uses these for

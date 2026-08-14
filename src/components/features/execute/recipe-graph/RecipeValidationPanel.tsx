@@ -354,9 +354,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const criticalCount = allIssues.filter((i) => i.severity === "critical").length;
   const warningCount = allIssues.filter((i) => i.severity === "warning").length;
 
-  const isLoading = compatLoading;
-
-  if (allIssues.length === 0 && !isLoading && !compatError && compatValidated) {
+  if (allIssues.length === 0 && !compatLoading && !compatError && compatValidated) {
     return (
       <div
         data-testid="recipe-validation-panel"
