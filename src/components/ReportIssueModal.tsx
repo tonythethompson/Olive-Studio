@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
 import { cn } from "@/lib/utils";
+import { useDialogFocusTrap } from "@/lib/hooks/useDialogFocusTrap";
 import { openExternal } from "@/lib/openExternal";
 import type { UIState } from "@/types";
 import type { HardwareProbeResult } from "@/lib/hardwareProbe";
@@ -129,73 +130,7 @@ export function ReportIssueModal({
     [report, state, hardwareProbe, executionLogs, chatLog],
   );
 
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Focus management: move focus in on open, trap Tab, Escape to close, restore on close.
-  useEffect(() => {
-    if (!open) return;
-
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-
-    const focusInitial = () => {
-      closeButtonRef.current?.focus();
-      if (document.activeElement !== closeButtonRef.current) {
-        dialogRef.current?.focus();
-      }
-    };
-    // Defer so the dialog exists in the DOM after open transitions
-    const focusTimer = window.setTimeout(focusInitial, 0);
-
-    const getFocusable = (): HTMLElement[] => {
-      const root = dialogRef.current;
-      if (!root) return [];
-      return Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = getFocusable();
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialogRef.current?.focus();
-        return;
-      }
-
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-      const active = document.activeElement;
-
-      if (event.shiftKey) {
-        if (active === first || !dialogRef.current?.contains(active)) {
-          event.preventDefault();
-          last.focus();
-        }
-      } else if (active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.clearTimeout(focusTimer);
-      window.removeEventListener("keydown", onKeyDown);
-      previouslyFocused?.focus();
-    };
-  }, [open, onClose]);
+  const { dialogRef, closeButtonRef } = useDialogFocusTrap(open, onClose);
 
   const copyFullText = useCallback(async () => {
     try {
