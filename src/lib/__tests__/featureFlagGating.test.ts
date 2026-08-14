@@ -405,7 +405,7 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
       expect(imported.passes?.peft).toBe(true);
     });
 
-    it("drops non-positive or fractional rank/alpha on import so rebuild does not throw", () => {
+    it("rejects non-positive or fractional rank/alpha on import instead of defaulting", () => {
       mockIsMultiLoraEnabled.mockReturnValue(true);
       const recipe = {
         input_model: {
@@ -415,9 +415,6 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
         systems: {},
         adapters: [
           { name: "bad-rank", path: "/adapters/bad-rank", rank: 0, alpha: 32 },
-          { name: "frac-rank", path: "/adapters/frac", rank: 1.5, alpha: 16 },
-          { name: "bad-alpha", path: "/adapters/bad-alpha", rank: 8, alpha: -1 },
-          { name: "ok", path: "/adapters/ok", rank: 8, alpha: 16 },
         ],
         passes: {
           peft: { type: "LoRA", config: {} },
@@ -425,23 +422,30 @@ describe("featureFlagGating — Task 11.3: Gate MultiLoRA UI behind feature flag
         },
         engine: {},
       };
-      const imported = deriveUiStateFromOliveRecipe(recipe, { replacePasses: true });
-      expect(imported.multiLoraAdapters).toEqual([
-        { name: "bad-rank", path: "/adapters/bad-rank", alpha: 32 },
-        { name: "frac-rank", path: "/adapters/frac", alpha: 16 },
-        { name: "bad-alpha", path: "/adapters/bad-alpha", rank: 8 },
-        { name: "ok", path: "/adapters/ok", rank: 8, alpha: 16 },
-      ]);
-      expect(() =>
-        buildOliveRecipe(
-          baseState({
-            ...imported,
-            multiLoraAdapters: imported.multiLoraAdapters,
-            passes: { ...DEFAULT_PASSES, ...imported.passes },
-            vramEstimateGb: 24,
-          }),
-        ),
-      ).not.toThrow();
+      expect(() => deriveUiStateFromOliveRecipe(recipe, { replacePasses: true })).toThrow(
+        /rank must be a positive integer/i,
+      );
+    });
+
+    it("rejects non-positive alpha on import instead of defaulting", () => {
+      mockIsMultiLoraEnabled.mockReturnValue(true);
+      const recipe = {
+        input_model: {
+          type: "HfModel",
+          config: { model_path: "meta-llama/Meta-Llama-3-8B" },
+        },
+        systems: {},
+        adapters: [
+          { name: "bad-alpha", path: "/adapters/bad-alpha", rank: 8, alpha: -1 },
+        ],
+        passes: {
+          peft: { type: "LoRA", config: {} },
+        },
+        engine: {},
+      };
+      expect(() => deriveUiStateFromOliveRecipe(recipe, { replacePasses: true })).toThrow(
+        /alpha must be a positive finite number/i,
+      );
     });
   });
 });

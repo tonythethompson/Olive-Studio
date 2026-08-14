@@ -98,37 +98,54 @@ function readOptionalRecipeTargetModules(
   return rawModules;
 }
 
+type RecipeAdapterParseResult =
+  | { ok: true; adapter: NonNullable<UIState["multiLoraAdapters"]>[number] | null }
+  | { ok: false; reason: string };
+
+type RecipeAdaptersParseResult =
+  | { ok: true; adapters?: UIState["multiLoraAdapters"] }
+  | { ok: false; reason: string };
+
 /**
  * Parse one recipe `adapters[]` entry into UIState MultiLoRA shape.
- * Rank/alpha must already satisfy builder rules; present-but-invalid values are
- * dropped so import does not leave workspace state that fails on rebuild.
+ * Absent rank/alpha stay omitted (builder defaults). Present-but-invalid values
+ * are rejected so import cannot silently rewrite adapter parameters.
  */
-function parseRecipeAdapterEntry(
-  item: Record<string, unknown>,
-): NonNullable<UIState["multiLoraAdapters"]>[number] | null {
+function parseRecipeAdapterEntry(item: Record<string, unknown>): RecipeAdapterParseResult {
   const path =
     typeof item.path === "string" && item.path.length > 0 ? item.path : undefined;
-  if (!path) return null;
+  if (!path) return { ok: true, adapter: null };
 
   const name =
     typeof item.name === "string" && item.name.length > 0 ? item.name : undefined;
-  // Match oliveRecipeBuilder: positive integer rank, positive finite alpha.
-  const rank =
-    typeof item.rank === "number" && Number.isInteger(item.rank) && item.rank > 0
-      ? item.rank
-      : undefined;
-  const alpha =
-    typeof item.alpha === "number" && Number.isFinite(item.alpha) && item.alpha > 0
-      ? item.alpha
-      : undefined;
+
+  let rank: number | undefined;
+  if ("rank" in item) {
+    if (!(typeof item.rank === "number" && Number.isInteger(item.rank) && item.rank > 0)) {
+      return { ok: false, reason: "rank must be a positive integer" };
+    }
+    rank = item.rank;
+  }
+
+  let alpha: number | undefined;
+  if ("alpha" in item) {
+    if (!(typeof item.alpha === "number" && Number.isFinite(item.alpha) && item.alpha > 0)) {
+      return { ok: false, reason: "alpha must be a positive finite number" };
+    }
+    alpha = item.alpha;
+  }
+
   const targetModules = readOptionalRecipeTargetModules(item);
 
   return {
-    path,
-    ...(name ? { name } : {}),
-    ...(rank !== undefined ? { rank } : {}),
-    ...(alpha !== undefined ? { alpha } : {}),
-    ...(targetModules ? { targetModules } : {}),
+    ok: true,
+    adapter: {
+      path,
+      ...(name ? { name } : {}),
+      ...(rank !== undefined ? { rank } : {}),
+      ...(alpha !== undefined ? { alpha } : {}),
+      ...(targetModules ? { targetModules } : {}),
+    },
   };
 }
 
@@ -148,19 +165,20 @@ function legacyAdapterPathFromInput(
 function parseMultiLoraAdaptersFromRecipe(
   recipe: Record<string, unknown> | undefined,
   inputConfig: Record<string, unknown>,
-): UIState["multiLoraAdapters"] | undefined {
+): RecipeAdaptersParseResult {
   const rawAdapters = recipe?.adapters;
   if (Array.isArray(rawAdapters) && rawAdapters.length > 0) {
     const out: NonNullable<UIState["multiLoraAdapters"]> = [];
     for (const item of rawAdapters) {
       if (!isRecord(item)) continue;
       const parsed = parseRecipeAdapterEntry(item);
-      if (parsed) out.push(parsed);
+      if (!parsed.ok) return parsed;
+      if (parsed.adapter) out.push(parsed.adapter);
     }
-    if (out.length > 0) return out;
+    if (out.length > 0) return { ok: true, adapters: out };
   }
 
-  return legacyAdapterPathFromInput(inputConfig);
+  return { ok: true, adapters: legacyAdapterPathFromInput(inputConfig) };
 }
 
 /**
@@ -680,6 +698,7 @@ function mapPassesFromRecipe(recipePasses: Record<string, unknown>): UIState["pa
  * @param parsed - The parsed Olive recipe.
  * @param options - Options controlling whether mapped passes replace or merge with existing passes.
  * @returns The UI state values derived from the recipe.
+ * @throws {Error} When recipe adapters include present-but-invalid rank or alpha.
  */
 export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUiStateOptions): Partial<UIState> {
   const recipe = isRecord(parsed) ? parsed : undefined;
@@ -757,9 +776,12 @@ export function deriveUiStateFromOliveRecipe(parsed: unknown, options?: DeriveUi
     }
   }
 
-  const adapters = parseMultiLoraAdaptersFromRecipe(recipe, icfg);
-  if (adapters) {
-    incomingState.multiLoraAdapters = adapters;
+  const adaptersResult = parseMultiLoraAdaptersFromRecipe(recipe, icfg);
+  if (!adaptersResult.ok) {
+    throw new Error(`Multi-LoRA adapter import rejected: ${adaptersResult.reason}`);
+  }
+  if (adaptersResult.adapters) {
+    incomingState.multiLoraAdapters = adaptersResult.adapters;
     const basePasses = incomingState.passes ?? options?.basePasses ?? DEFAULT_PASSES;
     incomingState.passes = {
       ...basePasses,
