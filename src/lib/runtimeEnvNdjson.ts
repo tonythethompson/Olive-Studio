@@ -82,17 +82,14 @@ export async function consumeInstallNdjson(
   // For non-2xx responses, attempt to parse as a single JSON error object before streaming
   if (!res.ok) {
     const bodyText = await res.text();
+    let data: { ok?: boolean; error?: string } | null = null;
     try {
-      const data = JSON.parse(bodyText) as { ok?: boolean; error?: string };
-      if (data.ok === false && data.error) {
-        throw new Error(data.error);
-      }
-    } catch (err) {
-      // If it's already an Error from the JSON parse above, rethrow
-      if (err instanceof Error && err.message !== "Unexpected token" && err.message !== "Unexpected end of JSON input") {
-        throw err;
-      }
-      // Otherwise fall through to NDJSON parsing below
+      data = JSON.parse(bodyText) as { ok?: boolean; error?: string };
+    } catch {
+      // Not JSON; fall through to NDJSON parsing below.
+    }
+    if (data?.ok === false && data.error) {
+      throw new Error(data.error);
     }
     // If we didn't throw above, create a new response with the body text for NDJSON parsing
     const stream = new ReadableStream<Uint8Array>({
