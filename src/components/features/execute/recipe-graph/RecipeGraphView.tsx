@@ -52,14 +52,16 @@ export function RecipeGraphView({
   /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
-    <div className="flex flex-col h-full min-h-[340px] overflow-x-auto">
-      <GraphCanvas
-        state={state}
-        selectedNodeId={selectedNodeId}
-        onSelectNode={setSelectedNodeId}
-        layoutTick={layoutTick}
-        onLayoutTick={bumpLayout}
-      />
+    <div className="flex flex-col h-full min-h-[340px]">
+      <div className="flex-1 min-h-0 overflow-auto">
+        <GraphCanvas
+          state={state}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={setSelectedNodeId}
+          layoutTick={layoutTick}
+          onLayoutTick={bumpLayout}
+        />
+      </div>
       <div className="px-3 py-1 border-t border-slate-900/80">
         <RecipeValidationPanel state={state} setState={setState} />
       </div>

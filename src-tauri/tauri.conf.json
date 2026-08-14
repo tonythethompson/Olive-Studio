@@ -16,7 +16,7 @@
         "title": "Olive Studio",
         "width": 1280,
         "height": 840,
-        "minWidth": 900,
+        "minWidth": 320,
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
