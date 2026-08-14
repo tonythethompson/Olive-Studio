@@ -9,8 +9,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .docs_search import get_or_build_kb_index
+from .docs_search import _keyword_search, _load_kb_text, get_or_build_kb_index
 from .embeddings import DEFAULT_THRESHOLD, semantic_search
+from .retrieval import get_retrieval_mode, retrieval_meta
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ def get_context_for_pipeline(
         model_name or "",
         target_hardware or "",
     )
+    mode = get_retrieval_mode()
 
     if not query or top_k == 0:
         return {
@@ -95,22 +97,71 @@ def get_context_for_pipeline(
             "confidence": 0.0,
             "snippet_count": 0,
             "status": "ok",
+            "retrieval": retrieval_meta(mode=mode, effective="none"),
         }
 
     status = "ok"
-    try:
-        kb_texts, embeddings = get_or_build_kb_index()
-        results = semantic_search(
-            query,
-            kb_texts,
-            embeddings,
-            top_k,
-            threshold=DEFAULT_THRESHOLD,
-        )
-    except Exception:
-        logger.warning("KB retrieval failed for pipeline context", exc_info=True)
-        results = []
-        status = "retrieval_failed"
+    retrieval: dict[str, Any] = retrieval_meta(mode=mode, effective="semantic")
+
+    def _keyword_results() -> list[dict[str, Any]]:
+        terms = [t.lower() for t in query.split() if t]
+        return _keyword_search(_load_kb_text(), terms, top_k)
+
+    if mode == "keyword":
+        try:
+            results = _keyword_results()
+            retrieval = retrieval_meta(mode=mode, effective="keyword")
+        except Exception:
+            logger.warning(
+                "Keyword retrieval failed for pipeline context",
+                exc_info=True,
+            )
+            results = []
+            status = "retrieval_failed"
+            retrieval = retrieval_meta(
+                mode=mode,
+                effective="none",
+                degraded=True,
+                reason="keyword_error",
+            )
+    else:
+        try:
+            kb_texts, embeddings = get_or_build_kb_index()
+            results = semantic_search(
+                query,
+                kb_texts,
+                embeddings,
+                top_k,
+                threshold=DEFAULT_THRESHOLD,
+            )
+        except Exception:
+            logger.warning(
+                "Semantic KB retrieval failed for pipeline context; "
+                "falling back to keyword search",
+                exc_info=True,
+            )
+            try:
+                results = _keyword_results()
+                status = "degraded"
+                retrieval = retrieval_meta(
+                    mode=mode,
+                    effective="keyword",
+                    degraded=True,
+                    reason="semantic_error",
+                )
+            except Exception:
+                logger.warning(
+                    "Keyword fallback also failed for pipeline context",
+                    exc_info=True,
+                )
+                results = []
+                status = "retrieval_failed"
+                retrieval = retrieval_meta(
+                    mode=mode,
+                    effective="none",
+                    degraded=True,
+                    reason="keyword_and_semantic_error",
+                )
 
     confidences = [float(r.get("relevance", 0.0)) for r in results]
     confidence = sum(confidences) / len(confidences) if confidences else 0.0
@@ -123,7 +174,8 @@ def get_context_for_pipeline(
         "confidence": confidence,
         "snippet_count": len(results),
         # Distinguishes "genuinely no relevant KB entries" (ok, empty
-        # results) from "the retrieval subsystem errored" (retrieval_failed)
-        # — both would otherwise look identical to a caller.
+        # results) from "semantic failed, keyword fallback used" (degraded)
+        # from "both retrieval paths failed" (retrieval_failed).
         "status": status,
+        "retrieval": retrieval,
     }

@@ -16,6 +16,15 @@ export const kbSyncRateLimit = rateLimit({
   message: { ok: false, error: "Rate limited: please wait before syncing again." },
 });
 
+/** MCP retrieval / preload settings (restarts the MCP child). */
+export const mcpSettingsRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Too many MCP settings updates. Please wait a minute and try again." },
+});
+
 /** Login / auth-sensitive endpoints (Codex, Devin). */
 export const authActionRateLimit = rateLimit({
   windowMs: 60_000,
