@@ -2,7 +2,7 @@
  * Single IHV provider selection card (conflicts, install CTAs, local detection).
  * Extracted from IHVIntegrationPanel to keep that panel under CodeFactor complexity limits.
  */
-import { memo, useState, useEffect, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -869,10 +869,13 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
 }: HardwareProviderCardProps) {
   const isSelected = state.ihvProvider === p.id;
   // Selected card starts open so the active target's details aren't hidden behind a click.
+  // Snap expand/collapse when selection changes; user can still toggle while selected.
   const [isExpanded, setIsExpanded] = useState(isSelected);
-  useEffect(() => {
+  const [wasSelected, setWasSelected] = useState(isSelected);
+  if (wasSelected !== isSelected) {
+    setWasSelected(isSelected);
     setIsExpanded(isSelected);
-  }, [isSelected]);
+  }
   const Icon = p.icon;
   const pConflicts = getProviderConflicts(p.id, state.passes);
   const cardHasCritical = pConflicts.some((c) => c.severity === "critical");
