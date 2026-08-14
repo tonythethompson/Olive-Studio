@@ -95,6 +95,38 @@ describe("mergeBridgeUiState MultiLoRA", () => {
     expect(merged.error).toMatch(/targetModules must be an array of non-empty strings/i);
   });
 
+  it("rejects more than 32 targetModules instead of truncating", () => {
+    const modules = Array.from({ length: 33 }, (_, i) => `mod_${i}`);
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", targetModules: modules }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/targetModules exceeds maximum of 32/i);
+  });
+
+  it("rejects a targetModules name longer than 128 characters instead of shortening it", () => {
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multi_lora_adapters: [{ path: "/a", target_modules: ["q_proj", "m".repeat(129)] }],
+    });
+    expect(merged.ok).toBe(false);
+    if (merged.ok) return;
+    expect(merged.code).toBe("invalid_ui_state");
+    expect(merged.error).toMatch(/each targetModules entry must be at most 128 characters/i);
+  });
+
+  it("accepts 32 targetModules including a 128-character name", () => {
+    const modules = Array.from({ length: 31 }, (_, i) => `mod_${i}`);
+    modules.push("n".repeat(128));
+    const merged = mergeBridgeUiState(createDefaultPipelineState(), {
+      multiLoraAdapters: [{ path: "/a", targetModules: modules }],
+    });
+    expect(merged.ok).toBe(true);
+    if (!merged.ok) return;
+    expect(merged.state.multiLoraAdapters).toEqual([{ path: "/a", targetModules: modules }]);
+  });
+
   it("rejects non-object adapter entries instead of dropping them", () => {
     const valid = { path: "/a" };
     for (const malformed of [null, "adapter-path", ["/a"]]) {

@@ -100,6 +100,8 @@ function parseLocalFiles(raw: unknown): UIState["localFiles"] | undefined {
 }
 
 const MAX_BRIDGE_ADAPTERS = 8;
+const MAX_BRIDGE_TARGET_MODULES = 32;
+const MAX_BRIDGE_TARGET_MODULE_NAME = 128;
 
 type BridgeTargetModulesResult =
   | { ok: true; modules?: string[] }
@@ -114,6 +116,12 @@ function parseBridgeTargetModules(rawModules: unknown): BridgeTargetModulesResul
     };
   }
   if (rawModules.length === 0) return { ok: true, modules: undefined };
+  if (rawModules.length > MAX_BRIDGE_TARGET_MODULES) {
+    return {
+      ok: false,
+      reason: `targetModules exceeds maximum of ${MAX_BRIDGE_TARGET_MODULES}`,
+    };
+  }
 
   const modules: string[] = [];
   for (const entry of rawModules) {
@@ -123,8 +131,14 @@ function parseBridgeTargetModules(rawModules: unknown): BridgeTargetModulesResul
         reason: "targetModules must be an array of non-empty strings",
       };
     }
-    modules.push(entry.trim().slice(0, 128));
-    if (modules.length >= 32) break;
+    const moduleName = entry.trim();
+    if (moduleName.length > MAX_BRIDGE_TARGET_MODULE_NAME) {
+      return {
+        ok: false,
+        reason: `each targetModules entry must be at most ${MAX_BRIDGE_TARGET_MODULE_NAME} characters`,
+      };
+    }
+    modules.push(moduleName);
   }
   return { ok: true, modules };
 }
