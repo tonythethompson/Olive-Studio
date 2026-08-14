@@ -251,8 +251,8 @@ export function ReportIssueModal({
       <Card className="w-full max-w-lg border-slate-800 bg-slate-900 shadow-2xl max-h-[90vh] flex flex-col">
         <CardHeader
           titleId="report-issue-title"
-          title="Report an Issue"
-          description="Help us improve Olive Studio by reporting bugs or suggesting features."
+          title="Send feedback"
+          description="Bugs, ideas, or anything else about Olive Studio."
           badge={
             <Button
               ref={closeButtonRef}

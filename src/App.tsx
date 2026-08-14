@@ -482,7 +482,7 @@ function Dashboard() {
             <footer className="shrink-0 border-t border-slate-800 px-2 wide:px-4 py-2.5 flex justify-center wide:justify-start">
               <button
                 type="button"
-                aria-label="Report an issue"
+                aria-label="Send feedback"
                 onClick={() => {
                   setReportData(null);
                   setIsReportOpen(true);
@@ -663,7 +663,7 @@ function Dashboard() {
 
         {/* Report Issue Modal */}
         {isReportOpen && (
-          <ErrorBoundary label="Report issue" onReportError={() => setIsReportOpen(false)}>
+          <ErrorBoundary label="Send feedback" onReportError={() => setIsReportOpen(false)}>
             <Suspense fallback={null}>
               <ReportIssueModal
                 open={isReportOpen}
