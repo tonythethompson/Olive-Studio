@@ -50,7 +50,6 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
     case "CPUExecutionProvider":
       return "Intel Core i9 CPU";
     case "QNNExecutionProvider":
-    case "QnnAbiExecutionProvider":
       return "Qualcomm Snapdragon NPU";
     case "ROCMExecutionProvider":
       return "AMD MI300X / ROCm";
@@ -269,7 +268,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     prevIssueCountRef.current = count;
 
     const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
-    fetchDiagnostic(logLines);
+    void fetchDiagnostic(logLines).catch(() => {});
   }, [validation.issues, modelSelected, fetchDiagnostic, clearDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
@@ -356,9 +355,8 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
   const warningCount = allIssues.filter((i) => i.severity === "warning").length;
 
   const isLoading = compatLoading;
-  const hasError = compatError;
 
-  if (allIssues.length === 0 && !isLoading && !hasError && compatValidated) {
+  if (allIssues.length === 0 && !isLoading && !compatError && compatValidated) {
     return (
       <div
         data-testid="recipe-validation-panel"

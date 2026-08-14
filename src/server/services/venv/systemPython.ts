@@ -3,8 +3,10 @@
  * Extracted from index.ts so familyEnsure can import without a cycle.
  */
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
+import { PREFERRED_PYTHON_MINORS } from "../../../lib/pythonPrerequisite.ts";
 import { execFileAsync, readStudioConfig } from "./config.ts";
 import { PYTHON_MIN, PYTHON_MAX_RECOMMENDED } from "./paths.ts";
 import { isPathPythonCommand, resolveAllowedPythonFile, type PathPythonCommand } from "./pythonGuard.ts";
@@ -91,9 +93,170 @@ async function isRunnablePython(candidate: string): Promise<boolean> {
   return v != null && isSupportedOlivePython(v);
 }
 
+/** Pull absolute python.exe paths out of `pymanager` / `py` list output. */
+export function parsePythonExeLines(text: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim().replace(/^"|"$/g, "");
+    if (!trimmed) continue;
+    const hits: string[] = [];
+    if (/^[A-Za-z]:[\\/].+\.exe$/i.test(trimmed) || /(^|[/\\])python(\d+(\.\d+)*)?(\.exe)?$/i.test(trimmed)) {
+      if (trimmed.includes("/") || trimmed.includes("\\")) hits.push(trimmed);
+    }
+    const win = trimmed.matchAll(/([A-Za-z]:\\[^:*?"<>|\r\n]*?python(?:\d+(?:\.\d+)*)?\.exe)/gi);
+    for (const m of win) hits.push(m[1]!);
+    const posix = trimmed.matchAll(/((?:\/[\w.+-]+)+\/python(?:\d+(?:\.\d+)*)?)/g);
+    for (const m of posix) hits.push(m[1]!);
+    for (const hit of hits) {
+      if (seen.has(hit)) continue;
+      seen.add(hit);
+      out.push(hit);
+    }
+  }
+  return out;
+}
+
+function pushUnique(list: string[], value: string | undefined): void {
+  if (!value) return;
+  if (list.includes(value)) return;
+  list.push(value);
+}
+
+function listImmediateSubdirInterpreters(root: string, nameRe: RegExp, relPython: string[]): string[] {
+  const found: string[] = [];
+  try {
+    const ents = fs.readdirSync(root, { withFileTypes: true });
+    for (const ent of ents) {
+      if (!ent.isDirectory() || ent.name.includes("\0")) continue;
+      if (!nameRe.test(ent.name)) continue;
+      for (const rel of relPython) {
+        found.push(path.join(root, ent.name, rel));
+      }
+    }
+  } catch {
+    /* missing dir */
+  }
+  return found;
+}
+
+function collectWindowsPythonFileCandidates(env: NodeJS.ProcessEnv, home: string): string[] {
+  const fileCandidates: string[] = [];
+  const localAppData = env.LOCALAPPDATA ?? "";
+  const programFiles = env.ProgramFiles ?? "C:\\Program Files";
+  const programFilesX86 = env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+  for (const ver of ["312", "311", "313", "310"]) {
+    if (localAppData) {
+      pushUnique(fileCandidates, path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
+      pushUnique(fileCandidates, path.join(localAppData, "Python", "bin", `python3.${ver.slice(1)}.exe`));
+      pushUnique(fileCandidates, path.join(localAppData, "Python", "bin", "python.exe"));
+    }
+    pushUnique(fileCandidates, path.join(programFiles, "Python" + ver, "python.exe"));
+    pushUnique(fileCandidates, path.join(programFilesX86, "Python" + ver, "python.exe"));
+    pushUnique(fileCandidates, path.join(`C:\\Python${ver}`, "python.exe"));
+  }
+  if (localAppData) {
+    for (const p of listImmediateSubdirInterpreters(
+      path.join(localAppData, "Python"),
+      /^pythoncore-3\.(10|11|12|13)\b/i,
+      ["python.exe"],
+    )) {
+      pushUnique(fileCandidates, p);
+    }
+  }
+  if (home) {
+    pushUnique(fileCandidates, path.join(home, "scoop", "apps", "python", "current", "python.exe"));
+    pushUnique(fileCandidates, path.join(home, "scoop", "apps", "python312", "current", "python.exe"));
+  }
+  return fileCandidates;
+}
+
+function collectPosixPythonFileCandidates(platform: NodeJS.Platform, home: string): string[] {
+  const fileCandidates: string[] = [];
+  const versionedNames = PREFERRED_PYTHON_MINORS.flatMap((minor) => [`python3.${minor}`, `python${minor}`]);
+  const binDirs = ["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin", "/home/linuxbrew/.linuxbrew/bin"];
+  if (home) binDirs.push(path.join(home, ".local", "bin"));
+  for (const dir of binDirs) {
+    for (const name of versionedNames) {
+      pushUnique(fileCandidates, path.join(dir, name));
+    }
+  }
+
+  if (platform === "darwin") {
+    for (const minor of PREFERRED_PYTHON_MINORS) {
+      pushUnique(fileCandidates, `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3`);
+      pushUnique(fileCandidates, `/Library/Frameworks/Python.framework/Versions/3.${minor}/bin/python3.${minor}`);
+    }
+  }
+
+  if (home) {
+    for (const p of listImmediateSubdirInterpreters(
+      path.join(home, ".pyenv", "versions"),
+      /^3\.(10|11|12|13)(\.|$)/,
+      ["bin/python", "bin/python3"],
+    )) {
+      pushUnique(fileCandidates, p);
+    }
+  }
+  return fileCandidates;
+}
+
+/**
+ * Known-good install locations, 3.12 first.
+ * Exported for unit tests (no process spawn).
+ */
+export function collectPreferredPythonFileCandidates(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const home = os.homedir();
+  if (platform === "win32") return collectWindowsPythonFileCandidates(env, home);
+  return collectPosixPythonFileCandidates(platform, home);
+}
+
+async function execLiteralList(
+  cmd: "pymanager" | "py",
+  args: string[],
+): Promise<string> {
+  try {
+    const { stdout, stderr } =
+      cmd === "pymanager"
+        ? await execFileAsync("pymanager", args, { timeout: 8_000, windowsHide: true })
+        : await execFileAsync("py", args, { timeout: 8_000, windowsHide: true });
+    return `${stdout}\n${stderr}`;
+  } catch (err: unknown) {
+    const stdout =
+      err && typeof err === "object" && "stdout" in err
+        ? String((err as { stdout?: unknown }).stdout ?? "")
+        : "";
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr?: unknown }).stderr ?? "")
+        : "";
+    return `${stdout}\n${stderr}`;
+  }
+}
+
+/** Ask the Windows Python install manager / legacy launcher for interpreter paths. */
+export async function listWindowsManagedPythonPaths(): Promise<string[]> {
+  if (process.platform !== "win32") return [];
+  const attempts: Array<{ cmd: "pymanager" | "py"; args: string[] }> = [
+    { cmd: "pymanager", args: ["list", "--format=exe"] },
+    { cmd: "py", args: ["list", "--format=exe"] },
+    { cmd: "py", args: ["-0p"] },
+  ];
+  for (const attempt of attempts) {
+    const text = await execLiteralList(attempt.cmd, attempt.args);
+    const paths = parsePythonExeLines(text);
+    if (paths.length > 0) return paths;
+  }
+  return [];
+}
+
 /**
  * Resolve a system Python for creating the project venv.
- * Order: env OLIVE_STUDIO_PYTHON → saved config → preferred installs (3.12 first) → PATH.
+ * Order: env OLIVE_STUDIO_PYTHON → saved config → preferred installs (3.12 first)
+ * → Windows install manager / py launcher → PATH.
  */
 export async function findSystemPython(): Promise<string | null> {
   const fileCandidates: string[] = [];
@@ -104,24 +267,26 @@ export async function findSystemPython(): Promise<string | null> {
   const cfgPy = readStudioConfig().systemPython?.trim();
   if (cfgPy) fileCandidates.push(cfgPy);
 
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA ?? "";
-    const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
-    for (const ver of ["312", "311", "313", "310"]) {
-      if (localAppData) {
-        fileCandidates.push(path.join(localAppData, "Programs", "Python", `Python${ver}`, "python.exe"));
-      }
-      fileCandidates.push(path.join(programFiles, "Python" + ver, "python.exe"));
-    }
-  }
+  fileCandidates.push(...collectPreferredPythonFileCandidates(process.platform));
 
   const seen = new Set<string>();
-  for (const c of fileCandidates) {
-    if (!c || seen.has(c)) continue;
-    seen.add(c);
-    const allowed = resolveAllowedPythonFile(c);
-    if (!allowed.ok) continue;
-    if (await isRunnablePython(allowed.path)) return allowed.path;
+  const tryCandidates = async (candidates: string[]): Promise<string | null> => {
+    for (const c of candidates) {
+      if (!c || seen.has(c)) continue;
+      seen.add(c);
+      const allowed = resolveAllowedPythonFile(c);
+      if (!allowed.ok) continue;
+      if (await isRunnablePython(allowed.path)) return allowed.path;
+    }
+    return null;
+  };
+
+  const fromFiles = await tryCandidates(fileCandidates);
+  if (fromFiles) return fromFiles;
+
+  if (process.platform === "win32") {
+    const fromManager = await tryCandidates(await listWindowsManagedPythonPaths());
+    if (fromManager) return fromManager;
   }
 
   if (await isRunnablePython("python3")) return "python3";

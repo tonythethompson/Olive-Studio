@@ -429,7 +429,7 @@ async function ensureVenvFamilyInner(
     return {
       ok: false,
       error:
-        "Python not found. Install Python 3.10–3.13 (3.12 recommended for torch/CUDA wheels), set a path in Runtime → Set Python, or set OLIVE_STUDIO_PYTHON.",
+        "Python not found. Install Python 3.10–3.13 (3.12 recommended) from Runtime → Setup runtime, or set OLIVE_STUDIO_PYTHON.",
     };
   }
 
