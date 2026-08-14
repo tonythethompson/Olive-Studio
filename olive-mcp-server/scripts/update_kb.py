@@ -98,13 +98,14 @@ def _coalesce_text(data: Any) -> str:
     if isinstance(data, dict):
         if isinstance(data.get("content"), str):
             return data["content"]
+        parts: list[str] = []
         pages = data.get("pages", {})
         if isinstance(pages, dict):
-            parts = [v for v in pages.values() if isinstance(v, str)]
-            if parts:
-                return "\n\n".join(parts)
-        if isinstance(data.get("overview"), str):
-            return data["overview"]
+            parts.extend(v for v in pages.values() if isinstance(v, str))
+        overview = data.get("overview")
+        if isinstance(overview, str) and overview:
+            parts.append(overview)
+        return "\n\n".join(parts)
     return ""
 
 

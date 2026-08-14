@@ -13,6 +13,10 @@ from bs4 import BeautifulSoup
 from .. import __version__
 
 DEFAULT_TIMEOUT = 15
+MAX_ATTEMPTS = 3
+MAX_REDIRECTS = 5
+RETRY_STATUS = {429, 500, 502, 503, 504}
+REDIRECT_STATUS = {301, 302, 303, 307, 308}
 _session: requests.Session | None = None
 
 
@@ -41,29 +45,55 @@ def _retry_delay(response: Any, attempt: int) -> float:
     return min(0.25 * (2**attempt), 4.0)
 
 
-def fetch_html(url: str) -> str:
-    """Fetch HTML with bounded retries for transient responses."""
+def _request(
+    url: str,
+    *,
+    kind: str,
+    params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+) -> requests.Response:
+    """Fetch a URL, retrying transient responses and following same-host redirects.
+
+    Retry attempts and redirect hops have independent budgets: a slow upstream that
+    also redirects should not exhaust the redirect allowance.
+    """
     current_url = url
     origin_host = urlparse(url).netloc
-    for attempt in range(3):
-        response = get_session().get(current_url, timeout=DEFAULT_TIMEOUT, allow_redirects=False)
-        if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+    attempt = 0
+    redirects = 0
+    while True:
+        response = get_session().get(
+            current_url,
+            params=params,
+            headers=headers,
+            timeout=DEFAULT_TIMEOUT,
+            allow_redirects=False,
+        )
+        if response.status_code in RETRY_STATUS and attempt < MAX_ATTEMPTS - 1:
             time.sleep(_retry_delay(response, attempt))
+            attempt += 1
             continue
         location = response.headers.get("Location", "") if hasattr(response, "headers") else ""
-        if response.status_code in {301, 302, 303, 307, 308} and location:
-            if attempt >= 2:
+        if response.status_code in REDIRECT_STATUS and location:
+            if redirects >= MAX_REDIRECTS:
                 raise requests.TooManyRedirects(f"Too many redirects fetching {url}")
+            redirects += 1
+            attempt = 0
             current_url = urljoin(current_url, location)
             if urlparse(current_url).netloc != origin_host:
-                raise requests.RequestException(f"HTML request redirected to another host: {current_url}")
+                raise requests.RequestException(f"{kind} request redirected to another host: {current_url}")
             continue
-        response.raise_for_status()
-        content_type = response.headers.get("Content-Type", "") if hasattr(response, "headers") else ""
-        if content_type and "html" not in content_type.lower() and "text/plain" not in content_type.lower():
-            raise requests.RequestException(f"Expected HTML response, got {content_type}")
-        return response.text
-    raise requests.RequestException(f"HTTP request failed after retries: {url}")
+        return response
+
+
+def fetch_html(url: str) -> str:
+    """Fetch HTML with bounded retries for transient responses."""
+    response = _request(url, kind="HTML")
+    response.raise_for_status()
+    content_type = response.headers.get("Content-Type", "") if hasattr(response, "headers") else ""
+    if content_type and "html" not in content_type.lower() and "text/plain" not in content_type.lower():
+        raise requests.RequestException(f"Expected HTML response, got {content_type}")
+    return response.text
 
 
 def fetch_json(
@@ -73,29 +103,7 @@ def fetch_json(
     headers: dict[str, str] | None = None,
 ) -> requests.Response:
     """Fetch a JSON API response through the shared session."""
-    current_url = url
-    origin_host = urlparse(url).netloc
-    for attempt in range(3):
-        response = get_session().get(
-            current_url,
-            params=params,
-            headers=headers,
-            timeout=DEFAULT_TIMEOUT,
-            allow_redirects=False,
-        )
-        if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
-            time.sleep(_retry_delay(response, attempt))
-            continue
-        location = response.headers.get("Location", "") if hasattr(response, "headers") else ""
-        if response.status_code in {301, 302, 303, 307, 308} and location:
-            if attempt >= 2:
-                raise requests.TooManyRedirects(f"Too many redirects fetching {url}")
-            current_url = urljoin(current_url, location)
-            if urlparse(current_url).netloc != origin_host:
-                raise requests.RequestException(f"JSON request redirected to another host: {current_url}")
-            continue
-        return response
-    raise requests.RequestException(f"HTTP request failed after retries: {url}")
+    return _request(url, kind="JSON", params=params, headers=headers)
 
 
 def markdown_from_html(html: str) -> str:

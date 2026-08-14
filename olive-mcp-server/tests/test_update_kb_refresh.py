@@ -49,6 +49,26 @@ def test_refresh_is_deterministic_and_preserves_candidates(monkeypatch, tmp_path
     assert report["deprecations"]
 
 
+def test_ort_overview_is_parsed_alongside_pages(monkeypatch, tmp_path):
+    update_kb = _load_script()
+    monkeypatch.setattr(update_kb, "fetch_official_docs", lambda: {"status": "ok", "pages": {}})
+    monkeypatch.setattr(update_kb, "fetch_github_issues", lambda: {"status": "ok", "content": ""})
+    monkeypatch.setattr(
+        update_kb,
+        "fetch_onnx_runtime_docs",
+        lambda: {
+            "status": "ok",
+            "pages": {"CUDA": "## CUDA\n\n- use it."},
+            "overview": "## Overview\n\n- CPU runs everywhere.",
+        },
+    )
+    update_kb.main(tmp_path)
+    parsed = json.loads((tmp_path / "update_report.json").read_text())["parsed"]
+    headings = parsed["onnx_runtime"]["headings"]
+    assert "CUDA" in headings
+    assert "Overview" in headings
+
+
 def test_refresh_error_exits(tmp_path, monkeypatch):
     update_kb = _load_script()
     monkeypatch.setattr(update_kb, "fetch_official_docs", lambda: {"status": "error"})

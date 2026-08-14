@@ -141,6 +141,20 @@ def test_http_follows_same_host_redirect_and_rejects_cross_host(monkeypatch):
         _http.fetch_html("https://example.test/page")
 
 
+def test_http_retry_budget_does_not_consume_redirect_budget(monkeypatch):
+    session = Session({
+        "https://example.test/page": [
+            Response(status_code=503),
+            Response(status_code=503),
+            Response(status_code=302, headers={"Location": "/final"}),
+        ],
+        "https://example.test/final": [Response(status_code=503), Response(HTML)],
+    })
+    monkeypatch.setattr(_http, "get_session", lambda: session)
+    monkeypatch.setattr(_http.time, "sleep", lambda _seconds: None)
+    assert _http.fetch_html("https://example.test/page")
+
+
 def test_github_filters_prs_and_paginates(monkeypatch):
     calls = []
     issue_pages = [
