@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable, Iterator
 
 import pytest
 
 from olive_mcp_server.tools import retrieval
+
+logger = logging.getLogger(__name__)
 
 # Generous ceiling for abandoned budget workers (tests use ≤0.55s sleeps today).
 _INFLIGHT_DRAIN_TIMEOUT_S = 5.0
@@ -73,4 +76,4 @@ def _warm_embedding_model_once() -> None:
     except Exception:
         # Offline/sandboxed environments: leave lazy-load behavior as-is;
         # individual tests that need semantic mode already mock it out.
-        pass
+        logger.debug("Embedding model warm-load skipped (offline/sandboxed)", exc_info=True)
