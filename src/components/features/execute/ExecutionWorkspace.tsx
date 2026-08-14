@@ -53,7 +53,6 @@ import {
   Square,
   Wrench,
   MoreHorizontal,
-  FileText,
   Bug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -67,7 +66,6 @@ import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
 import { GpuMetricsBar } from "@/components/features/execute/GpuMetricsBar";
 
 import { getJobHistory, type JobHistoryRecord } from "@/lib/jobHistoryStore";
-import { downloadMarkdownReport } from "@/lib/reportGenerator";
 import { JobHistoryModal } from "@/components/features/execute/JobHistoryModal";
 import { ReportIssueModal } from "@/components/ReportIssueModal";
 import { OwrExportOverlay } from "./OwrExportOverlay";
@@ -1003,24 +1001,6 @@ export function ExecutionWorkspace({
                         }}
                       >
                         <History className="h-3 w-3" /> Run History
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-slate-300 hover:bg-slate-900 cursor-pointer"
-                        onClick={() => {
-                          void getJobHistory()
-                            .then((records) => downloadMarkdownReport(records))
-                            .catch((err: unknown) => {
-                              console.error(
-                                "Failed to export Markdown report:",
-                                err instanceof Error ? err.message : err,
-                              );
-                            });
-                          setMoreToolsOpen(false);
-                        }}
-                      >
-                        <FileText className="h-3 w-3" /> Export Report
                       </button>
                       <button
                         type="button"
