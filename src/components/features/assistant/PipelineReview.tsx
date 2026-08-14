@@ -16,7 +16,7 @@
  * @module PipelineReview
  */
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useLayoutEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -48,6 +48,11 @@ export interface PipelineReviewProps {
   /** Optional ref populated with `refresh` so the parent can trigger a review. */
   reviewRefreshRef?: React.RefObject<((options?: { resetFirst?: boolean }) => void) | null>;
   reviewResetRef?: React.RefObject<(() => void) | null>;
+  /**
+   * Invoked after review control refs are wired (layout phase). Parents that
+   * may have queued an initial refresh before mount can flush it here.
+   */
+  onReviewApiReady?: () => void;
 }
 
 // ─── Score Level Colors ──────────────────────────────────────────────────────
@@ -94,7 +99,16 @@ function getScoreTextColor(level: string): string {
  * - 1.7: Zero-state with "No review yet" message and Refresh button.
  * - 1.8: Toggle via click or Enter/Space on focused header.
  */
-export function PipelineReview({ onExplain, className, postPatchRefreshRef, state, setState, reviewRefreshRef, reviewResetRef }: PipelineReviewProps) {
+export function PipelineReview({
+  onExplain,
+  className,
+  postPatchRefreshRef,
+  state,
+  setState,
+  reviewRefreshRef,
+  reviewResetRef,
+  onReviewApiReady,
+}: PipelineReviewProps) {
   // Expanded by default on first session open (Req 1.6).
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -139,8 +153,9 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
     return `${Math.floor(elapsed / 86_400_000)}d ago`;
   }, [hasReviewData, completedAt, nowTick]);
 
-  // Expose schedulePostPatchRefresh to parent via ref (for chat action patches).
-  useEffect(() => {
+  // Wire parent refs in layout phase so parent useEffects / pending flushes
+  // see a live API before paint, not after a dropped mount-time kick.
+  useLayoutEffect(() => {
     if (postPatchRefreshRef) {
       postPatchRefreshRef.current = schedulePostPatchRefresh;
     }
@@ -150,6 +165,7 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
     if (reviewResetRef) {
       reviewResetRef.current = reset;
     }
+    onReviewApiReady?.();
     return () => {
       if (postPatchRefreshRef) {
         postPatchRefreshRef.current = null;
@@ -161,7 +177,15 @@ export function PipelineReview({ onExplain, className, postPatchRefreshRef, stat
         reviewResetRef.current = null;
       }
     };
-  }, [postPatchRefreshRef, reviewRefreshRef, reviewResetRef, schedulePostPatchRefresh, refresh, reset]);
+  }, [
+    postPatchRefreshRef,
+    reviewRefreshRef,
+    reviewResetRef,
+    schedulePostPatchRefresh,
+    refresh,
+    reset,
+    onReviewApiReady,
+  ]);
 
   // ── Toggle handlers ─────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useTransition, useRef } from "react";
+import { useState, useEffect, useMemo, useTransition, useRef, useCallback } from "react";
 import { UIState } from "@/types";
 import type { AskAiChatDetail } from "@/lib/aiChatBridge";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
@@ -23,6 +23,9 @@ import { useLocalEngineSetup } from "./useLocalEngineSetup";
 
 export type { AnalysisResult, Suggestion } from "./types";
 
+type PendingReviewKick =
+  | { kind: "refresh"; resetFirst?: boolean }
+  | { kind: "reset" };
 interface AssistantSidebarProps {
   state?: UIState;
   setState?: (partial: Partial<UIState>) => void;
@@ -81,6 +84,44 @@ export function AssistantSidebar({
   const postPatchRefreshRef = useRef<(() => void) | null>(null);
   const reviewRefreshRef = useRef<((options?: { resetFirst?: boolean }) => void) | null>(null);
   const reviewResetRef = useRef<(() => void) | null>(null);
+  /** Queued when parent kicks review before PipelineReview has wired the refs. */
+  const pendingReviewKickRef = useRef<PendingReviewKick | null>(null);
+
+  const requestReviewRefresh = useCallback((options?: { resetFirst?: boolean }) => {
+    if (options?.resetFirst) {
+      reviewResetRef.current?.();
+    }
+    if (reviewRefreshRef.current) {
+      reviewRefreshRef.current(options);
+      pendingReviewKickRef.current = null;
+      return;
+    }
+    pendingReviewKickRef.current = { kind: "refresh", resetFirst: options?.resetFirst };
+  }, []);
+
+  const requestReviewReset = useCallback(() => {
+    if (reviewResetRef.current) {
+      reviewResetRef.current();
+      pendingReviewKickRef.current = null;
+      return;
+    }
+    pendingReviewKickRef.current = { kind: "reset" };
+  }, []);
+
+  const flushPendingReviewKick = useCallback(() => {
+    const pending = pendingReviewKickRef.current;
+    if (!pending) return;
+    pendingReviewKickRef.current = null;
+    if (pending.kind === "reset") {
+      reviewResetRef.current?.();
+      return;
+    }
+    if (pending.resetFirst) {
+      reviewResetRef.current?.();
+    }
+    reviewRefreshRef.current?.(pending.resetFirst ? { resetFirst: true } : undefined);
+  }, []);
+
   const chatLogForReport = useMemo(
     () =>
       chat.chatMessages.map((m) => {
@@ -120,13 +161,12 @@ export function AssistantSidebar({
     activeTab,
     onProviderActivated: () => {
       setActiveTab("assistant");
-      reviewResetRef.current?.();
-      reviewRefreshRef.current?.({ resetFirst: true });
+      requestReviewRefresh({ resetFirst: true });
     },
     onProviderMissing: () => setActiveTab("settings"),
     onProviderCleared: () => {
       setActiveTab("settings");
-      reviewResetRef.current?.();
+      requestReviewReset();
     },
   });
 
@@ -148,23 +188,22 @@ export function AssistantSidebar({
 
     if (providerSource !== "none") {
       if (providerChanged) {
-        reviewResetRef.current?.();
-        reviewRefreshRef.current?.({ resetFirst: true });
+        requestReviewRefresh({ resetFirst: true });
       } else {
-        reviewRefreshRef.current?.();
+        requestReviewRefresh();
       }
     } else {
-      reviewResetRef.current?.();
+      requestReviewReset();
     }
-  }, [isOpen, providerSource]);
+  }, [isOpen, providerSource, requestReviewRefresh, requestReviewReset]);
 
   useEffect(() => {
     if (!openToAudit) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
-    reviewRefreshRef.current?.();
+    requestReviewRefresh();
     onAuditOpened?.();
-  }, [openToAudit]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [openToAudit, requestReviewRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!pendingChatQuery) return;
@@ -289,6 +328,7 @@ export function AssistantSidebar({
                 postPatchRefreshRef={postPatchRefreshRef}
                 reviewRefreshRef={reviewRefreshRef}
                 reviewResetRef={reviewResetRef}
+                onReviewApiReady={flushPendingReviewKick}
               />
 
               {/* Chat conversation below (Req 1.5) */}
