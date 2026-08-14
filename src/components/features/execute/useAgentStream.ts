@@ -250,6 +250,8 @@ export function useAgentStream({
   const deliveredPrefixRef = useRef<{ kind: ActivityEntryKind; text: string }[]>([]);
   const replayIndexRef = useRef(0);
   const replayingPrefixRef = useRef(false);
+  /** Metrics carry no id and are excluded from prefix matching; dedupe an exact repeat separately. */
+  const lastMetricsTextRef = useRef<string | null>(null);
 
   // Cleanup helper
   const cleanup = useCallback(() => {
@@ -267,6 +269,7 @@ export function useAgentStream({
     deliveredPrefixRef.current = [];
     replayIndexRef.current = 0;
     replayingPrefixRef.current = false;
+    lastMetricsTextRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -315,7 +318,15 @@ export function useAgentStream({
         if (eventId) {
           if (seenPayloadKeysRef.current.has(eventId)) return false;
           addSeenPayloadKey(seenPayloadKeysRef.current, eventId);
-        } else if (replayingPrefixRef.current && !metricsEvent) {
+        } else if (metricsEvent) {
+          // Metrics carry no id and are excluded from log prefix matching
+          // below, so an unkeyed reconnect replay of the latest snapshot
+          // would otherwise never be deduped. Skip an exact repeat of the
+          // last delivered metrics snapshot while a replay is in progress.
+          if (replayingPrefixRef.current && lastMetricsTextRef.current === entry.text) {
+            return false;
+          }
+        } else if (replayingPrefixRef.current) {
           // Prefix matching is log-only. Metrics between replayed logs must
           // not terminate / desync the skip window.
           const res = shouldSkipReplayEntry(
@@ -328,7 +339,9 @@ export function useAgentStream({
           if (res.skip) return false;
         }
 
-        if (!metricsEvent && !isTruncationNotice(entry.text)) {
+        if (metricsEvent) {
+          lastMetricsTextRef.current = entry.text;
+        } else if (!isTruncationNotice(entry.text)) {
           pushDeliveredPrefix(deliveredPrefixRef.current, {
             kind: entry.kind,
             text: entry.text,

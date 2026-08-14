@@ -65,6 +65,44 @@ function requestAgentCancelQuiet(jobId: string): Promise<Response | null> {
   return requestAgentCancelWithTimeout(jobId).catch(() => null);
 }
 
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+interface SubmitPayload {
+  recipeJson: string;
+  cudaVersion: string;
+  idempotencyKey: string;
+}
+
+/**
+ * Re-POST a submit with its original idempotencyKey to reconcile a request whose
+ * response was lost to a client-side abort. The server returns the existing job
+ * (reused: true) instead of spawning a duplicate — this is how an orphaned job
+ * gets found so it can be cancelled, rather than left running unmanaged.
+ */
+async function reconcileOrphanedSubmit(payload: SubmitPayload): Promise<string | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CANCEL_TIMEOUT_MS);
+  try {
+    const resp = await fetch("/api/olive/jobs/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const data = (await resp.json().catch(() => ({}))) as { jobId?: string };
+    return resp.ok ? data.jobId : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function isAbortError(err: unknown): boolean {
   return (
     typeof err === "object" &&
@@ -246,6 +284,8 @@ export function useAgentMode(): UseAgentModeReturn {
   /** Generation that currently owns submitInFlightRef / a deferred stop waiter. */
   const submitGenerationRef = useRef(0);
   const stopRequestedRef = useRef(false);
+  /** Recipe/idempotencyKey for the in-flight submit, so a grace-timeout can reconcile it. */
+  const submitPayloadRef = useRef<SubmitPayload | null>(null);
   const pendingStopWaiterRef = useRef<{
     promise: Promise<boolean>;
     resolve: (ok: boolean) => void;
@@ -286,6 +326,8 @@ export function useAgentMode(): UseAgentModeReturn {
       if (!stopRequestedRef.current) return;
       stopSubmitGraceRef.current = null;
       submitControllerRef.current?.abort();
+      const payload = submitPayloadRef.current;
+      submitPayloadRef.current = null;
       stopRequestedRef.current = false;
       runGenerationRef.current += 1;
       setAgentRunning(false);
@@ -298,6 +340,22 @@ export function useAgentMode(): UseAgentModeReturn {
         errorDescription: "Timed out waiting to cancel pending agent submission",
       });
       resolvePendingStop(false);
+
+      // Best-effort background reconciliation — does not gate or delay the
+      // UI state above. Abort only cancels the client-side request; if the
+      // server had already created the job before the abort landed, the
+      // response is lost and the job would otherwise run unmanaged forever.
+      // Re-POSTing with the same idempotencyKey returns that existing job
+      // (reused: true) instead of spawning a duplicate, so it can be found
+      // and cancelled.
+      if (payload) {
+        void (async () => {
+          const orphanJobId = await reconcileOrphanedSubmit(payload);
+          if (orphanJobId) {
+            await requestAgentCancelQuiet(orphanJobId);
+          }
+        })();
+      }
     }, STOP_SUBMIT_GRACE_MS);
   }, [resolvePendingStop]);
 
@@ -401,16 +459,20 @@ export function useAgentMode(): UseAgentModeReturn {
 
     if (!opts?.recipeJson) return;
 
+    const submitPayload: SubmitPayload = {
+      recipeJson: opts.recipeJson,
+      cudaVersion: opts.cudaVersion ?? "auto",
+      idempotencyKey: generateIdempotencyKey(),
+    };
+    submitPayloadRef.current = submitPayload;
+
     submitInFlightRef.current = true;
     submitGenerationRef.current = thisGen;
     try {
       const resp = await fetch("/api/olive/jobs/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          recipeJson: opts.recipeJson,
-          cudaVersion: opts.cudaVersion ?? "auto",
-        }),
+        body: JSON.stringify(submitPayload),
         signal: submitController.signal,
       });
       const data = (await resp.json().catch(() => ({}))) as { jobId?: string; error?: string };
@@ -453,6 +515,7 @@ export function useAgentMode(): UseAgentModeReturn {
     } finally {
       if (submitGenerationRef.current === thisGen) {
         submitInFlightRef.current = false;
+        submitPayloadRef.current = null;
       }
       if (submitControllerRef.current === submitController) {
         submitControllerRef.current = null;
