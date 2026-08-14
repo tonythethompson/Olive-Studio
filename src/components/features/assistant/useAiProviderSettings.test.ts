@@ -259,4 +259,61 @@ describe("useAiProviderSettings", () => {
     expect(fetchSpy).not.toHaveBeenCalledWith("/api/ai/provider", { method: "DELETE" });
     expect(onProviderCleared).not.toHaveBeenCalled();
   });
+
+  it("calls onProviderActivated after Devin sign-in completes while another runtime provider is active", async () => {
+    const onProviderActivated = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: unknown, init?: RequestInit) => {
+      const urlStr = String(url);
+      if (urlStr.includes("devin/login/complete")) {
+        return Promise.resolve(jsonResponse({ ok: true, name: "Ada" }));
+      }
+      if (urlStr.includes("devin/account")) {
+        return Promise.resolve(jsonResponse({ signedIn: true, name: "Ada" }));
+      }
+      if (urlStr.includes("ai/models")) {
+        return Promise.resolve(jsonResponse({ models: [], source: "fallback" }));
+      }
+      if (urlStr.includes("ai/provider") && init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ ok: true }));
+      }
+      if (urlStr.includes("ai/provider")) {
+        return Promise.resolve(
+          jsonResponse({ source: "runtime", provider: "codex", model: "default" }),
+        );
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const { result } = renderHook(() =>
+      useAiProviderSettings({
+        isOpen: true,
+        activeTab: "settings",
+        onProviderActivated,
+        onProviderCleared: vi.fn(),
+        onProviderMissing: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      result.current.selectProvider("devin");
+      result.current.setDevinToken("browser-token");
+    });
+    await act(async () => {
+      await result.current.handleDevinCompleteLogin();
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith("/api/devin/login/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "browser-token" }),
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/ai/provider",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"provider":"devin"'),
+      }),
+    );
+    expect(onProviderActivated).toHaveBeenCalledTimes(1);
+  });
 });

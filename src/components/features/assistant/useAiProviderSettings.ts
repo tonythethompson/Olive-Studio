@@ -523,6 +523,7 @@ export function useAiProviderSettings({
         body: JSON.stringify({ provider: "devin", model: settingsModel || "swe-1-6" }),
       });
       await fetchProviderStatus();
+      onProviderActivated();
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
