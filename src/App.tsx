@@ -272,6 +272,8 @@ function Dashboard() {
       return;
     }
 
+    // Keep observing until the lazy Execute workspace mounts the panel.
+    // No short safety cutoff: a slow chunk load would otherwise drop Resolve Issues silently.
     const observer = new MutationObserver(() => {
       if (tryExpandAndScroll()) {
         observer.disconnect();
@@ -279,14 +281,9 @@ function Dashboard() {
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    const safetyTimer = window.setTimeout(() => {
-      observer.disconnect();
-      complete();
-    }, 5000);
 
     return () => {
       observer.disconnect();
-      window.clearTimeout(safetyTimer);
     };
   }, [pendingResolveIssues, activeView]);
 
