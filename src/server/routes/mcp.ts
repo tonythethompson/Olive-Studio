@@ -424,8 +424,16 @@ export function mountMcpRoutes(router: Router): void {
         } catch (err) {
           // Revert config on disk if reconnect failed so failed settings are not persisted
           writeStudioConfig({ mcpSettings: previousMcpSettings });
-          // Attempt best-effort reconnect with previous settings
-          void reconnectMcpClient().catch(() => undefined);
+          // Await restore so the next settings write cannot share this reconnect
+          // (and so we do not release the write queue while MCP is mid-rollback).
+          try {
+            await reconnectMcpClient();
+          } catch (rollbackErr) {
+            console.warn(
+              "[mcp] failed to restore previous MCP process after settings rollback:",
+              rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
+            );
+          }
           throw err;
         }
       });

@@ -419,6 +419,50 @@ describe("POST /api/mcp/settings", () => {
 
     const onDisk = readStudioConfig();
     expect(onDisk.mcpSettings).toEqual({ retrievalMode: "auto", preloadEmbeddings: false });
+    // Failed apply + rollback attempt.
+    expect(mcpToolMocks.reconnectCalls).toBe(2);
+  });
+
+  it("awaits rollback reconnect before the next settings write can start", async () => {
+    writeStudioConfig({ mcpSettings: { retrievalMode: "auto", preloadEmbeddings: false } });
+
+    let releaseRollback!: () => void;
+    const rollbackHold = new Promise<void>((resolve) => {
+      releaseRollback = resolve;
+    });
+    let reconnects = 0;
+    mcpToolMocks.reconnectMcpClientImpl = async () => {
+      reconnects += 1;
+      if (reconnects === 1) throw new Error("Failed to spawn process");
+      if (reconnects === 2) await rollbackHold;
+    };
+
+    const first = fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "semantic" }),
+    });
+    await vi.waitFor(() => {
+      expect(reconnects).toBe(2);
+    });
+
+    const second = fetch(`${baseUrl}/api/mcp/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retrievalMode: "keyword" }),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reconnects).toBe(2);
+
+    releaseRollback();
+    const [res1, res2] = await Promise.all([first, second]);
+    expect(res1.status).toBe(500);
+    expect(res2.status).toBe(200);
+    expect(reconnects).toBe(3);
+    const body2 = (await res2.json()) as {
+      mcpSettings?: { retrievalMode?: string; preloadEmbeddings?: boolean };
+    };
+    expect(body2.mcpSettings?.retrievalMode).toBe("keyword");
   });
 
   it("rejects settings changes when OLIVE_MCP_URL is configured", async () => {
