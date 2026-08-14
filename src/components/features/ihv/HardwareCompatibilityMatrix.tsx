@@ -19,6 +19,41 @@ import {
   Lock,
 } from "lucide-react";
 
+type CellCompatStatus = "supported" | "partial" | "unsupported" | "blocked";
+
+function getPassStatusButtonLabel(status: CellCompatStatus, isActive: boolean): string {
+  if (status === "unsupported") return "Unsupported";
+  if (status === "blocked") return "Blocked";
+  if (!isActive) return "Enable";
+  if (status === "partial") return "Fallback";
+  return "Active";
+}
+
+function PassStatusBadge({
+  status,
+  color,
+  isActive,
+  disabled,
+}: {
+  status: CellCompatStatus;
+  color: string;
+  isActive: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-7 min-w-[4.5rem] items-center justify-center rounded border px-2 text-[10.5px] font-mono font-medium transition-all",
+        color,
+        disabled && "opacity-60 cursor-not-allowed",
+        !disabled && !isActive && "hover:brightness-110 active:scale-95 cursor-pointer",
+      )}
+    >
+      {getPassStatusButtonLabel(status, isActive)}
+    </span>
+  );
+}
+
 interface HardwareCompatibilityMatrixProps {
   selectableProviders: typeof PROVIDER_CATALOG;
   state: UIState;
@@ -52,18 +87,28 @@ export function HardwareCompatibilityMatrix({
   const [showAllProviders, setShowAllProviders] = useState(false);
   const selectedProviderId = state.ihvProvider;
 
-  const visibleProviders = useMemo(() => {
-    if (showAllProviders) return selectableProviders;
-    const filtered = selectableProviders.filter(
-      (p) => p.id === selectedProviderId || isProviderDetectedLocally(p.id, hardwareProbe),
-    );
-    return filtered.length > 0 ? filtered : selectableProviders;
-  }, [selectableProviders, selectedProviderId, hardwareProbe, showAllProviders]);
+  const detectedOrSelectedProviders = useMemo(
+    () =>
+      selectableProviders.filter(
+        (p) => p.id === selectedProviderId || isProviderDetectedLocally(p.id, hardwareProbe),
+      ),
+    [selectableProviders, selectedProviderId, hardwareProbe],
+  );
+  // Filtering is available when the detected/selected subset is non-empty and
+  // smaller than the full catalog. Gate the toolbar on that, not on the current
+  // visible length, so "Show all" does not unmount the "Show detected only" control.
+  const canFilterProviders =
+    detectedOrSelectedProviders.length > 0 &&
+    detectedOrSelectedProviders.length < selectableProviders.length;
+  const visibleProviders =
+    showAllProviders || detectedOrSelectedProviders.length === 0
+      ? selectableProviders
+      : detectedOrSelectedProviders;
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/25 mt-2 shadow-xl animate-in fade-in duration-300">
-        {selectableProviders.length > 0 && (
+        {canFilterProviders && (
           <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-slate-800/80 bg-slate-900/40">
             <span className="text-xs text-slate-500 truncate">
               {showAllProviders ? "Showing all providers" : "Showing detected & selected providers"}
@@ -271,30 +316,12 @@ export function HardwareCompatibilityMatrix({
                                 }
                                 className="inline-flex w-full items-center justify-center p-1 disabled:opacity-100"
                               >
-                                {(() => {
-                                  const label =
-                                    comp.status === "unsupported"
-                                      ? "Unsupported"
-                                      : comp.status === "blocked"
-                                        ? "Blocked"
-                                        : isCurrentlyActiveInCore
-                                          ? comp.status === "partial"
-                                            ? "Fallback"
-                                            : "Active"
-                                          : "Enable";
-                                  return (
-                                    <span
-                                      className={cn(
-                                        "inline-flex h-7 min-w-[4.5rem] items-center justify-center rounded border px-2 text-[10.5px] font-mono font-medium transition-all",
-                                        comp.color,
-                                        cellDisabled && "opacity-60 cursor-not-allowed",
-                                        !cellDisabled && !isCurrentlyActiveInCore && "hover:brightness-110 active:scale-95 cursor-pointer",
-                                      )}
-                                    >
-                                      {label}
-                                    </span>
-                                  );
-                                })()}
+                                <PassStatusBadge
+                                  status={comp.status}
+                                  color={comp.color}
+                                  isActive={isCurrentlyActiveInCore}
+                                  disabled={cellDisabled}
+                                />
                               </button>
                               </div>
                             </TooltipTrigger>

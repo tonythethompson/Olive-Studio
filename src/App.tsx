@@ -120,6 +120,7 @@ function Dashboard() {
   );
   const [activeView, setActiveView] = useState<ActiveView>("input");
   const [visitedSections, setVisitedSections] = useState<ReadonlySet<ActiveView>>(() => new Set(["input"]));
+  const [pendingResolveIssues, setPendingResolveIssues] = useState(false);
 
   // Header center cluster (KB sync / runtime / agent access) must never wrap
   // onto a second line. Measure the actual gap between the fixed left and
@@ -240,13 +241,56 @@ function Dashboard() {
       return;
     }
 
+    setPendingResolveIssues(true);
     scrollToSection("execute");
-    window.setTimeout(() => {
-      expandPipelineValidation();
-      document.getElementById("recipe-validation-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.setTimeout(() => emphasizeValidationPanel(), 600);
-    }, 400);
   }, [scrollToSection]);
+
+  useEffect(() => {
+    if (!pendingResolveIssues || activeView !== "execute") return;
+
+    let observer: MutationObserver | undefined;
+    let safetyTimer: number | undefined;
+    let completed = false;
+
+    const complete = () => {
+      if (completed) return;
+      completed = true;
+      setPendingResolveIssues(false);
+    };
+
+    const tryExpandAndScroll = () => {
+      const panel = document.getElementById("recipe-validation-panel");
+      if (!panel) return false;
+      expandPipelineValidation();
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Keep this timer independent of effect cleanup: flipping pendingResolveIssues
+      // remounts the effect and would cancel the emphasize flash too early.
+      window.setTimeout(() => emphasizeValidationPanel(), 600);
+      return true;
+    };
+
+    if (tryExpandAndScroll()) {
+      complete();
+      return;
+    }
+
+    observer = new MutationObserver(() => {
+      if (tryExpandAndScroll()) {
+        observer?.disconnect();
+        complete();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    safetyTimer = window.setTimeout(() => {
+      observer?.disconnect();
+      complete();
+    }, 5000);
+
+    return () => {
+      observer?.disconnect();
+      if (safetyTimer !== undefined) window.clearTimeout(safetyTimer);
+    };
+  }, [pendingResolveIssues, activeView]);
 
   useEffect(() => {
     const onNavigate = (event: Event) => {
