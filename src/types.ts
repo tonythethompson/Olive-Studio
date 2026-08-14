@@ -82,6 +82,10 @@ export interface BatchJob {
   logs: string[];
   /** olive backend job ID once started */
   oliveJobId?: string;
+  /** Wall-clock start (ms since epoch) once the job leaves the queue. */
+  startedAtMs?: number;
+  /** Wall-clock end (ms since epoch) when the job becomes terminal. */
+  finishedAtMs?: number;
   metrics?: {
     latency: string;
     throughput: string;

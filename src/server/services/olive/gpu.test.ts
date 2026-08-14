@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_JOB_LOG_LINES, pushLog } from "./gpu.ts";
+import { JOB_LOG_TRIM_WATERMARK, MAX_JOB_LOG_LINES, pushLog } from "./gpu.ts";
 import type { OliveJob } from "../../types.ts";
 
 function makeJob(): OliveJob {
@@ -44,7 +44,7 @@ describe("pushLog", () => {
 
     // Bounded between the cap and the watermark, newest lines retained.
     expect(job.logs.length).toBeGreaterThanOrEqual(MAX_JOB_LOG_LINES);
-    expect(job.logs.length).toBeLessThanOrEqual(MAX_JOB_LOG_LINES + 250);
+    expect(job.logs.length).toBeLessThanOrEqual(JOB_LOG_TRIM_WATERMARK);
     expect(job.logs[0]).toBe(`line-${total - job.logs.length}`);
     expect(job.logs.at(-1)).toBe(`line-${total - 1}`);
     expect(job.logsTruncated).toBe(true);
