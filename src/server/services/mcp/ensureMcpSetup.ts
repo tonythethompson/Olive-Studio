@@ -49,7 +49,9 @@ function findSystemPython(): string | null {
 function run(cmd: string, args: string[], cwd: string): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd, stdio: "pipe" });
+    // eslint-disable-next-line no-console -- intentional background setup progress logging
     child.stdout?.on("data", (d: Buffer) => console.log(`[mcp-setup] ${d.toString().trim()}`));
+    // eslint-disable-next-line no-console -- intentional background setup progress logging
     child.stderr?.on("data", (d: Buffer) => console.log(`[mcp-setup] ${d.toString().trim()}`));
     child.on("error", () => resolve(false));
     child.on("exit", (code) => resolve(code === 0));
@@ -62,6 +64,7 @@ function recordResult(lastResult: "ok" | "python-missing" | "failed"): void {
 
 async function performSetup(mcpDir: string, pythonCmd: string): Promise<void> {
   const venvDir = path.join(mcpDir, ".venv");
+  // eslint-disable-next-line no-console -- intentional background setup progress logging
   console.log("[mcp-setup] Setting up Olive MCP server (first launch, one-time)...");
 
   if (!(await run(pythonCmd, ["-m", "venv", venvDir], mcpDir))) {
@@ -90,6 +93,7 @@ async function performSetup(mcpDir: string, pythonCmd: string): Promise<void> {
     return;
   }
 
+  // eslint-disable-next-line no-console -- intentional background setup progress logging
   console.log("[mcp-setup] Olive MCP server is ready.");
   recordResult("ok");
 }
