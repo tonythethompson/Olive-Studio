@@ -858,6 +858,49 @@ export interface AdapterGateResult {
  * @param vramGb - Available VRAM in gigabytes (for count limit enforcement)
  * @returns Gating result with validated adapters or rejection reason
  */
+/**
+ * Normalize a path-bearing adapter entry so MCP path-only payloads and
+ * flag-off single-adapter mode share the same name/rank/alpha defaults.
+ * Returns null when `path` is missing or empty (still invalid).
+ */
+function normalizePathBearingAdapter(
+  entry: unknown,
+  index: number,
+): AdapterEntry | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const obj = entry as Record<string, unknown>;
+  if (typeof obj.path !== "string" || obj.path.length === 0) return null;
+
+  const rawModules = Array.isArray(obj.targetModules)
+    ? obj.targetModules
+    : Array.isArray(obj.target_modules)
+      ? obj.target_modules
+      : undefined;
+  const targetModules =
+    Array.isArray(rawModules) &&
+    rawModules.every((m): m is string => typeof m === "string" && m.length > 0)
+      ? (rawModules as string[])
+      : undefined;
+
+  const pathBase = obj.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "";
+  const fallbackName = pathBase || (index === 0 ? "default" : `adapter-${index}`);
+
+  return {
+    name:
+      typeof obj.name === "string" && obj.name.length > 0 ? obj.name : fallbackName,
+    path: obj.path,
+    rank:
+      typeof obj.rank === "number" && Number.isInteger(obj.rank) && obj.rank > 0
+        ? obj.rank
+        : 8,
+    alpha:
+      typeof obj.alpha === "number" && Number.isFinite(obj.alpha) && obj.alpha > 0
+        ? obj.alpha
+        : 16,
+    ...(targetModules ? { targetModules } : {}),
+  };
+}
+
 export function gateMultiLoraAdapters(
   adapters: unknown[],
   vramGb: number,
@@ -875,22 +918,9 @@ export function gateMultiLoraAdapters(
     }
     // Single adapter (or empty) is allowed even with flag off — treated as legacy single-adapter mode
     if (adapters.length === 1) {
-      const entry = adapters[0];
-      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        const obj = entry as Record<string, unknown>;
-        if (typeof obj.path === "string" && obj.path.length > 0) {
-          return {
-            allowed: true,
-            adapters: [{
-              name: (typeof obj.name === "string" && obj.name.length > 0) ? obj.name : "default",
-              path: obj.path,
-              rank: (typeof obj.rank === "number" && Number.isInteger(obj.rank) && obj.rank > 0) ? obj.rank : 8,
-              alpha: (typeof obj.alpha === "number" && Number.isFinite(obj.alpha) && obj.alpha > 0) ? obj.alpha : 16,
-              ...(Array.isArray(obj.targetModules) ? { targetModules: obj.targetModules as string[] } : {}),
-            }],
-            reason: undefined,
-          };
-        }
+      const normalized = normalizePathBearingAdapter(adapters[0], 0);
+      if (normalized) {
+        return { allowed: true, adapters: [normalized], reason: undefined };
       }
       return {
         allowed: false,
@@ -902,8 +932,14 @@ export function gateMultiLoraAdapters(
     return { allowed: true, adapters: [], reason: undefined };
   }
 
-  // Flag is enabled — validate via multiLoraValidation
-  const result = validateAdapters(adapters, vramGb);
+  // Flag is enabled — normalize path-only MCP bridge entries, then validate.
+  // Path-only payloads are accepted by the bridge; apply the same defaults as
+  // flag-off mode so evaluate/build do not reject otherwise usable adapters.
+  const normalized = adapters.map((entry, i) => {
+    const withDefaults = normalizePathBearingAdapter(entry, i);
+    return withDefaults ?? entry;
+  });
+  const result = validateAdapters(normalized, vramGb);
   if (result.valid) {
     return { allowed: true, adapters: result.adapters, reason: undefined };
   }
