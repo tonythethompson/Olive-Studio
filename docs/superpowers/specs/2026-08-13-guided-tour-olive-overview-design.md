@@ -45,14 +45,14 @@ Stale `welcomeDismissed` values already in `olive:preferences` are ignored. A us
 | 1 | What Olive is | none (centered popover) | What Olive is; why it exists (models too big/slow → smaller/faster on CPU, GPU, or NPU); one line that this app builds and runs that recipe. |
 | 2 | Your pipeline | `nav[aria-label="Pipeline"]` | Existing copy. |
 | 3 | Model source | `data-tour="model-source"` on the real recipe/model controls (catalog / apply area), not only `#input-heading` | Point at choosing a recipe or model. |
-| — | *(side effect)* | — | If `!hasSelectedModel(state)`, apply the bundled demo. If a model is already selected, no-op. |
+| n/a | *(side effect)* | n/a | If `!hasSelectedModel(state)`, apply the bundled demo. If a model is already selected, no-op. |
 | 4 | Hardware | `data-tour="hardware-providers"` on the provider/pass controls | Only after the demo apply (or existing model) has flushed so `PipelineSectionGate` is unlocked. Fallback: `#ihv-heading` if the inner target is missing. |
 | 5 | Recipe & run | `data-tour="recipe-graph"` on the recipe graph | Same unlock/fallback rule (`#execute-heading`). |
 | 6 | Playground | `#playground-heading` | Existing copy. |
 | 7 | Assistant | `[data-tour="assistant"]` | Existing copy. |
 | 8 | Replay | `[data-tour="settings"]` | Existing copy. |
 
-Driver.js `showProgress` continues to count only popover steps (1–8). The demo apply is not a user-facing step.
+Driver.js `showProgress` continues to count only popover steps (1-8). The demo apply is not a user-facing step.
 
 ### Demo model
 
@@ -66,7 +66,9 @@ Recommended fixture identity (implementation may substitute an equally tiny CPU 
 
 ### Copy constraints
 
-Step 1 must explain Olive the toolkit, not only Olive Studio chrome. Do not put engineering details in user-facing strings (viewport breakpoints, store keys, “dummy,” “fixture”). If the tour injected a model, later steps may say a **sample recipe** is loaded so they can see the next panels — not that a test dummy was injected.
+Step 1 must explain Olive the toolkit, not only Olive Studio chrome. Do not put engineering details in user-facing strings (viewport breakpoints, store keys, "dummy," "fixture"). If the tour injected a model, later steps may say a **sample recipe** is loaded so they can see the next panels, not that a test dummy was injected.
+
+**No em dashes.** User-facing tour copy (titles, descriptions, buttons) must not use U+2014 (em dash, `—`) or U+2013 (en dash, `–`). Use a comma, colon, period, or parentheses instead. Remove any existing em/en dashes from tour popovers and from first-run strings this work replaces. Do not introduce them in new copy. Tests should reject `—` and `–` in `TOUR_STEPS` popover text.
 
 ## Architecture
 
@@ -79,7 +81,7 @@ App.tsx
 src/lib/tour.ts
   TOUR_STEPS (8 popovers)
   startGuidedTour(onSettled)
-  ensureTourDemoModel() — pure-enough helper used from onNextClick after step 3
+  ensureTourDemoModel() : helper used from onNextClick after step 3
 
 src/data/tour-demo-recipe.json
   static Olive recipe
@@ -120,7 +122,7 @@ src/lib/stores/pipelineStore.ts
 | Action | Path |
 |--------|------|
 | Delete | `src/components/WelcomeModal.tsx`, `src/components/WelcomeModal.test.tsx` |
-| Edit | `src/App.tsx` — remove modal; auto-start only on `!tourSeen` + desktop |
+| Edit | `src/App.tsx`: remove modal; auto-start only on `!tourSeen` + desktop |
 | Edit | `src/lib/tour.ts`, `src/lib/tour.test.ts` |
 | Edit | `src/lib/stores/preferencesStore.ts` (+ existing preference tests if any) |
 | Edit | Model source / IHV / recipe graph markup for `data-tour` |

@@ -4,8 +4,8 @@ import "driver.js/dist/driver.css";
 /**
  * Guided tour steps, in the order a first-time user meets the UI:
  * sidebar navigation, the four pipeline sections (top to bottom), then the
- * header affordances (Assistant, Settings). Steps anchor to stable landmarks —
- * section headings and `data-tour` attributes — rather than to lazily loaded
+ * header affordances (Assistant, Settings). Steps anchor to stable landmarks
+ * (section headings and `data-tour` attributes) rather than to lazily loaded
  * panel content, so every target exists as soon as the dashboard renders.
  */
 export const TOUR_STEPS: DriveStep[] = [
@@ -34,7 +34,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "2 · Hardware",
       description:
-        "Choose where the optimized model will run — CPU, GPU, or NPU — and Olive Studio tailors the recipe to that execution provider.",
+        "Choose where the optimized model will run (CPU, GPU, or NPU) and Olive Studio tailors the recipe to that execution provider.",
       side: "bottom",
       align: "start",
     },
