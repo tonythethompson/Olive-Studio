@@ -402,6 +402,23 @@ export function useAiProviderSettings({
     }
   };
 
+  /**
+   * Codex/Devin logout clears auth cookies/tokens but leaves `/api/ai/provider`
+   * pointing at that provider. Drop the runtime selection when it matches so
+   * pipeline review results are not left displayed as current.
+   */
+  const clearReviewAfterAuthLogout = async (providerId: "codex" | "devin") => {
+    const status = await fetchProviderStatus();
+    const activeId = normalizeUiProviderId(status.provider ?? "") ?? status.provider;
+    if (status.source !== "none" && activeId === providerId) {
+      await fetch("/api/ai/provider", { method: "DELETE" });
+      await fetchProviderStatus();
+    }
+    if (status.source === "none" || activeId === providerId) {
+      onProviderCleared();
+    }
+  };
+
   const handleCodexLogin = async () => {
     setCodexBusy(true);
     setCodexMessage(null);
@@ -451,10 +468,8 @@ export function useAiProviderSettings({
       await fetch("/api/codex/logout", { method: "POST" });
       await refreshCodexAccount();
       setCodexMessage("Signed out of Codex.");
-      const status = await fetchProviderStatus();
-      if (status.source === "none") {
-        onProviderCleared();
-      }
+      // Logout clears Codex auth only; runtime /ai/provider can still be "codex".
+      await clearReviewAfterAuthLogout("codex");
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -513,10 +528,8 @@ export function useAiProviderSettings({
       await fetch("/api/devin/logout", { method: "POST" });
       setDevinStatus({ signedIn: false });
       setDevinMessage("Signed out of Devin.");
-      const status = await fetchProviderStatus();
-      if (status.source === "none") {
-        onProviderCleared();
-      }
+      // Logout clears Devin auth only; runtime /ai/provider can still be "devin".
+      await clearReviewAfterAuthLogout("devin");
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));
     } finally {
