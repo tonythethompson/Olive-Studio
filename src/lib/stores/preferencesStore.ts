@@ -6,10 +6,12 @@ export type ResolvedTheme = "light" | "dark";
 
 interface PreferencesState {
   themePreference: ThemePreference;
+  welcomeDismissed: boolean;
 }
 
 interface PreferencesActions {
   setThemePreference: (pref: ThemePreference) => void;
+  dismissWelcome: () => void;
 }
 
 type PreferencesStore = PreferencesState & PreferencesActions;
@@ -20,7 +22,9 @@ export const usePreferencesStore = create<PreferencesStore>()(
   persist(
     (set) => ({
       themePreference: "system",
+      welcomeDismissed: false,
       setThemePreference: (pref) => set({ themePreference: pref }),
+      dismissWelcome: () => set({ welcomeDismissed: true }),
     }),
     { name: STORAGE_KEY },
   ),

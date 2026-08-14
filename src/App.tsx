@@ -5,8 +5,10 @@ import { useThemeEffect } from "@/lib/hooks/useThemeEffect";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { InputEnvironmentPanel } from "@/components/features/input/InputEnvironmentPanel";
 import { LicenseNotice } from "@/components/LicenseNotice";
+import { WelcomeModal } from "@/components/WelcomeModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
+import { usePreferencesStore } from "@/lib/stores/preferencesStore";
 import { hasSelectedModel } from "@/lib/pipelineValidation";
 import type { ReportArea } from "@/lib/issueReport";
 import { VramEstimateBanner } from "@/components/features/VramEstimateBanner";
@@ -128,6 +130,10 @@ function Dashboard() {
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  // First run only: once dismissed via "Don't show again", this never re-opens.
+  const [welcomeOpen, setWelcomeOpen] = useState(
+    () => !usePreferencesStore.getState().welcomeDismissed,
+  );
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportData, setReportData] = useState<{
     error: Error;
@@ -505,6 +511,8 @@ function Dashboard() {
             </ErrorBoundary>
           </div>
         </div>
+
+        <WelcomeModal open={welcomeOpen} onClose={() => setWelcomeOpen(false)} />
 
         <LicenseNotice open={licenseOpen} onClose={() => setLicenseOpen(false)} />
 
