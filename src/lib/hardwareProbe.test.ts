@@ -640,9 +640,7 @@ describe("mergeDetectedProviders QNN", () => {
   });
 
   it("computeQnnCompatibleHardware is Windows ARM64 only (local accelerator)", () => {
-    expect(
-      computeQnnCompatibleHardware({ os: "win32 10.0", arch: "arm64" }),
-    ).toBe(true);
+    expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "arm64" })).toBe(true);
     // Windows x64 is preparation-only (cross-compile), not a local accelerator
     expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "x64" })).toBe(false);
     expect(computeQnnCompatibleHardware({ os: "linux 6.8", arch: "x64" })).toBe(false);
@@ -681,74 +679,69 @@ describe("isProviderDetectedLocally", () => {
   });
 });
 
-
 // ─────────────────────────────────────────────────────────────────────────
 // CoreML detection and recommendation
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("CoreML detection and recommendation", () => {
   /**
-   * Property 1: CoreML soft-detected on Apple Silicon
+   * Property 1: CoreML is not soft-detected from Apple hardware
    *
-   * For any input where `isMacAppleSilicon` is `true`, the returned provider
-   * list SHALL contain `CoreMLExecutionProvider`, regardless of other flags.
+   * Without an ORT-reported CoreML EP, the returned provider list SHALL NOT
+   * contain `CoreMLExecutionProvider`.
    *
    * **Validates: Requirements 2.1**
    */
-  it("Property 1: CoreML soft-detected when isMacAppleSilicon is true", () => {
+  it("Property 1: CoreML is not detected without an ORT provider report", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
       hasOpenVino: false,
-      isMacAppleSilicon: true,
     });
-    expect(detected).toContain("CoreMLExecutionProvider");
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+    expect(pickRecommendedProvider(detected)).toBe("CPUExecutionProvider");
   });
 
-  it("Property 1: CoreML soft-detected alongside other providers", () => {
+  it("Property 1: other hardware signals do not imply CoreML", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: true,
       hasRocmGpu: false,
       hasOpenVino: true,
       hasDirectMl: true,
-      isMacAppleSilicon: true,
     });
-    expect(detected).toContain("CoreMLExecutionProvider");
+    expect(detected).not.toContain("CoreMLExecutionProvider");
     expect(detected).toContain("CUDAExecutionProvider");
     expect(detected).toContain("OpenVINOExecutionProvider");
   });
 
-  it("Property 1: CoreML soft-detected even when ORT providers list is empty", () => {
+  it("Property 1: an empty ORT providers list does not imply CoreML", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
       hasOpenVino: false,
       onnxRuntimeProviders: [],
-      isMacAppleSilicon: true,
-    });
-    expect(detected).toContain("CoreMLExecutionProvider");
-  });
-
-  /**
-   * Property 2: CoreML not soft-detected on non-Apple-Silicon
-   *
-   * For any input where `isMacAppleSilicon` is `false` (or undefined) AND
-   * `onnxRuntimeProviders` does NOT include `CoreMLExecutionProvider`, the
-   * returned list SHALL NOT contain it.
-   *
-   * **Validates: Requirements 2.2**
-   */
-  it("Property 2: CoreML not detected when isMacAppleSilicon is false", () => {
-    const detected = mergeDetectedProviders({
-      hasNvidiaGpu: false,
-      hasRocmGpu: false,
-      hasOpenVino: false,
-      isMacAppleSilicon: false,
     });
     expect(detected).not.toContain("CoreMLExecutionProvider");
   });
 
-  it("Property 2: CoreML not detected when isMacAppleSilicon is undefined", () => {
+  /**
+   * Property 2: CoreML requires an explicit ORT provider report
+   *
+   * When `onnxRuntimeProviders` does NOT include
+   * `CoreMLExecutionProvider`, the returned list SHALL NOT contain it.
+   *
+   * **Validates: Requirements 2.2**
+   */
+  it("Property 2: CoreML not detected when ORT providers are unavailable", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+  });
+
+  it("Property 2: CoreML not detected when ORT providers are omitted", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
@@ -763,31 +756,19 @@ describe("CoreML detection and recommendation", () => {
       hasRocmGpu: false,
       hasOpenVino: false,
       onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
-      isMacAppleSilicon: false,
     });
     expect(detected).not.toContain("CoreMLExecutionProvider");
   });
 
   /**
-   * Property 3: ORT-listed CoreML overrides platform check
+   * Property 3: ORT-listed CoreML is detected
    *
    * For any input where `onnxRuntimeProviders` includes `CoreMLExecutionProvider`,
-   * the returned list SHALL contain it regardless of `isMacAppleSilicon` value.
+   * the returned list SHALL contain it.
    *
    * **Validates: Requirements 2.3**
    */
-  it("Property 3: ORT-listed CoreML detected regardless of isMacAppleSilicon=false", () => {
-    const detected = mergeDetectedProviders({
-      hasNvidiaGpu: false,
-      hasRocmGpu: false,
-      hasOpenVino: false,
-      onnxRuntimeProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider"],
-      isMacAppleSilicon: false,
-    });
-    expect(detected).toContain("CoreMLExecutionProvider");
-  });
-
-  it("Property 3: ORT-listed CoreML detected when isMacAppleSilicon is undefined", () => {
+  it("Property 3: ORT-listed CoreML is detected", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
@@ -797,13 +778,22 @@ describe("CoreML detection and recommendation", () => {
     expect(detected).toContain("CoreMLExecutionProvider");
   });
 
-  it("Property 3: ORT-listed CoreML detected alongside isMacAppleSilicon=true (no duplicate)", () => {
+  it("Property 3: ORT-listed CoreML remains detected with the minimal probe input", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: false,
       hasOpenVino: false,
       onnxRuntimeProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider"],
-      isMacAppleSilicon: true,
+    });
+    expect(detected).toContain("CoreMLExecutionProvider");
+  });
+
+  it("Property 3: duplicate ORT CoreML entries are de-duplicated", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider", "CoreMLExecutionProvider"],
     });
     expect(detected).toContain("CoreMLExecutionProvider");
     // Should not have duplicate entries

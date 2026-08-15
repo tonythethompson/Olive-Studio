@@ -69,7 +69,6 @@ _COREML_COMPATIBLE_PASSES = [
     "QATQuantizer",
     "OnnxHqqQuantization",
     "LoRA",
-    "QLoRA",
 ]
 
 
@@ -101,6 +100,7 @@ _GPU_ONLY_PASSES = [
     "Gptq",
     "SpinQuant",
     "QuaRot",
+    "QLoRA",
 ]
 
 
@@ -171,7 +171,6 @@ def test_coreml_profile_compatible_passes(coreml_profile: dict) -> None:
         "OnnxQatQuantization",
         "OnnxHqqQuantization",
         "LoRA",
-        "QLoRA",
     }
     missing = expected - compatible
     assert not missing, f"CoreML profile missing compatible_passes: {missing}"
@@ -185,6 +184,7 @@ def test_coreml_profile_incompatible_passes(coreml_profile: dict) -> None:
         "OnnxGptqQuantization",
         "OnnxSpinQuantQuantization",
         "OnnxQuaRotQuantization",
+        "QLoRA",
     }
     missing = expected - incompatible
     assert not missing, f"CoreML profile missing incompatible_passes: {missing}"

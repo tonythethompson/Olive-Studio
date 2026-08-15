@@ -41,7 +41,9 @@ export const TENSORRT_FAMILY_MIN_COMPUTE_CAPABILITY = { major: 7, minor: 5 } as 
  * a comparable pair. Returns `undefined` on any malformed/empty input so
  * "I don't know" never downgrades compat silently.
  */
-export function parseComputeCapability(value: string | undefined): { major: number; minor: number } | undefined {
+export function parseComputeCapability(
+  value: string | undefined,
+): { major: number; minor: number } | undefined {
   if (!value) return undefined;
   const m = value.trim().match(/^(\d+)\.(\d+)$/);
   if (!m) return undefined;
@@ -235,8 +237,7 @@ export function computeOpenVinoCompatibleHardware(input: {
 }): boolean {
   const hasIntelCpu = /\bIntel\b|\bXeon\b/i.test(input.cpuModel);
   const hasIntelGpu = (input.intelGpuNames ?? []).some((name) => /Intel/i.test(name));
-  const hasIntelOpenVinoDevices =
-    (input.openvinoDevices ?? []).some((device) => /GPU|NPU/i.test(device));
+  const hasIntelOpenVinoDevices = (input.openvinoDevices ?? []).some((device) => /GPU|NPU/i.test(device));
   return hasIntelCpu || hasIntelGpu || hasIntelOpenVinoDevices;
 }
 
@@ -256,9 +257,7 @@ export function computeDirectMlHardwareReady(input: { os: string }): boolean {
  * True when Hardware should offer DirectML one-click install: DX12-class host
  * and DmlExecutionProvider not yet registered in the probe.
  */
-export function computeDirectMlNeedsInstall(
-  probe: HardwareProbeResult | null | undefined,
-): boolean {
+export function computeDirectMlNeedsInstall(probe: HardwareProbeResult | null | undefined): boolean {
   if (!probe?.platform?.os) return false;
   return (
     computeDirectMlHardwareReady({ os: probe.platform.os }) &&
@@ -292,8 +291,6 @@ export function mergeDetectedProviders(input: {
   cudaFamilyCapable?: boolean;
   /** Platform OS string for DirectML Windows detection. */
   os?: string;
-  /** True when platform is darwin AND arch is arm64 (Apple Silicon). */
-  isMacAppleSilicon?: boolean;
 }): IHVProvider[] {
   const detected = new Set<IHVProvider>(["CPUExecutionProvider"]);
   const tensorRtOk = input.tensorRtLoadable === true;
@@ -353,11 +350,6 @@ export function mergeDetectedProviders(input: {
   }
   if (input.hasQnnCompatibleHardware) {
     detected.add("QNNExecutionProvider");
-  }
-
-  // CoreML soft-detection: Apple Silicon macOS
-  if (input.isMacAppleSilicon) {
-    detected.add("CoreMLExecutionProvider");
   }
 
   return Array.from(detected);
@@ -421,10 +413,7 @@ export function pickRecommendedProvider(
  * @param probe - Optional hardware probe result for path-specific messaging
  * @returns An availability message, or an empty string for the CPU provider
  */
-function undetectedProviderReason(
-  provider: IHVProvider,
-  probe?: HardwareProbeResult | null,
-): string {
+function undetectedProviderReason(provider: IHVProvider, probe?: HardwareProbeResult | null): string {
   switch (provider) {
     case "QNNExecutionProvider":
     case "QnnAbiExecutionProvider": {
@@ -471,15 +460,16 @@ function undetectedProviderReason(
       const toolTip =
         toolkit?.available === true
           ? `toolkit ${toolkit.version ?? "available"}` +
-          (nvidia?.cudaVersion ? ` on driver CUDA ${nvidia.cudaVersion}` : "")
+            (nvidia?.cudaVersion ? ` on driver CUDA ${nvidia.cudaVersion}` : "")
           : toolkit?.available === false
             ? "toolkit (nvcc) not installed"
             : "toolkit status unknown";
       if (!cudaEpUsable) {
-        return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${toolkit?.available === false
-          ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
-          : ""
-          }`;
+        return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${
+          toolkit?.available === false
+            ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
+            : ""
+        }`;
       }
       // 4. Toolkit + driver + ORT installed but the CUDA EP isn't in
       // detectedProviders — likely driver/wheel mismatch (e.g. CUDA 13
@@ -554,7 +544,10 @@ export function getProviderAvailabilityBlock(
   // DirectML: on Windows, the hardware is always DX12-capable. The only missing
   // piece is the onnxruntime-directml wheel — that's a runtime install, not a
   // hardware incompatibility. Don't block it.
-  if (provider === "DmlExecutionProvider" && computeDirectMlHardwareReady({ os: probe?.platform?.os ?? "" })) {
+  if (
+    provider === "DmlExecutionProvider" &&
+    computeDirectMlHardwareReady({ os: probe?.platform?.os ?? "" })
+  ) {
     return null;
   }
   if (!probe) {

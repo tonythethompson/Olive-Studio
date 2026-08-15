@@ -7,10 +7,10 @@ This plan integrates CoreML as a fully-functional execution provider in Olive St
 ## Tasks
 
 - [x] 1. CoreML Detection & Recommendation
-  - [x] 1.1 Add `isMacAppleSilicon` parameter to `mergeDetectedProviders()` in `src/lib/hardwareProbe.ts`
-    - Add `isMacAppleSilicon?: boolean` to the input object type
-    - When `true`, add `CoreMLExecutionProvider` to the detected set (after existing soft-detection blocks)
-    - Backward-compatible: undefined/false means no CoreML soft-detection
+  - [x] 1.1 Detect CoreML through the default ORT runtime in `src/lib/hardwareProbe.ts`
+    - Map `CoreMLExecutionProvider` only when it is present in `onnxRuntimeProviders`
+    - Do not add CoreML from an Apple Silicon hardware-only signal
+    - Keep platform-local recipe selectability separate from local detection
     - _Requirements: 2.1, 2.2, 2.4_
 
   - [x] 1.2 Insert `CoreMLExecutionProvider` into `pickRecommendedProvider()` priority list in `src/lib/hardwareProbe.ts`
@@ -19,9 +19,9 @@ This plan integrates CoreML as a fully-functional execution provider in Olive St
     - _Requirements: 3.1, 3.2, 3.3_
 
   - [x] 1.3 Write property tests for CoreML detection and recommendation
-    - **Property 1: CoreML soft-detected on Apple Silicon**
-    - **Property 2: CoreML not soft-detected on non-Apple-Silicon**
-    - **Property 3: ORT-listed CoreML overrides platform check**
+    - **Property 1: CoreML is not soft-detected from Apple hardware**
+    - **Property 2: CoreML requires a default ORT provider report**
+    - **Property 3: ORT-listed CoreML is detected**
     - **Property 4: CoreML recommended over CPU without GPU providers**
     - **Property 5: GPU providers recommended over CoreML**
     - **Validates: Requirements 2.1, 2.2, 2.3, 3.1, 3.2**
@@ -33,7 +33,8 @@ This plan integrates CoreML as a fully-functional execution provider in Olive St
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5_
 
   - [x] 2.2 Update `isPeftMethodAllowed()` in `src/lib/pipelineStateCommit.ts`
-    - Add `|| provider === "CoreMLExecutionProvider"` to the QLoRA case so QLoRA is allowed for CoreML
+    - Keep QLoRA limited to the existing CUDA/ROCm-capable provider set
+    - Preserve LoRA and disable base quantization when LoRA cannot be promoted to QLoRA
     - Verify `isPeftAllowed()` already returns true for CoreML (not in `PEFT_UNSUPPORTED_PROVIDERS`)
     - _Requirements: 5.6, 5.7_
 
@@ -71,8 +72,8 @@ This plan integrates CoreML as a fully-functional execution provider in Olive St
     - _Requirements: 7.1, 7.2, 7.3_
 
   - [x] 5.2 Update `olive-mcp-server/olive_mcp_server/knowledge_base/passes.json` with CoreML provider references
-    - Add `CoreMLExecutionProvider` to compatible_providers for: OnnxConversion, OnnxStaticQuantization, OnnxDynamicQuantization, OnnxRtnQuantization, OnnxKquantQuantization, OnnxQatQuantization, OnnxHqqQuantization, LoRA, QLoRA
-    - Ensure `CoreMLExecutionProvider` is NOT in: OnnxAwqQuantization, OnnxGptqQuantization, OnnxSpinQuantQuantization, OnnxQuaRotQuantization
+    - Add `CoreMLExecutionProvider` to compatible_providers for: OnnxConversion, OnnxStaticQuantization, OnnxDynamicQuantization, OnnxRtnQuantization, OnnxKquantQuantization, OnnxQatQuantization, OnnxHqqQuantization, LoRA
+    - Ensure `CoreMLExecutionProvider` is NOT in: OnnxAwqQuantization, OnnxGptqQuantization, OnnxSpinQuantQuantization, OnnxQuaRotQuantization, QLoRA
     - _Requirements: 8.1, 8.2_
 
   - [x] 5.3 Write pytest tests for CoreML MCP knowledge base entries

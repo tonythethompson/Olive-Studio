@@ -31,16 +31,16 @@ This feature addresses two complementary goals for Olive Studio's macOS story: (
 3. THE Studio SHALL include the same unsigned-app disclaimer in GitHub Release notes for any release containing a macOS DMG artifact.
 4. THE Studio SHALL NOT include any automated `xattr -cr` commands or signing workarounds in scripts or documentation.
 
-### Requirement 2: CoreML Soft-Detection
+### Requirement 2: CoreML Runtime Detection
 
-**User Story:** As a macOS Apple Silicon user, I want Olive Studio to automatically detect CoreML as an available execution provider, so that I can select it without manual configuration.
+**User Story:** As a macOS Apple Silicon user, I want Olive Studio to report CoreML as locally available only when the active ONNX Runtime can execute it, while keeping CoreML selectable as a recipe target.
 
 #### Acceptance Criteria
 
-1. WHEN the hardware probe reports `platform.os === 'darwin'` AND `arch === 'arm64'`, THE Detection_Service SHALL include `CoreMLExecutionProvider` in the detected providers list.
-2. WHILE the host platform is not darwin or the architecture is not arm64, THE Detection_Service SHALL NOT include `CoreMLExecutionProvider` via soft-detection.
-3. WHEN ORT runtime providers list includes `CoreMLExecutionProvider` on any platform, THE Detection_Service SHALL include it in the detected providers list regardless of the soft-detection condition.
-4. THE Detection_Service SHALL accept an `isMacAppleSilicon` boolean input parameter to drive CoreML soft-detection without depending on `process.platform` at call time.
+1. WHEN the default ORT runtime providers list includes `CoreMLExecutionProvider`, THE Detection_Service SHALL include it in the detected providers list.
+2. WHEN the default ORT runtime providers list does not include `CoreMLExecutionProvider`, THE Detection_Service SHALL NOT include it based on Apple Silicon hardware alone.
+3. THE Studio SHALL keep `CoreMLExecutionProvider` selectable as a platform-local recipe target even when it is not locally detected.
+4. THE Execute Live path SHALL remain unavailable until the default ORT runtime reports `CoreMLExecutionProvider`.
 
 ### Requirement 3: CoreML Recommended Provider Priority
 
@@ -76,7 +76,7 @@ This feature addresses two complementary goals for Olive Studio's macOS story: (
 4. WHILE `CoreMLExecutionProvider` is the selected provider, THE Validation_Engine SHALL allow selection of QAT quantization.
 5. WHILE `CoreMLExecutionProvider` is the selected provider, THE Validation_Engine SHALL allow selection of HQQ quantization.
 6. WHILE `CoreMLExecutionProvider` is the selected provider, THE Validation_Engine SHALL allow selection of LoRA fine-tuning.
-7. WHILE `CoreMLExecutionProvider` is the selected provider, THE Validation_Engine SHALL allow selection of QLoRA fine-tuning.
+7. WHILE `CoreMLExecutionProvider` is the selected provider, THE Validation_Engine SHALL reject QLoRA and coerce it to LoRA because CoreML is not a supported QLoRA training backend.
 
 ### Requirement 6: CoreML Venv Supplemental Dependency
 
@@ -97,7 +97,7 @@ This feature addresses two complementary goals for Olive Studio's macOS story: (
 
 1. THE MCP_Knowledge_Base SHALL contain a CoreML entry in `hardware_profiles.json` specifying the platform constraint (macOS, Apple Silicon), supported ORT execution provider name, and compatible pass types.
 2. THE MCP_Knowledge_Base SHALL list CoreML-incompatible quantization methods (AWQ, GPTQ, SpinQuant, QuaRot) in the hardware profile's exclusion metadata.
-3. THE MCP_Knowledge_Base SHALL list CoreML-compatible quantization methods (PTQ, RTN, KQuant, QAT, HQQ) and fine-tuning methods (LoRA, QLoRA) in the hardware profile's inclusion metadata.
+3. THE MCP_Knowledge_Base SHALL list CoreML-compatible quantization methods (PTQ, RTN, KQuant, QAT, HQQ) and LoRA in the hardware profile's inclusion metadata, and SHALL list QLoRA as incompatible.
 
 ### Requirement 8: MCP Knowledge Base — Pass Compatibility
 
@@ -105,8 +105,8 @@ This feature addresses two complementary goals for Olive Studio's macOS story: (
 
 #### Acceptance Criteria
 
-1. WHEN a pass entry in `passes.json` lists compatible providers, THE MCP_Knowledge_Base SHALL include `CoreMLExecutionProvider` for passes compatible with CoreML (PTQ, RTN, KQuant, QAT, HQQ, LoRA, QLoRA, OnnxConversion).
-2. WHEN a pass entry in `passes.json` lists compatible providers for GPU-only quantization (AWQ, GPTQ, SpinQuant, QuaRot), THE MCP_Knowledge_Base SHALL NOT include `CoreMLExecutionProvider`.
+1. WHEN a pass entry in `passes.json` lists compatible providers, THE MCP_Knowledge_Base SHALL include `CoreMLExecutionProvider` for passes compatible with CoreML (PTQ, RTN, KQuant, QAT, HQQ, LoRA, OnnxConversion).
+2. WHEN a pass entry in `passes.json` lists compatible providers for GPU-only quantization or training (AWQ, GPTQ, SpinQuant, QuaRot, QLoRA), THE MCP_Knowledge_Base SHALL NOT include `CoreMLExecutionProvider`.
 
 ### Requirement 9: Provider Card — CoreML Hardware Context
 

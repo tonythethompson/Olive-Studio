@@ -173,14 +173,14 @@
         "OnnxKquantQuantization",
         "OnnxQatQuantization",
         "OnnxHqqQuantization",
-        "LoRA",
-        "QLoRA"
+        "LoRA"
       ],
       "incompatible_passes": [
         "OnnxAwqQuantization",
         "OnnxGptqQuantization",
         "OnnxSpinQuantQuantization",
-        "OnnxQuaRotQuantization"
+        "OnnxQuaRotQuantization",
+        "QLoRA"
       ],
       "typical_speedup": "3-7x",
       "calibration_size": 100,

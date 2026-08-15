@@ -156,6 +156,7 @@ describe("isPeftMethodAllowed", () => {
   it("allows QLoRA only on GPU providers", () => {
     expect(isPeftMethodAllowed("qlora", "CUDAExecutionProvider")).toBe(true);
     expect(isPeftMethodAllowed("qlora", "CPUExecutionProvider")).toBe(false);
+    expect(isPeftMethodAllowed("qlora", "CoreMLExecutionProvider")).toBe(false);
   });
   it("allows LoRA on any PEFT-allowed provider", () => {
     expect(isPeftMethodAllowed("lora", "CPUExecutionProvider")).toBe(true);
@@ -469,6 +470,14 @@ describe("coercePassFields", () => {
       ).peftMethod,
     ).toBe("qlora");
   });
+  it("keeps LoRA and disables base quantization when QLoRA is unavailable", () => {
+    const passes = coercePassFields(
+      basePasses({ peft: true, peftMethod: "lora", quantization: true, quantPrecision: "int4" }),
+      "CoreMLExecutionProvider",
+    );
+    expect(passes.peftMethod).toBe("lora");
+    expect(passes.quantization).toBe(false);
+  });
   it("disables splitting when QAT active", () => {
     expect(
       coercePassFields(
@@ -499,7 +508,9 @@ describe("coercePassFields", () => {
 
 describe("getPipelineValidation", () => {
   it("returns success on clean GPU config", () => {
-    const r = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider", passes: basePasses({ conversion: false }) }));
+    const r = getPipelineValidation(
+      baseState({ ihvProvider: "CUDAExecutionProvider", passes: basePasses({ conversion: false }) }),
+    );
     expect(r.isBlocked).toBe(false);
     expect(r.statusTone).toBe("success");
   });
@@ -515,7 +526,9 @@ describe("getPipelineValidation", () => {
       baseState({ passes: basePasses({ conversion: true, conversionFormat: "openvino" }) }),
     );
     expect(blocked.statusLabel).toMatch(/blocking/);
-    const success = getPipelineValidation(baseState({ ihvProvider: "CUDAExecutionProvider", passes: basePasses({ conversion: false }) }));
+    const success = getPipelineValidation(
+      baseState({ ihvProvider: "CUDAExecutionProvider", passes: basePasses({ conversion: false }) }),
+    );
     expect(success.statusLabel).toBe("Local checks passed");
   });
 
@@ -551,10 +564,13 @@ describe("getPipelineValidation", () => {
       recommendedProvider: "CPUExecutionProvider" as IHVProvider,
       notes: [],
     };
-    const r = getPipelineValidation(baseState({ ihvProvider: "CoreMLExecutionProvider", passes: basePasses({ conversion: false }) }), {
-      forLocalExecution: true,
-      hardwareProbe: probe,
-    });
+    const r = getPipelineValidation(
+      baseState({ ihvProvider: "CoreMLExecutionProvider", passes: basePasses({ conversion: false }) }),
+      {
+        forLocalExecution: true,
+        hardwareProbe: probe,
+      },
+    );
     const critical = r.issues.filter((i) => i.severity === "critical");
     expect(critical.map((i) => i.id)).toEqual(["platform-local-execution-unavailable"]);
     expect(r.isBlocked).toBe(true);
@@ -761,7 +777,6 @@ describe("parseUIStatePayload", () => {
   });
 });
 
-
 // ─── 0.13.0 validation rules ─────────────────────────────────
 
 describe("0.13.0 validation rules", () => {
@@ -871,7 +886,9 @@ describe("0.13.0 validation rules", () => {
   describe("removed-pass warning (9.3)", () => {
     it("fires for QairtPreparation in passRecipeOverrides", () => {
       const state = baseState({
-        passRecipeOverrides: { QairtPreparation: { enabled: true } } as unknown as UIState["passRecipeOverrides"],
+        passRecipeOverrides: {
+          QairtPreparation: { enabled: true },
+        } as unknown as UIState["passRecipeOverrides"],
       });
       const result = getPipelineValidation(state);
       const issue = result.issues.find((i) => i.id === "removed-pass-QairtPreparation");
@@ -881,7 +898,9 @@ describe("0.13.0 validation rules", () => {
 
     it("fires for QairtGenAIBuilder in passRecipeOverrides", () => {
       const state = baseState({
-        passRecipeOverrides: { QairtGenAIBuilder: { enabled: true } } as unknown as UIState["passRecipeOverrides"],
+        passRecipeOverrides: {
+          QairtGenAIBuilder: { enabled: true },
+        } as unknown as UIState["passRecipeOverrides"],
       });
       const result = getPipelineValidation(state);
       expect(result.issues.some((i) => i.id === "removed-pass-QairtGenAIBuilder")).toBe(true);
@@ -889,7 +908,9 @@ describe("0.13.0 validation rules", () => {
 
     it("fires for MobiusModelBuilder in passRecipeOverrides", () => {
       const state = baseState({
-        passRecipeOverrides: { MobiusModelBuilder: { enabled: true } } as unknown as UIState["passRecipeOverrides"],
+        passRecipeOverrides: {
+          MobiusModelBuilder: { enabled: true },
+        } as unknown as UIState["passRecipeOverrides"],
       });
       const result = getPipelineValidation(state);
       expect(result.issues.some((i) => i.id === "removed-pass-MobiusModelBuilder")).toBe(true);
@@ -1031,10 +1052,18 @@ describe("0.13.0 validation rules", () => {
 // CROSS_PASS_RULES: every silent coercion must fire on commitUiStateUpdate.
 describe("commit-path auto-coercion parity", () => {
   it("coerces LoRA + base quant to QLoRA on commit", () => {
-    const next = commitLight(baseState(), {
+    const next = commitLight(baseState({ ihvProvider: "CUDAExecutionProvider" }), {
       passes: basePasses({ peft: true, peftMethod: "lora", quantization: true, quantPrecision: "int8" }),
     });
     expect(next.passes.peftMethod).toBe("qlora");
+  });
+
+  it("does not auto-coerce CoreML LoRA + base quant to QLoRA", () => {
+    const next = commitLight(baseState({ ihvProvider: "CoreMLExecutionProvider" }), {
+      passes: basePasses({ peft: true, peftMethod: "lora", quantization: true, quantPrecision: "int8" }),
+    });
+    expect(next.passes.peftMethod).toBe("lora");
+    expect(next.passes.quantization).toBe(false);
   });
 
   it("coerces INT4 + pruning to INT8 on commit", () => {
@@ -1174,8 +1203,8 @@ describe("CoreML validation rules", () => {
    * For any quant method in {ptq, rtn, kquant, qat, hqq},
    * isQuantMethodAllowed(method, "CoreMLExecutionProvider") SHALL return true.
    * Additionally, isPeftAllowed("CoreMLExecutionProvider") SHALL return true,
-   * and for any PEFT method in {lora, qlora},
-   * isPeftMethodAllowed(method, "CoreMLExecutionProvider") SHALL return true.
+   * LoRA SHALL remain available, and QLoRA SHALL remain blocked because CoreML
+   * is an inference EP rather than a supported QLoRA training backend.
    *
    * **Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7**
    */
@@ -1192,12 +1221,28 @@ describe("CoreML validation rules", () => {
       expect(isPeftAllowed("CoreMLExecutionProvider")).toBe(true);
     });
 
-    const allowedPeftMethods = ["lora", "qlora"] as const;
+    it("allows LoRA but blocks QLoRA on CoreMLExecutionProvider", () => {
+      expect(isPeftMethodAllowed("lora", "CoreMLExecutionProvider")).toBe(true);
+      expect(isPeftMethodAllowed("qlora", "CoreMLExecutionProvider")).toBe(false);
+      expect(getAllowedPeftMethods("CoreMLExecutionProvider")).toEqual(["lora"]);
+    });
 
-    for (const method of allowedPeftMethods) {
-      it(`allows ${method} on CoreMLExecutionProvider`, () => {
-        expect(isPeftMethodAllowed(method, "CoreMLExecutionProvider")).toBe(true);
-      });
-    }
+    it("coerces explicit CoreML QLoRA to LoRA", () => {
+      const passes = coercePassFields(
+        basePasses({ peft: true, peftMethod: "qlora" }),
+        "CoreMLExecutionProvider",
+      );
+      expect(passes.peftMethod).toBe("lora");
+    });
+
+    it("reports explicit CoreML QLoRA as a critical provider conflict", () => {
+      const conflicts = getProviderConflicts(
+        "CoreMLExecutionProvider",
+        basePasses({ peft: true, peftMethod: "qlora" }),
+      );
+      expect(conflicts).toEqual(
+        expect.arrayContaining([expect.objectContaining({ passKey: "peftMethod", severity: "critical" })]),
+      );
+    });
   });
 });

@@ -11,7 +11,10 @@
  * that display validation results.
  */
 import type { IHVProvider, UIState } from "@/types";
-import { REPLACEMENT_PIPELINE_SUPPRESSED_PASSES, isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
+import {
+  REPLACEMENT_PIPELINE_SUPPRESSED_PASSES,
+  isReplacementExportPipeline,
+} from "@/lib/replacementExportPipeline";
 import { PEFT_UNSUPPORTED_PROVIDERS } from "@/lib/providerRuntimeKind";
 
 // ─── Provider Constant Sets ───────────────────────────────────────────────────
@@ -97,7 +100,7 @@ export function isPeftAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
-  if (method === "qlora") return GPU_PROVIDERS.includes(provider) || provider === "CoreMLExecutionProvider";
+  if (method === "qlora") return GPU_PROVIDERS.includes(provider);
   return true;
 }
 
@@ -119,10 +122,26 @@ export interface CrossPassCoercion {
  */
 export const AUTO_COERCE_RULES: CrossPassCoercion[] = [
   {
+    // LoRA + base quant cannot become QLoRA on inference-only providers.
+    // Preserve LoRA and drop the incompatible base-quantization pass instead.
+    id: "peft-lora-quant-no-qlora",
+    applies: (passes, provider) =>
+      passes.peft &&
+      passes.quantization &&
+      passes.quantPrecision !== "fp16" &&
+      passes.peftMethod === "lora" &&
+      !isPeftMethodAllowed("qlora", provider),
+    fix: { quantization: false },
+  },
+  {
     // LoRA + base quant → switch to QLoRA
     id: "peft-lora-quant",
-    applies: (passes) =>
-      passes.peft && passes.quantization && passes.quantPrecision !== "fp16" && passes.peftMethod === "lora",
+    applies: (passes, provider) =>
+      passes.peft &&
+      passes.quantization &&
+      passes.quantPrecision !== "fp16" &&
+      passes.peftMethod === "lora" &&
+      isPeftMethodAllowed("qlora", provider),
     fix: { peftMethod: "qlora" },
   },
   {
@@ -242,8 +261,8 @@ export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
 export function sanitizePipelineStateShallow(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
-      state.openvinoTargetDevice === "GPU" ||
-      state.openvinoTargetDevice === "NPU"
+    state.openvinoTargetDevice === "GPU" ||
+    state.openvinoTargetDevice === "NPU"
       ? state.openvinoTargetDevice
       : "CPU";
 
