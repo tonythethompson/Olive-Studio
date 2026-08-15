@@ -47,6 +47,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
@@ -71,25 +73,39 @@ jobs:
       - name: Apply version override
         if: inputs.version_override != ''
         shell: bash
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
         run: |
-          VER="${{ inputs.version_override }}"
+          set -euo pipefail
+
+          node <<'NODE'
+          const version = process.env.VERSION_OVERRIDE ?? "";
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+          const match = semver.exec(version);
+          if (!match || match[0] !== version) {
+            console.error(`Invalid version_override: ${version}`);
+            process.exit(1);
+          }
+          NODE
+
+          VER="$VERSION_OVERRIDE"
           echo "Overriding version to: $VER"
 
           # package.json
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-            pkg.version = '$VER';
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
+          node <<'NODE'
+          const fs = require("fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          pkg.version = process.env.VERSION_OVERRIDE;
+          fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          NODE
 
           # tauri.conf.json
-          node -e "
-            const fs = require('fs');
-            const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8'));
-            conf.version = '$VER';
-            fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(conf, null, 2) + '\n');
-          "
+          node <<'NODE'
+          const fs = require("fs");
+          const conf = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+          conf.version = process.env.VERSION_OVERRIDE;
+          fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(conf, null, 2) + "\n");
+          NODE
 
           # Cargo.toml
           sed -i.bak "s/^version = \".*\"/version = \"$VER\"/" src-tauri/Cargo.toml
