@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ensureCoremltools } from "./coreml.ts";
 
 // ── Mocks ───────────────────────────────────────────────────────────────────
 const execFileAsyncMock = vi.fn();
@@ -19,9 +20,6 @@ vi.mock("../venv/pathIsolation.ts", () => ({
 vi.mock("../venv/paths.ts", () => ({
   getVenvPython: () => "/fake/.venv/bin/python",
 }));
-
-// ── Import under test (after mocks are hoisted) ─────────────────────────────
-import { ensureCoremltools } from "./coreml.ts";
 
 describe("ensureCoremltools", () => {
   let lines: string[];

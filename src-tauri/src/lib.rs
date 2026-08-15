@@ -59,15 +59,7 @@ fn server_entry(root: &Path) -> PathBuf {
 /// Development builds and locally-built packages can still use the Node binary
 /// on PATH as a fallback.
 fn node_executable(root: &Path) -> PathBuf {
-  #[cfg(target_os = "linux")]
-  {
-    let bundled = root.join("node-runtime").join("node");
-    if bundled.is_file() {
-      return bundled;
-    }
-  }
-
-  #[cfg(target_os = "macos")]
+  #[cfg(any(target_os = "linux", target_os = "macos"))]
   {
     let bundled = root.join("node-runtime").join("node");
     if bundled.is_file() {
