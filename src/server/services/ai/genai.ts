@@ -69,6 +69,7 @@ async function call(
   return new Promise<string>((resolve, reject) => {
     const tokens: string[] = [];
     let settled = false;
+    let unsubscribe: (() => void) | undefined;
 
     const timeout = setTimeout(() => {
       if (!settled) {
@@ -80,6 +81,8 @@ async function call(
 
     function cleanup() {
       clearTimeout(timeout);
+      unsubscribe?.();
+      unsubscribe = undefined;
     }
 
     function handleResponse(data: Record<string, unknown>) {
