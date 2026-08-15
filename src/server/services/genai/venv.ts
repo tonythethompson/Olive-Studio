@@ -155,7 +155,7 @@ export interface SidecarProcess {
   /** Send a JSON request to the sidecar. */
   send: (request: Record<string, unknown>) => void;
   /** Register a handler for NDJSON responses. */
-  onResponse: (handler: (data: Record<string, unknown>) => void) => void;
+  onResponse: (handler: (data: Record<string, unknown>) => void) => () => void;
   /** Kill the sidecar process. */
   kill: () => void;
   /** Whether the process is still alive. */
