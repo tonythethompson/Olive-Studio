@@ -64,7 +64,7 @@ export async function listUserModels(): Promise<S3ModelEntry[] | null> {
     );
 
     for (const obj of response.Contents ?? []) {
-      if (!obj.Key || !obj.Size) continue;
+      if (!obj.Key || obj.Size == null) continue;
       // Skip "directory" markers
       if (obj.Key.endsWith("/")) continue;
       entries.push({
