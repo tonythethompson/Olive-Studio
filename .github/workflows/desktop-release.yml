@@ -97,6 +97,11 @@ jobs:
         if: matrix.platform == 'macos-latest'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
+      - name: Bundle Node runtime (macOS)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: bash scripts/bundle-macos-node.sh src-tauri/node-runtime/node
+
       - run: pnpm install --frozen-lockfile
         env:
           OLIVE_SKIP_MCP_SETUP: "1"
@@ -114,7 +119,14 @@ jobs:
           # (Draft releases are invisible to /latest until published.)
           tagName: ${{ github.ref_name }}
           releaseName: "Olive Studio ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for details."
+          releaseBody: |
+            See CHANGELOG.md for details.
+
+            ### macOS Installation (Unsigned DMG)
+
+            The macOS DMG is not code-signed or notarized. See the
+            [macOS installation instructions](https://github.com/tonythethompson/Olive-Studio#macos-installation-unsigned-dmg),
+            including the macOS 15+ **Open Anyway** fallback.
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.tauri_target }}
@@ -160,3 +172,11 @@ jobs:
             "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_${VERSION}.msix" \
             --repo "${{ github.repository }}" \
             --clobber
+
+      - name: Smoke test macOS artifact
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: >-
+          bash scripts/smoke-macos-app.sh
+          "src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
+          31415

@@ -101,8 +101,8 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
 
   add(
     passes.conversion &&
-    passes.conversionFormat === "openvino" &&
-    !isConversionFormatAllowed("openvino", providerId),
+      passes.conversionFormat === "openvino" &&
+      !isConversionFormatAllowed("openvino", providerId),
     {
       passKey: "conversionFormat",
       passName: "OpenVINO IR Conversion",
@@ -154,8 +154,8 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
 
   add(
     passes.quantization &&
-    (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
-    !isQuantMethodAllowed(passes.quantMethod, providerId),
+      (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
+      !isQuantMethodAllowed(passes.quantMethod, providerId),
     {
       passKey: "quantMethod",
       passName: passes.quantMethod === "spinquant" ? "SpinQuant Quantization" : "QuaRot Quantization",
@@ -183,7 +183,10 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
       providerId === "QNNExecutionProvider" || providerId === "QnnAbiExecutionProvider"
         ? "Snapdragon QNN targets are inference-only and cannot run PEFT training loops."
         : "Intel OpenVINO targets are inference-only; PEFT training requires CUDA or ROCm.",
-    severity: providerId === "QNNExecutionProvider" || providerId === "QnnAbiExecutionProvider" ? "critical" : "warning",
+    severity:
+      providerId === "QNNExecutionProvider" || providerId === "QnnAbiExecutionProvider"
+        ? "critical"
+        : "warning",
     autofix: () => ({ peft: false }),
   });
 
@@ -257,11 +260,7 @@ export function prepareProviderChange(
     // PlatformLocal providers bypass getProviderAvailabilityBlock (always selectable in UI),
     // but prepareProviderChange should still block switching to them when not detected
     // and the host cannot support them (e.g. QNN on Linux).
-    if (
-      isPlatformLocalProvider(providerId) &&
-      probe &&
-      !probe.detectedProviders.includes(providerId)
-    ) {
+    if (isPlatformLocalProvider(providerId) && probe && !probe.detectedProviders.includes(providerId)) {
       return null;
     }
   }
@@ -273,12 +272,10 @@ export function prepareProviderChange(
     ihvProvider: providerId,
     ...(providerId === "OpenVINOExecutionProvider"
       ? {
-        openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
-      }
+          openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
+        }
       : {}),
-    ...(hasCritical
-      ? { passes: applyProviderConflictAutofixes(providerId, state.passes) }
-      : {}),
+    ...(hasCritical ? { passes: applyProviderConflictAutofixes(providerId, state.passes) } : {}),
   };
 }
 
@@ -345,6 +342,17 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     affectedTabs: ["conversion", "transforms", "quantization"],
     affectedPasses: ["conversion", "transformer_opt", "quantization", "provider"],
     actionLabel: "Enable ONNX conversion",
+  },
+  {
+    ...autoCoercion("peft-lora-quant-no-qlora"),
+    autoCoerce: true,
+    severity: "critical",
+    title: "LoRA base quantization is unsupported by this provider",
+    description:
+      "This provider cannot run QLoRA training kernels, so standard LoRA must keep floating-point base parameters.",
+    affectedTabs: ["quantization", "peft"],
+    affectedPasses: ["peft", "quantization"],
+    actionLabel: "Disable base Quantization",
   },
   {
     ...autoCoercion("peft-lora-quant"),
@@ -571,9 +579,7 @@ function getQnnRecipeReadinessIssues(
     state,
     probe,
     ioConfig: extractRecipeIoConfig(recipe),
-    platform: probe?.platform
-      ? { platform: probe.platform.os, arch: probe.platform.arch }
-      : undefined,
+    platform: probe?.platform ? { platform: probe.platform.os, arch: probe.platform.arch } : undefined,
   }).map((issue) => ({
     id: `qnn-readiness-${issue.code}`,
     severity: qnnReadinessSeverityToPipeline(issue.severity),
@@ -957,8 +963,8 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
 export function sanitizePipelineState(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
-      state.openvinoTargetDevice === "GPU" ||
-      state.openvinoTargetDevice === "NPU"
+    state.openvinoTargetDevice === "GPU" ||
+    state.openvinoTargetDevice === "NPU"
       ? state.openvinoTargetDevice
       : "CPU";
 

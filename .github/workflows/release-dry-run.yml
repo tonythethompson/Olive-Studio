@@ -1,0 +1,247 @@
+name: Release Dry Run
+
+# Builds the full set of Tauri desktop artifacts (all platforms) without
+# tagging, publishing, or creating a GitHub Release. Use this to verify the
+# release pipeline works end-to-end and to produce installable artifacts
+# that are identical to what a real tagged release would produce.
+#
+# Artifacts are uploaded as workflow artifacts and retained for 7 days.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: "Optional version to inject (e.g. 0.5.0-rc.1). Leave empty to use the current package.json version."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      # Serialize to match production release behavior and avoid resource pressure
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            rust_targets: x86_64-unknown-linux-gnu
+            tauri_target: x86_64-unknown-linux-gnu
+            artifact_name: olive-studio-linux
+          - platform: windows-latest
+            rust_targets: x86_64-pc-windows-msvc
+            tauri_target: x86_64-pc-windows-msvc
+            artifact_name: olive-studio-windows
+          - platform: macos-latest
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri_target: universal-apple-darwin
+            artifact_name: olive-studio-macos
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # ─── Optional version override ────────────────────────────────────
+      - name: Apply version override
+        if: inputs.version_override != ''
+        shell: bash
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const version = process.env.VERSION_OVERRIDE ?? "";
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+          const match = semver.exec(version);
+          if (!match || match[0] !== version) {
+            console.error(`Invalid version_override: ${version}`);
+            process.exit(1);
+          }
+          NODE
+
+          VER="$VERSION_OVERRIDE"
+          echo "Overriding version to: $VER"
+
+          # package.json
+          node <<'NODE'
+          const fs = require("fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          pkg.version = process.env.VERSION_OVERRIDE;
+          fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          NODE
+
+          # tauri.conf.json
+          node <<'NODE'
+          const fs = require("fs");
+          const conf = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+          conf.version = process.env.VERSION_OVERRIDE;
+          fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(conf, null, 2) + "\n");
+          NODE
+
+          # Cargo.toml
+          sed -i.bak "s/^version = \".*\"/version = \"$VER\"/" src-tauri/Cargo.toml
+          rm -f src-tauri/Cargo.toml.bak
+
+          echo "Versions updated:"
+          echo "  package.json: $(node -p "require('./package.json').version")"
+          echo "  tauri.conf.json: $(node -p "require('./src-tauri/tauri.conf.json').version")"
+          grep '^version' src-tauri/Cargo.toml | head -1
+
+      # ─── Platform-specific deps ───────────────────────────────────────
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install macOS universal target
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      # ─── Node runtime sidecar ─────────────────────────────────────────
+      - name: Bundle Node runtime (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/node-runtime
+          install -m 0755 "$(command -v node)" src-tauri/node-runtime/node
+          src-tauri/node-runtime/node --version
+
+      - name: Bundle Node runtime (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/node-runtime | Out-Null
+          Copy-Item (Get-Command node).Source src-tauri/node-runtime/node.exe -Force
+          & src-tauri/node-runtime/node.exe --version
+
+      - name: Bundle Node runtime (macOS)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: bash scripts/bundle-macos-node.sh src-tauri/node-runtime/node
+
+      # ─── Install & Build ──────────────────────────────────────────────
+      - run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
+
+      - name: Build Tauri app
+        shell: bash
+        run: pnpm exec tauri build --target ${{ matrix.tauri_target }}
+        env:
+          # Updater signing — same key as production so artifacts are identical
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # ─── MSIX (Windows only) ──────────────────────────────────────────
+      - name: Build MSIX (Microsoft Store)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          ./scripts/build-msix.ps1 `
+            -ReleaseDir "src-tauri/target/${{ matrix.tauri_target }}/release" `
+            -Version $version `
+            -OutFile "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_$version.msix"
+
+      # ─── Upload artifacts ─────────────────────────────────────────────
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          retention-days: 7
+          path: |
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/appimage/*.AppImage
+
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          retention-days: 7
+          path: |
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msi/*.msi
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/*.msix
+
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          retention-days: 7
+          path: |
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/macos/*.app.tar.gz
+
+      # ─── Smoke test (Linux only) ─────────────────────────────────────
+      - name: Smoke test DEB artifact
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
+          DEB="$(find "$BUNDLE_DIR/deb" -name '*.deb' -print -quit)"
+          test -n "$DEB"
+          EXTRACT_DIR="$(mktemp -d)"
+          trap 'if [ -n "${SERVER_PID:-}" ]; then kill -- "-$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi; rm -rf "$EXTRACT_DIR"' EXIT
+          dpkg-deb -x "$DEB" "$EXTRACT_DIR"
+          NODE="$(find "$EXTRACT_DIR" -type f -path '*/node-runtime/node' -print -quit)"
+          SERVER_MJS="$(find "$EXTRACT_DIR" -type f -path '*/dist/server.mjs' -print -quit)"
+          test -n "$NODE" && test -x "$NODE"
+          test -n "$SERVER_MJS"
+          SERVER_ROOT="$(dirname "$(dirname "$SERVER_MJS")")"
+          setsid bash -c 'cd "$1" && PORT="$2" exec "$3" dist/server.mjs' bash "$SERVER_ROOT" 31415 "$NODE" &
+          SERVER_PID=$!
+          for _ in $(seq 1 20); do
+            if curl -fsS "http://127.0.0.1:31415/api/health" >/dev/null; then
+              echo "Smoke test passed — server started from packaged DEB"
+              kill -- -"$SERVER_PID" 2>/dev/null || true
+              wait "$SERVER_PID" 2>/dev/null || true
+              unset SERVER_PID
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Smoke test FAILED — server did not respond within 20s"
+          exit 1
+
+      # ─── Smoke test (macOS) ──────────────────────────────────────────
+      - name: Smoke test macOS artifact
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: >-
+          bash scripts/smoke-macos-app.sh
+          "src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
+          31415
