@@ -173,8 +173,13 @@ export async function downloadModel(
     const file = manifest.files[i];
     const localPath = path.join(modelDir, file);
 
-    // Skip files that already exist (resume support)
+    // Only files at their final name count as downloaded. In-progress and
+    // aborted downloads write to `<file>.partial` and are renamed on success,
+    // so a truncated file can never masquerade as a ready model file.
     if (fs.existsSync(localPath)) {
+      try {
+        fs.unlinkSync(`${localPath}.partial`);
+      } catch { /* no stale partial file */ }
       try {
         bytesDownloaded += fs.statSync(localPath).size;
       } catch { /* ignore */ }
@@ -192,10 +197,17 @@ export async function downloadModel(
     // Ensure subdirectory exists for the file
     fs.mkdirSync(path.dirname(localPath), { recursive: true });
 
+    const partialPath = `${localPath}.partial`;
     try {
+      // Start from a clean partial file — leftovers from an interrupted
+      // download are truncated/invalid and must be re-fetched.
+      try {
+        fs.unlinkSync(partialPath);
+      } catch { /* nothing to remove */ }
+
       if (cdnUrl) {
         // Download from CloudFront CDN (simple HTTPS fetch)
-        await downloadFromCdn(cdnUrl, manifest.s3Prefix + file, localPath, (loaded) => {
+        await downloadFromCdn(cdnUrl, manifest.s3Prefix + file, partialPath, (loaded) => {
           onProgress?.({
             file,
             fileIndex: i,
@@ -212,7 +224,7 @@ export async function downloadModel(
           return { ok: false, error: "No CDN URL or public S3 bucket configured. Set OLIVE_GENAI_CDN_URL or OLIVE_S3_PUBLIC_BUCKET." };
         }
         const s3Key = publicCfg.prefix + manifest.s3Prefix + file;
-        await pullModel(s3Key, localPath, "public", (progress) => {
+        await pullModel(s3Key, partialPath, "public", (progress) => {
           onProgress?.({
             file,
             fileIndex: i,
@@ -224,6 +236,9 @@ export async function downloadModel(
         });
       }
 
+      // Atomic promote: rename only after the full download succeeded.
+      fs.renameSync(partialPath, localPath);
+
       // Update running total
       try {
         bytesDownloaded += fs.statSync(localPath).size;
@@ -231,7 +246,7 @@ export async function downloadModel(
     } catch (err: unknown) {
       // Clean up partial file
       try {
-        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        if (fs.existsSync(partialPath)) fs.unlinkSync(partialPath);
       } catch { /* ignore */ }
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, error: `Failed to download ${file}: ${msg}` };

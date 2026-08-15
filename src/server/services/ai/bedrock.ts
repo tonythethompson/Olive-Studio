@@ -22,6 +22,7 @@ import {
 import { fromIni } from "@aws-sdk/credential-providers";
 import type { ProviderConfig, AIChatMessage } from "../../types.ts";
 import { registerProvider } from "./registry.ts";
+import { AWS_REGION_PATTERN } from "./security.ts";
 
 // ─── Credential Resolution ────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ import { registerProvider } from "./registry.ts";
 function resolveRegion(cfg: ProviderConfig): string {
   // The UI stores the region in the baseUrl field (repurposed for Bedrock).
   const regionFromConfig = cfg.baseUrl?.trim();
-  if (regionFromConfig && /^[a-z]{2}-[a-z]+-\d+$/.test(regionFromConfig)) {
+  if (regionFromConfig && AWS_REGION_PATTERN.test(regionFromConfig)) {
     return regionFromConfig;
   }
   return process.env.AWS_REGION?.trim() || process.env.AWS_DEFAULT_REGION?.trim() || "us-east-1";
@@ -49,7 +50,10 @@ function resolveRegion(cfg: ProviderConfig): string {
 function hasExplicitCredentials(cfg: ProviderConfig): boolean {
   if (!cfg.apiKey?.trim()) return false;
   // A packed credential looks like: AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-  return cfg.apiKey.includes(":") && /^A[KS]IA/.test(cfg.apiKey);
+  if (!cfg.apiKey.includes(":") || !/^A[KS]IA/.test(cfg.apiKey)) return false;
+  // Reject half-packed keys (missing secret) so the default credential chain
+  // is used instead of sending an empty secret to AWS.
+  return cfg.apiKey.slice(cfg.apiKey.indexOf(":") + 1).trim().length > 0;
 }
 
 /**
@@ -118,7 +122,10 @@ async function call(
     },
   });
 
-  const response = await client.send(command);
+  // Bound the request so a hung connection cannot block the caller forever.
+  const response = await client.send(command, {
+    abortSignal: AbortSignal.timeout(120_000),
+  });
 
   const outputMessage = response.output?.message;
   if (!outputMessage?.content?.length) {
@@ -158,7 +165,8 @@ registerProvider({
   defaultModel: "anthropic.claude-3-5-haiku-20241022-v1:0",
   // No defaultBaseUrl — Bedrock uses the AWS SDK, not HTTP endpoints directly.
   // The baseUrl field is repurposed to store the AWS region.
-  envVarNames: ["AWS_ACCESS_KEY_ID"],
+  // AWS_PROFILE alone is enough for the default chain, so detect it too.
+  envVarNames: ["AWS_ACCESS_KEY_ID", "AWS_PROFILE"],
   buildConfig: (apiKey) => {
     const secretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim() ?? "";
     return {

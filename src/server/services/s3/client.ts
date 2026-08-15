@@ -45,9 +45,12 @@ export function resolvePublicS3Config(): S3Config | null {
   if (!bucket) return null;
 
   const prefix = process.env.OLIVE_S3_PUBLIC_PREFIX?.trim() || "models/";
+  // Mirror resolveS3Config's fallback chain so both clients agree when only
+  // AWS_DEFAULT_REGION is set.
   const region =
     process.env.OLIVE_S3_PUBLIC_REGION?.trim() ||
     process.env.AWS_REGION?.trim() ||
+    process.env.AWS_DEFAULT_REGION?.trim() ||
     "us-east-1";
 
   return { bucket, prefix, region };

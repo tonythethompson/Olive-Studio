@@ -36,8 +36,13 @@ export function isGenaiVenvReady(): boolean {
 export function sidecarScriptPath(): string {
   const bundled = fileURLToPath(new URL("./inference_sidecar.py", import.meta.url));
   if (fs.existsSync(bundled)) return bundled;
-  const resource = path.join(process.resourcesPath ?? "", "genai", "inference_sidecar.py");
-  if (fs.existsSync(resource)) return resource;
+  // Packaged builds: the Tauri shell exports OLIVE_DIST_DIR pointing at the
+  // resource dist directory, where copy-genai-sidecar places the script.
+  const distDir = process.env.OLIVE_DIST_DIR;
+  if (distDir) {
+    const resource = path.join(distDir, "inference_sidecar.py");
+    if (fs.existsSync(resource)) return resource;
+  }
   return bundled;
 }
 
@@ -168,16 +173,27 @@ export interface SidecarProcess {
 }
 
 let activeSidecar: SidecarProcess | null = null;
+// Track which model/EP the active sidecar was started for. A request for a
+// different model or EP must restart the sidecar instead of reusing it.
+let activeSidecarKey: string | null = null;
 
 /**
  * Spawns the GenAI inference sidecar as a long-running child process.
- * Reuses the existing process if it's still alive.
+ * Reuses the existing process if it's still alive AND matches the requested
+ * model and execution provider.
  *
  * @param modelPath - Absolute path to the ONNX model directory.
  * @param ep - Execution provider: "cpu", "cuda", or "dml".
  */
 export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProcess {
-  if (activeSidecar?.alive()) return activeSidecar;
+  const key = `${modelPath}\u0000${ep}`;
+  if (activeSidecar?.alive() && activeSidecarKey === key) return activeSidecar;
+  // Stale sidecar for a different model/EP — stop it before spawning a new one.
+  if (activeSidecar?.alive()) {
+    activeSidecar.kill();
+  }
+  activeSidecar = null;
+  activeSidecarKey = null;
 
   const pythonExe = genaiPythonPath();
   const scriptPath = sidecarScriptPath();
@@ -215,8 +231,22 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
     if (text) console.warn("[genai-sidecar] stderr:", text.slice(0, 300));
   });
 
+  // spawn emits 'error' (not 'exit') when the executable is missing, e.g. the
+  // venv python was deleted after isGenaiVenvReady() passed. Without a handler
+  // that would crash the whole server.
+  child.on("error", (err) => {
+    console.warn("[genai-sidecar] spawn error:", err.message);
+    if (activeSidecar === sidecar) {
+      activeSidecar = null;
+      activeSidecarKey = null;
+    }
+  });
+
   child.on("exit", (code) => {
-    if (activeSidecar === sidecar) activeSidecar = null;
+    if (activeSidecar === sidecar) {
+      activeSidecar = null;
+      activeSidecarKey = null;
+    }
     if (code !== 0 && code !== null) {
       console.warn(`[genai-sidecar] Process exited with code ${code}`);
     }
@@ -247,13 +277,24 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   };
 
   activeSidecar = sidecar;
+  activeSidecarKey = key;
   return sidecar;
 }
 
-/** Get the active sidecar if it's running. */
-export function getActiveSidecar(): SidecarProcess | null {
-  if (activeSidecar?.alive()) return activeSidecar;
+/**
+ * Get the active sidecar if it's running.
+ * When modelPath/ep are provided, only returns it when it was started for
+ * that exact model and execution provider — otherwise the caller would send
+ * requests to a process loaded with a different model.
+ */
+export function getActiveSidecar(modelPath?: string, ep?: string): SidecarProcess | null {
+  if (activeSidecar?.alive()) {
+    if (modelPath === undefined || ep === undefined) return activeSidecar;
+    if (activeSidecarKey === `${modelPath}\u0000${ep}`) return activeSidecar;
+    return null;
+  }
   activeSidecar = null;
+  activeSidecarKey = null;
   return null;
 }
 
@@ -261,4 +302,5 @@ export function getActiveSidecar(): SidecarProcess | null {
 export function shutdownSidecar(): void {
   activeSidecar?.kill();
   activeSidecar = null;
+  activeSidecarKey = null;
 }

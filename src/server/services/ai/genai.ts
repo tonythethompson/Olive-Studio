@@ -57,7 +57,9 @@ async function call(
   }
 
   const ep = process.env.GENAI_EXECUTION_PROVIDER?.trim() || "cpu";
-  const sidecar = getActiveSidecar() ?? spawnSidecar(modelPath, ep);
+  // Only reuse a sidecar that was started for this exact model/EP; otherwise
+  // spawnSidecar restarts it with the new configuration.
+  const sidecar = getActiveSidecar(modelPath, ep) ?? spawnSidecar(modelPath, ep);
 
   const sysText = wantJson
     ? `${system}\n\nIMPORTANT: Respond with valid JSON only. No markdown fences, no text outside the JSON object.`

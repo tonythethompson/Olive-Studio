@@ -110,19 +110,27 @@ export function mountS3Routes(router: Router): void {
     if (isParseBodyError(body)) return res.status(400).json({ error: body.error });
 
     const { key, source: rawSource, destDir: rawDestDir } = body.parsed;
+    // Reject unknown source values explicitly — silently defaulting a typo to
+    // "private" could read the user's private bucket by accident.
+    if (rawSource !== undefined && rawSource !== "public" && rawSource !== "private") {
+      return res.status(400).json({ error: "source must be \"public\" or \"private\"." });
+    }
     const source = rawSource === "public" ? "public" as const : "private" as const;
 
     // Default destination: ./models/optimized/<basename>
     const basename = path.basename(key);
     const cwd = process.cwd();
     const destDir = rawDestDir?.trim() ? path.resolve(cwd, rawDestDir.trim()) : path.resolve(cwd, "models", "optimized");
-    if (path.relative(cwd, destDir).startsWith("..")) {
+    // path.relative returns an absolute path across roots (Windows drives),
+    // which would slip past the ".." check — treat that as outside too.
+    const relativeToCwd = path.relative(cwd, destDir);
+    if (path.isAbsolute(relativeToCwd) || relativeToCwd.startsWith("..")) {
       return res.status(400).json({ error: "Destination path must be inside the project directory." });
     }
     // Reject symlinked destination components. A lexical containment check is
     // insufficient because createWriteStream follows symlinks at write time.
     let cursor = cwd;
-    const relativeDest = path.relative(cwd, destDir);
+    const relativeDest = relativeToCwd;
     for (const component of relativeDest ? relativeDest.split(path.sep) : []) {
       cursor = path.join(cursor, component);
       try {

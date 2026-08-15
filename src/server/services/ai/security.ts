@@ -1,6 +1,12 @@
 import type { ProviderConfig } from "../../types.ts";
 import { isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
 
+/**
+ * AWS region shape: 2-letter geo prefix, one or more word segments, trailing
+ * digit. Accepts multi-segment regions like us-gov-west-1 and eu-isoe-west-1.
+ */
+export const AWS_REGION_PATTERN = /^[a-z]{2}(-[a-z]+)+-\d+$/;
+
 /** Allowed base URL prefixes per provider (SSRF protection). */
 export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig["provider"], string[]>> = {
   openai: ["https://api.openai.com/v1"],
@@ -82,7 +88,7 @@ export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): 
   const trimmed = rawBaseUrl?.trim();
   if (!trimmed) return undefined;
   if (provider === "bedrock") {
-    if (!/^[a-z]{2}-[a-z]+-\d+$/.test(trimmed)) throw new Error("Invalid AWS Bedrock region");
+    if (!AWS_REGION_PATTERN.test(trimmed)) throw new Error("Invalid AWS Bedrock region");
     return trimmed;
   }
   let parsed: URL;

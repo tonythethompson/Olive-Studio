@@ -64,7 +64,6 @@ def main():
                 config.append_provider("cpu")
         model = og.Model(config)
         tokenizer = og.Tokenizer(model)
-        token_stream = tokenizer.create_stream()
         emit_status("ready", f"Model loaded ({ep})")
     except Exception as e:
         emit_error("startup", f"Failed to load model: {e}")
@@ -95,7 +94,7 @@ def main():
                 request=request,
                 model=model,
                 tokenizer=tokenizer,
-                token_stream=token_stream,
+                model_path=model_path,
                 default_max_tokens=default_max_tokens,
             )
         except Exception as e:
@@ -104,9 +103,13 @@ def main():
                 traceback.print_exc(file=sys.stderr)
 
 
-def process_inference(request_id, request, model, tokenizer, token_stream, default_max_tokens):
+def process_inference(request_id, request, model, tokenizer, model_path, default_max_tokens):
     """Process a single inference request with streaming token output."""
     import onnxruntime_genai as og
+
+    # A decode stream carries partial multi-byte/sub-word state, so each
+    # request must get a fresh one — reusing it across requests corrupts text.
+    token_stream = tokenizer.create_stream()
 
     system = request.get("system", "You are a helpful assistant.")
     messages = request.get("messages", [])
@@ -115,19 +118,19 @@ def process_inference(request_id, request, model, tokenizer, token_stream, defau
     top_p = request.get("top_p", 0.9)
 
     # Build prompt using chat template format
-    # Format: <system>\n<user>\n<assistant>\n...
-    prompt = build_chat_prompt(system, messages)
+    prompt = build_chat_prompt(model_path, system, messages)
+
+    # Encode prompt first: max_length is the TOTAL sequence length (prompt +
+    # completion), so it must include the prompt tokens or replies truncate.
+    input_tokens = tokenizer.encode(prompt)
 
     # Set up generation parameters
     params = og.GeneratorParams(model)
     params.set_search_options(
-        max_length=max_tokens,
+        max_length=len(input_tokens) + max_tokens,
         temperature=temperature,
         top_p=top_p,
     )
-
-    # Encode prompt
-    input_tokens = tokenizer.encode(prompt)
 
     # Create generator and feed prompt
     generator = og.Generator(model, params)
@@ -148,27 +151,52 @@ def process_inference(request_id, request, model, tokenizer, token_stream, defau
     emit({"id": request_id, "type": "done", "text": "", "token_count": token_count})
 
 
-def build_chat_prompt(system: str, messages: list) -> str:
+def detect_template_style(model_path: str) -> str:
+    """
+    Detect the chat template style from the model's genai_config.json.
+
+    Returns "chatml" for Qwen-style models (<|im_start|>role ... <|im_end|>)
+    and "phi" for Phi-style models (<|role|> ... <|end|>). Falls back to
+    "chatml" when the config is unreadable — the catalog default model
+    (qwen2.5-coder) is ChatML.
+    """
+    try:
+        with open(os.path.join(model_path, "genai_config.json"), "r", encoding="utf-8") as f:
+            config_text = f.read()
+    except OSError:
+        return "chatml"
+    if "im_start" in config_text or "qwen" in model_path.lower():
+        return "chatml"
+    return "phi"
+
+
+def build_chat_prompt(model_path: str, system: str, messages: list) -> str:
     """
     Build a chat prompt string from system + messages.
 
-    Uses a generic ChatML-style template that works with most ONNX GenAI models
-    (Phi, Qwen, Llama use variants of this). The model's genai_config.json
-    should handle the actual template if it differs.
+    Selects the template from the model's genai_config.json: ChatML for the
+    catalog default (Qwen2.5) and Phi-style otherwise.
     """
+    style = detect_template_style(model_path)
     parts = []
 
-    # System message
+    if style == "chatml":
+        if system:
+            parts.append(f"<|im_start|>system\n{system}<|im_end|>")
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+        parts.append("<|im_start|>assistant\n")
+        return "\n".join(parts)
+
+    # Phi-style template
     if system:
         parts.append(f"<|system|>\n{system}<|end|>")
-
-    # Conversation messages
     for msg in messages:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         parts.append(f"<|{role}|>\n{content}<|end|>")
-
-    # Prompt the assistant to respond
     parts.append("<|assistant|>")
 
     return "\n".join(parts)
