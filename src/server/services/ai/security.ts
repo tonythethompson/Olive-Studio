@@ -19,6 +19,9 @@ export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig[
   huggingface: ["https://router.huggingface.co/v1"],
   // Account id is path segment: …/accounts/{32hex}/ai/v1
   cloudflare: ["https://api.cloudflare.com/client/v4/accounts"],
+  // Bedrock uses the AWS SDK (not a direct HTTP base URL). The baseUrl field
+  // stores only the AWS region string (e.g. "us-east-1"), not a URL.
+  // No URL prefix validation needed — the SDK constructs endpoints internally.
 };
 
 /** Strip trailing `/` without a regex (avoids ReDoS on long slash runs). */

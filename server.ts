@@ -15,6 +15,7 @@ import { ensureMcpSetupInBackground } from "./src/server/services/mcp/ensureMcpS
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
 import { mountArenaRoutes } from "./src/server/routes/arena.ts";
+import { mountS3Routes } from "./src/server/routes/s3.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
 import { probeOpenVino } from "./src/server/services/olive/openvino.ts";
@@ -121,6 +122,10 @@ app.use("/api", systemRouter);
 const arenaRouter = Router();
 mountArenaRoutes(arenaRouter);
 app.use("/api", arenaRouter);
+
+const s3Router = Router();
+mountS3Routes(s3Router);
+app.use("/api", s3Router);
 
 // ─── Health check (required by Tauri desktop bootstrap) ────────────────────
 // Tauri (src-tauri/src/lib.rs wait_for_health) accepts ready:true, ok:true, or status:"ok".

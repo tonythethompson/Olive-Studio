@@ -54,6 +54,10 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1110.0",
+    "@aws-sdk/client-s3": "^3.1110.0",
+    "@aws-sdk/credential-providers": "^3.1110.0",
+    "@aws-sdk/lib-storage": "^3.1110.0",
     "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/client": "^2.0.0",
     "@radix-ui/react-accordion": "^1.2.20",
