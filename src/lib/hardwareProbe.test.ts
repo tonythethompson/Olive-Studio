@@ -640,9 +640,7 @@ describe("mergeDetectedProviders QNN", () => {
   });
 
   it("computeQnnCompatibleHardware is Windows ARM64 only (local accelerator)", () => {
-    expect(
-      computeQnnCompatibleHardware({ os: "win32 10.0", arch: "arm64" }),
-    ).toBe(true);
+    expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "arm64" })).toBe(true);
     // Windows x64 is preparation-only (cross-compile), not a local accelerator
     expect(computeQnnCompatibleHardware({ os: "win32 10.0", arch: "x64" })).toBe(false);
     expect(computeQnnCompatibleHardware({ os: "linux 6.8", arch: "x64" })).toBe(false);
@@ -678,5 +676,244 @@ describe("isProviderDetectedLocally", () => {
 
   it("returns false for non-CPU providers when probe is null", () => {
     expect(isProviderDetectedLocally("CUDAExecutionProvider", null)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// CoreML detection and recommendation
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("CoreML detection and recommendation", () => {
+  /**
+   * Property 1: CoreML is not soft-detected from Apple hardware
+   *
+   * Without an ORT-reported CoreML EP, the returned provider list SHALL NOT
+   * contain `CoreMLExecutionProvider`.
+   *
+   * **Validates: Requirements 2.1**
+   */
+  it("Property 1: CoreML is not detected without an ORT provider report", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+    expect(pickRecommendedProvider(detected)).toBe("CPUExecutionProvider");
+  });
+
+  it("Property 1: other hardware signals do not imply CoreML", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: true,
+      hasDirectMl: true,
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+    expect(detected).toContain("CUDAExecutionProvider");
+    expect(detected).toContain("OpenVINOExecutionProvider");
+  });
+
+  it("Property 1: an empty ORT providers list does not imply CoreML", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: [],
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+  });
+
+  /**
+   * Property 2: CoreML requires an explicit ORT provider report
+   *
+   * When `onnxRuntimeProviders` does NOT include
+   * `CoreMLExecutionProvider`, the returned list SHALL NOT contain it.
+   *
+   * **Validates: Requirements 2.2**
+   */
+  it("Property 2: CoreML not detected when ORT providers are unavailable", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+  });
+
+  it("Property 2: CoreML not detected when ORT providers are omitted", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+  });
+
+  it("Property 2: CoreML not detected on non-Apple with ORT providers that exclude CoreML", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: true,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CUDAExecutionProvider"],
+    });
+    expect(detected).not.toContain("CoreMLExecutionProvider");
+  });
+
+  /**
+   * Property 3: ORT-listed CoreML is detected
+   *
+   * For any input where `onnxRuntimeProviders` includes `CoreMLExecutionProvider`,
+   * the returned list SHALL contain it.
+   *
+   * **Validates: Requirements 2.3**
+   */
+  it("Property 3: ORT-listed CoreML is detected", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider"],
+    });
+    expect(detected).toContain("CoreMLExecutionProvider");
+  });
+
+  it("Property 3: ORT-listed CoreML remains detected with the minimal probe input", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider"],
+    });
+    expect(detected).toContain("CoreMLExecutionProvider");
+  });
+
+  it("Property 3: duplicate ORT CoreML entries are de-duplicated", () => {
+    const detected = mergeDetectedProviders({
+      hasNvidiaGpu: false,
+      hasRocmGpu: false,
+      hasOpenVino: false,
+      onnxRuntimeProviders: ["CPUExecutionProvider", "CoreMLExecutionProvider", "CoreMLExecutionProvider"],
+    });
+    expect(detected).toContain("CoreMLExecutionProvider");
+    // Should not have duplicate entries
+    const coremlCount = detected.filter((p) => p === "CoreMLExecutionProvider").length;
+    expect(coremlCount).toBe(1);
+  });
+
+  /**
+   * Property 4: CoreML recommended over CPU without GPU providers
+   *
+   * When CoreML and CPU are detected but no GPU providers, `pickRecommendedProvider`
+   * SHALL NOT return `CPUExecutionProvider`.
+   *
+   * **Validates: Requirements 3.1**
+   */
+  it("Property 4: CoreML recommended over CPU when no GPU providers present", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected);
+    expect(recommended).not.toBe("CPUExecutionProvider");
+    expect(recommended).toBe("CoreMLExecutionProvider");
+  });
+
+  it("Property 4: CoreML recommended over CPU even with WebGPU present", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "WebGpuExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected);
+    // CoreML is above WebGPU in priority, so it should be picked
+    expect(recommended).not.toBe("CPUExecutionProvider");
+    expect(recommended).toBe("CoreMLExecutionProvider");
+  });
+
+  it("Property 4: CoreML recommended over CPU with OpenVINO (not loadable)", () => {
+    // OpenVINO only gets priority boost when loadable; without loadable flag,
+    // CoreML is above CPU but OpenVINO needs the `openvinoLoadable` opt to rank higher.
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "OpenVINOExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected, { openvinoLoadable: false });
+    expect(recommended).not.toBe("CPUExecutionProvider");
+  });
+
+  /**
+   * Property 5: GPU providers recommended over CoreML
+   *
+   * When CoreML and a GPU provider are both detected, `pickRecommendedProvider`
+   * SHALL NOT return `CoreMLExecutionProvider`.
+   *
+   * **Validates: Requirements 3.2**
+   */
+  it("Property 5: CUDA recommended over CoreML", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "CUDAExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected);
+    expect(recommended).not.toBe("CoreMLExecutionProvider");
+    expect(recommended).toBe("CUDAExecutionProvider");
+  });
+
+  it("Property 5: TensorRT recommended over CoreML when loadable", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "TensorrtExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected, { tensorRtLoadable: true });
+    expect(recommended).not.toBe("CoreMLExecutionProvider");
+    expect(recommended).toBe("TensorrtExecutionProvider");
+  });
+
+  it("Property 5: TensorRT RTX recommended over CoreML when loadable", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "NvTensorRTRTXExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected, { tensorRtRtxLoadable: true });
+    expect(recommended).not.toBe("CoreMLExecutionProvider");
+    expect(recommended).toBe("NvTensorRTRTXExecutionProvider");
+  });
+
+  it("Property 5: ROCm recommended over CoreML", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "ROCMExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected);
+    expect(recommended).not.toBe("CoreMLExecutionProvider");
+    expect(recommended).toBe("ROCMExecutionProvider");
+  });
+
+  it("Property 5: DirectML recommended over CoreML", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "DmlExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected);
+    expect(recommended).not.toBe("CoreMLExecutionProvider");
+    expect(recommended).toBe("DmlExecutionProvider");
+  });
+
+  it("Property 5: OpenVINO (loadable) recommended over CoreML", () => {
+    const detected: ReturnType<typeof mergeDetectedProviders> = [
+      "CPUExecutionProvider",
+      "CoreMLExecutionProvider",
+      "OpenVINOExecutionProvider",
+    ];
+    const recommended = pickRecommendedProvider(detected, { openvinoLoadable: true });
+    expect(recommended).not.toBe("CoreMLExecutionProvider");
+    expect(recommended).toBe("OpenVINOExecutionProvider");
   });
 });

@@ -149,15 +149,39 @@
       "notes": "New in olive-ai 0.13.0 (PR #2434). ABI-stable QNN execution provider; use QairtPipeline for single-pass LLM quantization+compilation. Prefer over legacy QNNExecutionProvider multi-step workflow."
     },
     {
-      "target": "Apple M2/M3 (CoreML)",
+      "target": "Apple CoreML (Neural Engine / Apple GPU)",
       "accelerator": "npu",
       "execution_providers": [
         "CoreMLExecutionProvider"
       ],
+      "platform": {
+        "os": "macOS",
+        "arch": "arm64",
+        "description": "Apple Silicon (M1/M2/M3/M4 series)"
+      },
       "recommended_passes": [
         "OnnxConversion",
         "OnnxStaticQuantization",
+        "OnnxDynamicQuantization",
         "OnnxModelOptimizer"
+      ],
+      "compatible_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxDynamicQuantization",
+        "OnnxBlockWiseRtnQuantization",
+        "OnnxKquantQuantization",
+        "QATQuantizer",
+        "OnnxHqqQuantization",
+        "LoRA"
+      ],
+      "incompatible_passes": [
+        "AutoAWQQuantizer",
+        "GptqQuantizer",
+        "Gptq",
+        "SpinQuant",
+        "QuaRot",
+        "QLoRA"
       ],
       "typical_speedup": "3-7x",
       "calibration_size": 100,
@@ -172,9 +196,10 @@
       ],
       "known_issues": [
         "CoreML requires per-channel quantization for some layers.",
-        "Dynamic shapes are limited; fix input shapes."
+        "Dynamic shapes are limited; fixed input shapes recommended for optimal ANE scheduling.",
+        "Requires coremltools for model conversion."
       ],
-      "notes": "CoreML works best for CNN and transformer models with fixed input sizes."
+      "notes": "CoreML targets the Apple Neural Engine and Apple GPU. Fixed input shapes recommended for optimal ANE scheduling. Requires coremltools for model conversion."
     },
     {
       "target": "Android NNAPI",
