@@ -72,8 +72,8 @@ This plan integrates CoreML as a fully-functional execution provider in Olive St
     - _Requirements: 7.1, 7.2, 7.3_
 
   - [x] 5.2 Update `olive-mcp-server/olive_mcp_server/knowledge_base/passes.json` with CoreML provider references
-    - Add `CoreMLExecutionProvider` to compatible_providers for: OnnxConversion, OnnxStaticQuantization, OnnxDynamicQuantization, OnnxRtnQuantization, OnnxKquantQuantization, OnnxQatQuantization, OnnxHqqQuantization, LoRA
-    - Ensure `CoreMLExecutionProvider` is NOT in: OnnxAwqQuantization, OnnxGptqQuantization, OnnxSpinQuantQuantization, OnnxQuaRotQuantization, QLoRA
+    - Add `CoreMLExecutionProvider` to hardware_requirements for: OnnxConversion, OnnxStaticQuantization, OnnxDynamicQuantization, OnnxBlockWiseRtnQuantization, OnnxKquantQuantization, QATQuantizer, OnnxHqqQuantization, LoRA
+    - Ensure `CoreMLExecutionProvider` is NOT in: AutoAWQQuantizer, GptqQuantizer, Gptq, SpinQuant, QuaRot, QLoRA
     - _Requirements: 8.1, 8.2_
 
   - [x] 5.3 Write pytest tests for CoreML MCP knowledge base entries

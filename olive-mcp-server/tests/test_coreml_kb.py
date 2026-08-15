@@ -166,9 +166,9 @@ def test_coreml_profile_compatible_passes(coreml_profile: dict) -> None:
         "OnnxConversion",
         "OnnxStaticQuantization",
         "OnnxDynamicQuantization",
-        "OnnxRtnQuantization",
+        "OnnxBlockWiseRtnQuantization",
         "OnnxKquantQuantization",
-        "OnnxQatQuantization",
+        "QATQuantizer",
         "OnnxHqqQuantization",
         "LoRA",
     }
@@ -180,14 +180,25 @@ def test_coreml_profile_incompatible_passes(coreml_profile: dict) -> None:
     """Incompatible passes must list all GPU-only quantization methods."""
     incompatible = set(coreml_profile.get("incompatible_passes", []))
     expected = {
-        "OnnxAwqQuantization",
-        "OnnxGptqQuantization",
-        "OnnxSpinQuantQuantization",
-        "OnnxQuaRotQuantization",
+        "AutoAWQQuantizer",
+        "GptqQuantizer",
+        "Gptq",
+        "SpinQuant",
+        "QuaRot",
         "QLoRA",
     }
     missing = expected - incompatible
     assert not missing, f"CoreML profile missing incompatible_passes: {missing}"
+
+
+@pytest.mark.parametrize("field", ["compatible_passes", "incompatible_passes"])
+def test_coreml_profile_uses_registered_pass_ids(
+    coreml_profile: dict, passes_by_name: dict[str, dict], field: str
+) -> None:
+    """Every CoreML profile pass reference must resolve to a passes.json entry."""
+    referenced = set(coreml_profile.get(field, []))
+    unknown = referenced - passes_by_name.keys()
+    assert not unknown, f"CoreML profile {field} contains unknown pass IDs: {unknown}"
 
 
 def test_coreml_profile_has_notes(coreml_profile: dict) -> None:

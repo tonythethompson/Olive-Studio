@@ -140,16 +140,14 @@ export function isQuantMethodAllowed(
 
 The existing conflict rules for AWQ/GPTQ/SpinQuant/QuaRot already use `!isQuantMethodAllowed(method, providerId)`. Since CoreML is not in `GPU_PROVIDERS`, these conflicts fire automatically. No new rule entries needed — the existing pattern handles CoreML.
 
-**PEFT/LoRA:** CoreML is NOT in `PEFT_UNSUPPORTED_PROVIDERS`, so `isPeftAllowed()` returns `true`. For QLoRA: `isPeftMethodAllowed("qlora", provider)` checks `GPU_PROVIDERS` — CoreML is not there, so QLoRA would be blocked. Per requirement 5.7, QLoRA must be allowed for CoreML. Fix:
+**PEFT/LoRA:** CoreML is NOT in `PEFT_UNSUPPORTED_PROVIDERS`, so `isPeftAllowed()` returns `true` for LoRA. QLoRA remains limited to `GPU_PROVIDERS`; CoreML is an inference EP rather than a supported QLoRA training backend.
 
 ```typescript
 export function isPeftMethodAllowed(
   method: UIState["passes"]["peftMethod"],
   provider: IHVProvider,
 ): boolean {
-  if (method === "qlora") {
-    return GPU_PROVIDERS.includes(provider) || provider === "CoreMLExecutionProvider";
-  }
+  if (method === "qlora") return GPU_PROVIDERS.includes(provider);
   return true;
 }
 ```
@@ -227,17 +225,17 @@ Add a CoreML entry:
     "arch": "arm64",
     "description": "Apple Silicon (M1/M2/M3/M4 series)"
   },
-  "compatible_passes": ["OnnxConversion", "OnnxStaticQuantization", "OnnxDynamicQuantization", "OnnxRtnQuantization", "OnnxKquantQuantization", "OnnxQatQuantization", "OnnxHqqQuantization", "LoRA", "QLoRA"],
-  "incompatible_passes": ["OnnxAwqQuantization", "OnnxGptqQuantization", "OnnxSpinQuantQuantization", "OnnxQuaRotQuantization"],
+  "compatible_passes": ["OnnxConversion", "OnnxStaticQuantization", "OnnxDynamicQuantization", "OnnxBlockWiseRtnQuantization", "OnnxKquantQuantization", "QATQuantizer", "OnnxHqqQuantization", "LoRA"],
+  "incompatible_passes": ["AutoAWQQuantizer", "GptqQuantizer", "Gptq", "SpinQuant", "QuaRot", "QLoRA"],
   "notes": "CoreML targets the Apple Neural Engine and Apple GPU. Fixed input shapes recommended for optimal ANE scheduling. Requires coremltools for model conversion."
 }
 ```
 
 **File:** `olive-mcp-server/olive_mcp_server/knowledge_base/passes.json`
 
-For each pass entry that lists `compatible_providers`:
-- Add `"CoreMLExecutionProvider"` to: OnnxConversion, OnnxStaticQuantization (PTQ), OnnxDynamicQuantization, OnnxRtnQuantization, OnnxKquantQuantization, OnnxQatQuantization, OnnxHqqQuantization, LoRA, QLoRA
-- Ensure `"CoreMLExecutionProvider"` is NOT in: OnnxAwqQuantization, OnnxGptqQuantization, OnnxSpinQuantQuantization, OnnxQuaRotQuantization
+For each pass entry that lists `hardware_requirements`:
+- Add `"CoreMLExecutionProvider"` to: OnnxConversion, OnnxStaticQuantization (PTQ), OnnxDynamicQuantization, OnnxBlockWiseRtnQuantization, OnnxKquantQuantization, QATQuantizer, OnnxHqqQuantization, LoRA
+- Ensure `"CoreMLExecutionProvider"` is NOT in: AutoAWQQuantizer, GptqQuantizer, Gptq, SpinQuant, QuaRot, QLoRA
 
 ### 6. Provider Card — CoreML Context
 
@@ -320,7 +318,7 @@ interface CoreMLHardwareProfile {
 |----------|---------|----------|
 | `coremltools` pip install fails | `ensureCoremltools()` | Returns `{ ok: false, error }`, propagated to job setup listener |
 | CoreML + AWQ selected | `getProviderConflicts()` | Returns critical conflict; `applyProviderConflictAutofixes()` coerces to PTQ |
-| CoreML + QLoRA on non-GPU host | Allowed per requirements | QLoRA is unblocked for CoreML (ANE can calibrate, train offloads to CPU/ANE) |
+| CoreML + QLoRA | `isPeftMethodAllowed()` / state commit | QLoRA is rejected and coerced to LoRA because CoreML is not a supported QLoRA training backend |
 | `isMacAppleSilicon` not provided | `mergeDetectedProviders()` | Treated as `false` — CoreML not soft-detected (backward-compatible default) |
 | CoreML detected but ORT doesn't list it | `capabilityEnsure` platformLocal path | Returns error: "not registered in default runtime ORT" |
 
@@ -336,7 +334,7 @@ No HTTP endpoint changes. All changes are internal to detection/validation/venv 
 |--------|--------|
 | `src/lib/hardwareProbe.ts` | `mergeDetectedProviders` input type adds `isMacAppleSilicon` |
 | `src/lib/pipelineStateCommit.ts` | `isQuantMethodAllowed` — CoreML added to HQQ/RTN/KQuant allowlist |
-| `src/lib/pipelineStateCommit.ts` | `isPeftMethodAllowed` — CoreML added to QLoRA allowlist |
+| `src/lib/pipelineStateCommit.ts` | `isPeftMethodAllowed` — QLoRA remains limited to GPU training providers |
 | `src/server/services/venv/capabilityEnsure.ts` | CoreML case calls `ensureCoremltools()` |
 | `src/server/services/olive/coreml.ts` | New module — `ensureCoremltools()` |
 
@@ -388,18 +386,18 @@ No HTTP endpoint changes. All changes are internal to detection/validation/venv 
 
 ### Property 8: CoreML allows CPU-compatible quantization and fine-tuning methods
 
-*For any* quantization method in `{ptq, rtn, kquant, qat, hqq}`, `isQuantMethodAllowed(method, "CoreMLExecutionProvider")` SHALL return `true`. Additionally, `isPeftAllowed("CoreMLExecutionProvider")` SHALL return `true`, and *for any* PEFT method in `{lora, qlora}`, `isPeftMethodAllowed(method, "CoreMLExecutionProvider")` SHALL return `true`.
+*For any* quantization method in `{ptq, rtn, kquant, qat, hqq}`, `isQuantMethodAllowed(method, "CoreMLExecutionProvider")` SHALL return `true`. Additionally, `isPeftAllowed("CoreMLExecutionProvider")` and `isPeftMethodAllowed("lora", "CoreMLExecutionProvider")` SHALL return `true`, while `isPeftMethodAllowed("qlora", "CoreMLExecutionProvider")` SHALL return `false`.
 
 **Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7**
 
 ### Property 9: MCP passes.json includes CoreML for compatible passes
 
-*For any* pass name in the CoreML-compatible set `{OnnxConversion, OnnxStaticQuantization, OnnxDynamicQuantization, OnnxRtnQuantization, OnnxKquantQuantization, OnnxQatQuantization, OnnxHqqQuantization, LoRA, QLoRA}`, its entry in `passes.json` SHALL list `CoreMLExecutionProvider` in the `compatible_providers` array.
+*For any* pass name in the CoreML-compatible set `{OnnxConversion, OnnxStaticQuantization, OnnxDynamicQuantization, OnnxBlockWiseRtnQuantization, OnnxKquantQuantization, QATQuantizer, OnnxHqqQuantization, LoRA}`, its entry in `passes.json` SHALL list `CoreMLExecutionProvider` in the `hardware_requirements` array.
 
 **Validates: Requirements 8.1**
 
 ### Property 10: MCP passes.json excludes CoreML for GPU-only passes
 
-*For any* pass name in the GPU-only set `{OnnxAwqQuantization, OnnxGptqQuantization, OnnxSpinQuantQuantization, OnnxQuaRotQuantization}`, its entry in `passes.json` SHALL NOT list `CoreMLExecutionProvider` in the `compatible_providers` array.
+*For any* pass name in the GPU-only set `{AutoAWQQuantizer, GptqQuantizer, Gptq, SpinQuant, QuaRot, QLoRA}`, its entry in `passes.json` SHALL NOT list `CoreMLExecutionProvider` in the `hardware_requirements` array.
 
 **Validates: Requirements 8.2**
