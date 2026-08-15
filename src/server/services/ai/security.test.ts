@@ -52,6 +52,13 @@ describe("AI provider security", () => {
       expect(sanitizeProviderBaseUrl("openai", "")).toBeUndefined();
     });
 
+    it("preserves valid Bedrock regions without parsing them as URLs", () => {
+      expect(sanitizeProviderBaseUrl("bedrock", "us-east-1")).toBe("us-east-1");
+      expect(() => sanitizeProviderBaseUrl("bedrock", "https://example.com")).toThrow(
+        "Invalid AWS Bedrock region",
+      );
+    });
+
     it("throws on non-https URLs", () => {
       expect(() => sanitizeProviderBaseUrl("openai", "http://api.openai.com/v1")).toThrow(
         "baseUrl must use https",
