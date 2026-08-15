@@ -292,6 +292,8 @@ export function mergeDetectedProviders(input: {
   cudaFamilyCapable?: boolean;
   /** Platform OS string for DirectML Windows detection. */
   os?: string;
+  /** True when platform is darwin AND arch is arm64 (Apple Silicon). */
+  isMacAppleSilicon?: boolean;
 }): IHVProvider[] {
   const detected = new Set<IHVProvider>(["CPUExecutionProvider"]);
   const tensorRtOk = input.tensorRtLoadable === true;
@@ -353,6 +355,11 @@ export function mergeDetectedProviders(input: {
     detected.add("QNNExecutionProvider");
   }
 
+  // CoreML soft-detection: Apple Silicon macOS
+  if (input.isMacAppleSilicon) {
+    detected.add("CoreMLExecutionProvider");
+  }
+
   return Array.from(detected);
 }
 
@@ -383,6 +390,7 @@ export function pickRecommendedProvider(
     "ROCMExecutionProvider",
     "DmlExecutionProvider",
     ...(opts?.openvinoLoadable ? (["OpenVINOExecutionProvider"] as const) : []),
+    "CoreMLExecutionProvider",
     "WebGpuExecutionProvider",
     "CPUExecutionProvider",
   ];

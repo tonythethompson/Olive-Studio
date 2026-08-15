@@ -807,6 +807,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     cudaLoadable: state.cudaVenvLoadable,
     cudaFamilyCapable,
     os: platform.os,
+    isMacAppleSilicon: platform.os === "darwin" && platform.arch === "arm64",
   });
 
   return {

@@ -67,8 +67,12 @@ export function isQuantMethodAllowed(
     return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
   }
   if (method === "hqq" || method === "rtn" || method === "kquant") {
-    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization only support CPU/CUDA.
-    return provider === "CPUExecutionProvider" || provider === "CUDAExecutionProvider";
+    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization support CPU, CUDA, and CoreML (Apple CPU/ANE path).
+    return (
+      provider === "CPUExecutionProvider" ||
+      provider === "CUDAExecutionProvider" ||
+      provider === "CoreMLExecutionProvider"
+    );
   }
   if (method === "spinquant" || method === "quarot") {
     return GPU_PROVIDERS.includes(provider);
@@ -93,7 +97,7 @@ export function isPeftAllowed(provider: IHVProvider): boolean {
 }
 
 export function isPeftMethodAllowed(method: UIState["passes"]["peftMethod"], provider: IHVProvider): boolean {
-  if (method === "qlora") return GPU_PROVIDERS.includes(provider);
+  if (method === "qlora") return GPU_PROVIDERS.includes(provider) || provider === "CoreMLExecutionProvider";
   return true;
 }
 

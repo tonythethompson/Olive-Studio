@@ -52,7 +52,8 @@
       },
       "hardware_requirements": [
         "CPUExecutionProvider",
-        "CUDAExecutionProvider"
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "none (format conversion)",
       "gotchas": [
@@ -177,7 +178,8 @@
         }
       },
       "hardware_requirements": [
-        "CPUExecutionProvider"
+        "CPUExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "60-70%",
       "gotchas": [
@@ -680,7 +682,8 @@
         }
       },
       "hardware_requirements": [
-        "CUDAExecutionProvider"
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "n/a (adds adapter weights)",
       "gotchas": [
@@ -732,7 +735,8 @@
         }
       },
       "hardware_requirements": [
-        "CUDAExecutionProvider"
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "n/a (reduces train memory)",
       "gotchas": [
@@ -1813,7 +1817,8 @@
       },
       "hardware_requirements": [
         "CPUExecutionProvider",
-        "CUDAExecutionProvider"
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "4x",
       "gotchas": [
@@ -1844,7 +1849,8 @@
       },
       "hardware_requirements": [
         "CPUExecutionProvider",
-        "CUDAExecutionProvider"
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "4x",
       "gotchas": [
@@ -1893,7 +1899,8 @@
         }
       },
       "hardware_requirements": [
-        "CUDAExecutionProvider"
+        "CUDAExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "4x",
       "gotchas": [
@@ -2847,7 +2854,8 @@
       "hardware_requirements": [
         "CPUExecutionProvider",
         "CUDAExecutionProvider",
-        "DmlExecutionProvider"
+        "DmlExecutionProvider",
+        "CoreMLExecutionProvider"
       ],
       "typical_compression": "4x-8x",
       "gotchas": [

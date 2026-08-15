@@ -12,6 +12,7 @@ import { ensureOnnxRuntimeGpu } from "../olive/cuda.ts";
 import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
+import { ensureCoremltools } from "../olive/coreml.ts";
 import { isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { isExportTargetProvider, isPlatformLocalProvider } from "../../../lib/providerRuntimeKind.ts";
@@ -150,7 +151,6 @@ async function installCapabilityPackages(
       case "DmlExecutionProvider":
       case "ROCMExecutionProvider":
       case "WebGpuExecutionProvider":
-      case "CoreMLExecutionProvider":
       case "NNAPIExecutionProvider":
       case "VitisAIExecutionProvider":
       case "SNPEExecutionProvider":
@@ -158,6 +158,11 @@ async function installCapabilityPackages(
       case "XnnpackExecutionProvider":
       case "WasmExecutionProvider":
         return { ok: true };
+
+      case "CoreMLExecutionProvider": {
+        const result = await ensureCoremltools(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
       // QNN ABI shares the QNN venv family / plugin stack with QNNExecutionProvider.
       case "QNNExecutionProvider":

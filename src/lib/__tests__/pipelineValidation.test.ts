@@ -1115,3 +1115,89 @@ describe("commit-path auto-coercion parity", () => {
     }
   });
 });
+
+// ─── CoreML validation rules (Property Tests) ─────────────────────────────────
+
+describe("CoreML validation rules", () => {
+  /**
+   * Property 6: CoreML blocks GPU-only quantization methods
+   *
+   * For any quant method in {awq, gptq, spinquant, quarot},
+   * isQuantMethodAllowed(method, "CoreMLExecutionProvider") SHALL return false.
+   *
+   * **Validates: Requirements 4.1, 4.2, 4.3, 4.4**
+   */
+  describe("Property 6: CoreML blocks GPU-only quantization methods", () => {
+    const gpuOnlyMethods = ["awq", "gptq", "spinquant", "quarot"] as const;
+
+    for (const method of gpuOnlyMethods) {
+      it(`blocks ${method} on CoreMLExecutionProvider`, () => {
+        expect(isQuantMethodAllowed(method, "CoreMLExecutionProvider")).toBe(false);
+      });
+    }
+  });
+
+  /**
+   * Property 7: CoreML auto-coerces blocked quantization methods
+   *
+   * For any pipeline state where ihvProvider is CoreMLExecutionProvider,
+   * quantization is true, and quantMethod is in {awq, gptq, spinquant, quarot},
+   * getProviderConflicts SHALL return at least one conflict with severity === "critical"
+   * and an autofix function that produces { quantMethod: "ptq" }.
+   *
+   * **Validates: Requirements 4.5**
+   */
+  describe("Property 7: CoreML auto-coerces blocked quantization methods", () => {
+    const blockedMethods = ["awq", "gptq", "spinquant", "quarot"] as const;
+
+    for (const method of blockedMethods) {
+      it(`returns a critical conflict with autofix → ptq for ${method} on CoreML`, () => {
+        const conflicts = getProviderConflicts(
+          "CoreMLExecutionProvider",
+          basePasses({ quantization: true, quantMethod: method }),
+        );
+        const quantConflicts = conflicts.filter(
+          (c) => c.passKey === "quantMethod" && c.severity === "critical",
+        );
+        expect(quantConflicts.length).toBeGreaterThanOrEqual(1);
+
+        // Verify autofix coerces to ptq
+        const autofix = quantConflicts[0].autofix();
+        expect(autofix.quantMethod).toBe("ptq");
+      });
+    }
+  });
+
+  /**
+   * Property 8: CoreML allows CPU-compatible quantization and fine-tuning methods
+   *
+   * For any quant method in {ptq, rtn, kquant, qat, hqq},
+   * isQuantMethodAllowed(method, "CoreMLExecutionProvider") SHALL return true.
+   * Additionally, isPeftAllowed("CoreMLExecutionProvider") SHALL return true,
+   * and for any PEFT method in {lora, qlora},
+   * isPeftMethodAllowed(method, "CoreMLExecutionProvider") SHALL return true.
+   *
+   * **Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7**
+   */
+  describe("Property 8: CoreML allows CPU-compatible quantization and fine-tuning methods", () => {
+    const allowedQuantMethods = ["ptq", "rtn", "kquant", "qat", "hqq"] as const;
+
+    for (const method of allowedQuantMethods) {
+      it(`allows ${method} on CoreMLExecutionProvider`, () => {
+        expect(isQuantMethodAllowed(method, "CoreMLExecutionProvider")).toBe(true);
+      });
+    }
+
+    it("allows PEFT on CoreMLExecutionProvider", () => {
+      expect(isPeftAllowed("CoreMLExecutionProvider")).toBe(true);
+    });
+
+    const allowedPeftMethods = ["lora", "qlora"] as const;
+
+    for (const method of allowedPeftMethods) {
+      it(`allows ${method} on CoreMLExecutionProvider`, () => {
+        expect(isPeftMethodAllowed(method, "CoreMLExecutionProvider")).toBe(true);
+      });
+    }
+  });
+});

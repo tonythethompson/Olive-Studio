@@ -79,6 +79,17 @@ sudo apt install -y libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 xd
 
 Install a DEB with `sudo apt install ./Olive-Studio_*.deb`, or make an AppImage executable with `chmod +x Olive-Studio_*.AppImage` and run it. Building from source still requires Node 22+, pnpm, Python, and Rust. For NVIDIA CUDA or AMD ROCm recipes, install the vendor driver/runtime first; CPU recipes work without GPU tooling.
 
+### macOS Installation (Unsigned DMG)
+
+The macOS DMG is not code-signed or notarized. On first launch, macOS
+Gatekeeper will block the app. To open it:
+
+1. Right-click (or Control-click) the Olive Studio application
+2. Select **Open** from the context menu
+3. Click **Open** in the confirmation dialog
+
+This is only required on first launch. Subsequent launches work normally.
+
 ---
 
 ## Features
