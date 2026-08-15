@@ -88,6 +88,11 @@ Gatekeeper will block the app. To open it:
 2. Select **Open** from the context menu
 3. Click **Open** in the confirmation dialog
 
+On macOS 15 and later, if that flow does not offer a way to continue, first try
+to open Olive Studio once. Then open **System Settings → Privacy & Security**,
+scroll to **Security**, click **Open Anyway**, and confirm **Open**. Only override
+Gatekeeper for a DMG downloaded from the official Olive Studio releases.
+
 This is only required on first launch. Subsequent launches work normally.
 
 ---

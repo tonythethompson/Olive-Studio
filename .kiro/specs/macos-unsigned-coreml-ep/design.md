@@ -10,7 +10,7 @@ The design touches multiple independent subsystems but each change is small, add
 
 ### Component Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  IHV Integration Panel (Provider Cards)                                 │
 │  ┌────────────┐ ┌────────────┐ ┌────────────────┐ ┌─────────────────┐ │

@@ -147,39 +147,7 @@ jobs:
       - name: Bundle Node runtime (macOS)
         if: matrix.platform == 'macos-latest'
         shell: bash
-        run: |
-          set -euo pipefail
-          NODE_VERSION="$(node -p 'process.version')"
-          NODE_STAGE="$(mktemp -d)"
-          X64_ARCHIVE="node-${NODE_VERSION}-darwin-x64.tar.gz"
-          ARM64_ARCHIVE="node-${NODE_VERSION}-darwin-arm64.tar.gz"
-          trap 'rm -rf "$NODE_STAGE"' EXIT
-
-          curl --fail --silent --show-error --location --retry 3 \
-            "https://nodejs.org/dist/${NODE_VERSION}/${X64_ARCHIVE}" \
-            --output "$NODE_STAGE/$X64_ARCHIVE"
-          curl --fail --silent --show-error --location --retry 3 \
-            "https://nodejs.org/dist/${NODE_VERSION}/${ARM64_ARCHIVE}" \
-            --output "$NODE_STAGE/$ARM64_ARCHIVE"
-          curl --fail --silent --show-error --location --retry 3 \
-            "https://nodejs.org/dist/${NODE_VERSION}/SHASUMS256.txt" \
-            --output "$NODE_STAGE/SHASUMS256.txt"
-          {
-            grep -F "  $X64_ARCHIVE" "$NODE_STAGE/SHASUMS256.txt"
-            grep -F "  $ARM64_ARCHIVE" "$NODE_STAGE/SHASUMS256.txt"
-          } > "$NODE_STAGE/SHASUMS256.selected"
-          (cd "$NODE_STAGE" && shasum -a 256 -c SHASUMS256.selected)
-          tar -xzf "$NODE_STAGE/$X64_ARCHIVE" -C "$NODE_STAGE"
-          tar -xzf "$NODE_STAGE/$ARM64_ARCHIVE" -C "$NODE_STAGE"
-
-          mkdir -p src-tauri/node-runtime
-          lipo -create \
-            "$NODE_STAGE/node-${NODE_VERSION}-darwin-x64/bin/node" \
-            "$NODE_STAGE/node-${NODE_VERSION}-darwin-arm64/bin/node" \
-            -output src-tauri/node-runtime/node
-          chmod 0755 src-tauri/node-runtime/node
-          lipo -verify_arch x86_64 arm64 src-tauri/node-runtime/node
-          src-tauri/node-runtime/node --version
+        run: bash scripts/bundle-macos-node.sh src-tauri/node-runtime/node
 
       # ─── Install & Build ──────────────────────────────────────────────
       - run: pnpm install --frozen-lockfile
@@ -273,51 +241,7 @@ jobs:
       - name: Smoke test macOS artifact
         if: matrix.platform == 'macos-latest'
         shell: bash
-        run: |
-          set -euo pipefail
-          BUNDLE_DIR="src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
-
-          # Find the .app bundle inside the macos output directory
-          APP_BUNDLE="$(find "$BUNDLE_DIR/macos" -maxdepth 1 -name '*.app' -print -quit)"
-          if [ -z "$APP_BUNDLE" ]; then
-            echo "ERROR: No .app bundle found in $BUNDLE_DIR/macos"
-            exit 1
-          fi
-          echo "Found app bundle: $APP_BUNDLE"
-
-          # Verify bundled Node runtime exists and is executable
-          RESOURCES="$APP_BUNDLE/Contents/Resources"
-          NODE="$RESOURCES/node-runtime/node"
-          if [ ! -f "$NODE" ]; then
-            echo "ERROR: Bundled Node runtime not found at $NODE"
-            echo "Contents of Resources/node-runtime/:"
-            ls -la "$RESOURCES/node-runtime/" 2>/dev/null || echo "(directory missing)"
-            exit 1
-          fi
-          test -x "$NODE"
-          lipo -verify_arch x86_64 arm64 "$NODE"
-          echo "Bundled Node version: $($NODE --version)"
-
-          # Verify server.mjs exists
-          SERVER_MJS="$RESOURCES/dist/server.mjs"
-          if [ ! -f "$SERVER_MJS" ]; then
-            echo "ERROR: server.mjs not found at $SERVER_MJS"
-            exit 1
-          fi
-
-          # Boot the server and hit /api/health
-          SERVER_ROOT="$RESOURCES"
-          PORT=31415
-          cd "$SERVER_ROOT" && PORT=$PORT "$NODE" dist/server.mjs &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true' EXIT
-
-          for i in $(seq 1 20); do
-            if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
-              echo "macOS smoke test passed — server started from packaged .app bundle"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "macOS smoke test FAILED — server did not respond within 20s"
-          exit 1
+        run: >-
+          bash scripts/smoke-macos-app.sh
+          "src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
+          31415
