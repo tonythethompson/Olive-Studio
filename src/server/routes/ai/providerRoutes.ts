@@ -154,7 +154,7 @@ export function mountProviderRoutes(router: Router): void {
   });
 
   router.post("/ai/genai/setup", authActionRateLimit, async (_req, res) => {
-    const result = await ensureGenaiVenv((line) => console.info(line));
+    const result = await ensureGenaiVenv((line) => console.warn(line));
     return res.status(result.ok ? 200 : 500).json(result);
   });
 
