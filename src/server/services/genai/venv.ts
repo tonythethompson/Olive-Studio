@@ -52,8 +52,9 @@ async function findSystemPython(): Promise<string | null> {
 
   for (const [cmd, args] of candidates) {
     try {
-      const { stdout } = await execFileAsync(cmd, args, { timeout: 10_000 });
-      const match = stdout.match(/Python (\d+)\.(\d+)/);
+      const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: 10_000 });
+      const versionText = (stdout || stderr).trim();
+      const match = versionText.match(/Python (\d+)\.(\d+)/);
       if (match) {
         const major = parseInt(match[1], 10);
         const minor = parseInt(match[2], 10);
