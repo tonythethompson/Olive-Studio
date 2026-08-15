@@ -12,14 +12,14 @@ Olive Studio is a desktop web app (React 19 + Express + Vite 8) that provides a 
 
 ## Architecture
 
-| Layer | Stack |
-|-------|-------|
-| UI | React 19, Tailwind CSS 4, Radix UI, Motion, Recharts, Lucide icons |
-| State | Zustand stores: `src/lib/stores/pipelineStore.ts` (`usePipelineStore`, main pipeline state) + `src/lib/stores/preferencesStore.ts` (`usePreferencesStore`, persisted UI preferences) |
-| Server | Express 5, SSE log streaming, Vite dev middleware |
-| Build | Vite 8 (client) + esbuild (server bundle → `dist/server.mjs`) |
-| AI | Optional: Gemini, OpenAI, Anthropic, Mistral (user-provided keys) |
-| Optimization | Python 3.9+, `olive-ai` in project `.venv` |
+| Layer        | Stack                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| UI           | React 19, Tailwind CSS 4, Radix UI, Motion, Recharts, Lucide icons                                                                                                                   |
+| State        | Zustand stores: `src/lib/stores/pipelineStore.ts` (`usePipelineStore`, main pipeline state) + `src/lib/stores/preferencesStore.ts` (`usePreferencesStore`, persisted UI preferences) |
+| Server       | Express 5, SSE log streaming, Vite dev middleware                                                                                                                                    |
+| Build        | Vite 8 (client) + esbuild (server bundle → `dist/server.mjs`)                                                                                                                        |
+| AI           | Optional: Gemini, OpenAI, Anthropic, Mistral (user-provided keys)                                                                                                                    |
+| Optimization | Python 3.9+, `olive-ai` in project `.venv`                                                                                                                                           |
 
 ### Key patterns
 
@@ -34,12 +34,12 @@ Olive Studio is a desktop web app (React 19 + Express + Vite 8) that provides a 
 
 ### UI pipeline steps
 
-| Step | View ID | Panel |
-|------|---------|-------|
-| 01 | `input` | `InputEnvironmentPanel` — model source (HF/local/Azure) |
-| 02 | `ihv` | `IHVIntegrationPanel` — execution provider + hardware |
-| 03 | `execute` | `ExecutionWorkspace` + `BatchProcessingPanel` (lazy) |
-| 04 | `playground` | In-browser inference, WebGPU benchmarks, Arena (lazy) |
+| Step | View ID      | Panel                                                   |
+| ---- | ------------ | ------------------------------------------------------- |
+| 01   | `input`      | `InputEnvironmentPanel` — model source (HF/local/Azure) |
+| 02   | `ihv`        | `IHVIntegrationPanel` — execution provider + hardware   |
+| 03   | `execute`    | `ExecutionWorkspace` + `BatchProcessingPanel` (lazy)    |
+| 04   | `playground` | In-browser inference, WebGPU benchmarks, Arena (lazy)   |
 
 `Dashboard` is a single scrollable page with 4 sections, sidebar nav, scroll-sync navigation via `CustomEvent('olive-studio:navigate')`.
 
@@ -70,7 +70,7 @@ pnpm a11y:scan              # python tools/a11y-scan.py src
 
 - **`@` alias** resolves to `src/` in all vitest configs
 - **No barrel exports** (`export *`) — hurts Vite tree-shaking and test isolation
-- **ESLint**: `--max-warnings 0` in `pnpm eslint`; `pnpm lint` uses `--max-warnings 20`
+- **ESLint**: `--max-warnings 0` in both `pnpm eslint` and `pnpm lint`. Any warning is a failure.
 - **Commits**: conventional commits enforced via commitlint + husky
 - **No Olive live runs in CI/VM** — recipe building, JSON export, and validation are CPU-only; don't trigger "Execute Live" or batch runs
 - **`python` alias**: `pnpm a11y:scan` calls `python`, not `python3` — ensure `python` on PATH

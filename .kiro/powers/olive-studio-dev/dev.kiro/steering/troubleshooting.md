@@ -85,9 +85,9 @@ pnpm vitest run src/lib/specificFile.test.ts
 
 **Symptom:** `pnpm lint` exits non-zero with "Too many warnings".
 
-**Cause:** More than 20 ESLint warnings in `src/` + `server.ts`.
+**Cause:** Any ESLint warning in `src/` + `server.ts` (threshold is `--max-warnings 0`).
 
-**Fix:** The threshold is `--max-warnings 20`. Fix warnings until count is ≤ 20. Current known suppressions are 6 `react-hooks/set-state-in-effect` comments — those are intentional.
+**Fix:** The threshold is `--max-warnings 0`. Fix all warnings — any warning is treated as a failure. Current known suppressions are 6 `react-hooks/set-state-in-effect` comments — those are intentional.
 
 ### Production build missing `dist/server.mjs`
 

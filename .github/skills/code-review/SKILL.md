@@ -84,7 +84,7 @@ Match changes to the existing tiers:
 
 - Require tests for new critical paths (spawn, path/allowlist, auth/token, rate limit, recipe validation, MCP tool allowlist).
 - Integration tests mock `child_process`, AI providers, and fetch via `src/server/__tests__/setup.integration.ts`; do not suggest live Olive runs.
-- ESLint warnings are expected (`--max-warnings 20`). Only treat lint **errors** or non-zero exit as review failures.
+- ESLint warnings fail the build (`--max-warnings 0`). Any warning is a failure, same as an error.
 
 ### Dependencies and tooling
 

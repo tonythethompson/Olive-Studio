@@ -5,7 +5,6 @@ Thank you for your interest in Olive Studio. This project is a community front e
 ## Before you start
 
 - Read [README.md](README.md) for setup and architecture overview.
-- Read [ABOUT.md](ABOUT.md) for project scope — Olive Studio is a local runner and UI, not a fork of Olive itself.
 - Olive Studio is licensed under the [MIT License](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
 
 ## Development setup
@@ -64,7 +63,8 @@ If you change how UI state maps to Olive JSON:
 
 ### Server and GPU runtime
 
-- Olive spawn, dependency install, and PATH logic live in `server.ts` and `scripts/olive_gpu_launcher.py`.
+- Olive job orchestration (spawn, venv creation, PATH resolution) lives in `src/server/services/olive/` and `src/server/services/venv/`.
+- GPU launch is handled by `scripts/olive_gpu_launcher.py`.
 - GPU package pins are centralized in `src/lib/oliveGpuRuntime.ts`, `tensorrtDeps.ts`, and `tensorrtRtxDeps.ts`.
 
 ## Checks before opening a PR

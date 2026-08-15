@@ -17,12 +17,12 @@ Olive Studio is a visual GUI for [Microsoft Olive](https://github.com/microsoft/
 
 ## Screenshots
 
-| Recipe catalog | Hardware detection |
-|:-:|:-:|
+|                                    Recipe catalog                                     |                                  Hardware detection                                  |
+| :-----------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------: |
 | ![Recipe catalog with presets and AI audit](public/screenshots/01-recipe-catalog.png) | ![Hardware probe with VRAM estimation](public/screenshots/02-hardware-detection.png) |
 
-| Hardware VRAM & providers | Recipe graph flow |
-|:-:|:-:|
+|                           Hardware VRAM & providers                            |                               Recipe graph flow                               |
+| :----------------------------------------------------------------------------: | :---------------------------------------------------------------------------: |
 | ![Provider cards with VRAM estimates](public/screenshots/02-hardware-vram.png) | ![Pipeline graph with AI suggestions](public/screenshots/03-recipe-graph.png) |
 
 ---
@@ -91,30 +91,30 @@ Install a DEB with `sudo apt install ./Olive-Studio_*.deb`, or make an AppImage 
 
 ### Optimization passes
 
-| Pass | What it does |
-| ------ | ------------- |
-| **Conversion** | PyTorch / TensorFlow / JAX → ONNX, OpenVINO IR, QNN, or TensorRT |
-| **Quantization** | PTQ, AWQ, QAT, GPTQ, HQQ, RTN, SpinQuant, QuaRot (INT8/INT4/FP16) |
-| **Pruning** | Magnitude, SparseGPT, Wanda (structured or unstructured) |
-| **ORT transforms** | Transformer-specific ONNX Runtime graph optimizations |
-| **PEFT** | LoRA / QLoRA, including diffusion LoRA |
-| **Model splitting** | Shard large models across devices |
+| Pass                | What it does                                                      |
+| ------------------- | ----------------------------------------------------------------- |
+| **Conversion**      | PyTorch / TensorFlow / JAX → ONNX, OpenVINO IR, QNN, or TensorRT  |
+| **Quantization**    | PTQ, AWQ, QAT, GPTQ, HQQ, RTN, SpinQuant, QuaRot (INT8/INT4/FP16) |
+| **Pruning**         | Magnitude, SparseGPT, Wanda (structured or unstructured)          |
+| **ORT transforms**  | Transformer-specific ONNX Runtime graph optimizations             |
+| **PEFT**            | LoRA / QLoRA, including diffusion LoRA                            |
+| **Model splitting** | Shard large models across devices                                 |
 
 Pass combinations are validated against your execution provider. Incompatible combinations surface conflict banners with one-click autofix.
 
 ### Execution providers
 
-| Provider | Target |
-| ---------- | -------- |
-| CPU | Broad compatibility |
-| CUDA | NVIDIA GPUs |
-| TensorRT | NVIDIA datacenter (full SDK) |
-| TensorRT RTX | Consumer GeForce RTX |
-| OpenVINO | Intel CPU / GPU / NPU |
-| QNN | Qualcomm Snapdragon NPU |
-| ROCm | AMD GPUs |
-| DirectML | Windows GPU acceleration |
-| WebGPU | In-browser (ONNX Runtime Web) |
+| Provider     | Target                        |
+| ------------ | ----------------------------- |
+| CPU          | Broad compatibility           |
+| CUDA         | NVIDIA GPUs                   |
+| TensorRT     | NVIDIA datacenter (full SDK)  |
+| TensorRT RTX | Consumer GeForce RTX          |
+| OpenVINO     | Intel CPU / GPU / NPU         |
+| QNN          | Qualcomm Snapdragon NPU       |
+| ROCm         | AMD GPUs                      |
+| DirectML     | Windows GPU acceleration      |
+| WebGPU       | In-browser (ONNX Runtime Web) |
 
 ### Runtime intelligence
 
@@ -130,7 +130,7 @@ Pass combinations are validated against your execution provider. Incompatible co
 
 ### AI assistant (optional)
 
-20 providers supported: Gemini, OpenAI, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, Fireworks, NVIDIA NIM, Hugging Face, Cloudflare Workers AI, OpenAI Codex (ChatGPT sign-in), GitHub Copilot, Devin, Kilo Gateway, LM Studio, Ollama, and generic OpenAI-compatible endpoints.
+20 providers supported: Gemini, OpenAI, ChatGPT Plus/Pro, Anthropic, Mistral, xAI, OpenRouter, Groq, Together, Fireworks, NVIDIA NIM, Hugging Face, Cloudflare Workers AI, OpenAI Codex, GitHub Copilot, Devin, Kilo Code, OpenCode Zen, OpenCode Go, and generic OpenAI-compatible endpoints. Local engines (LM Studio, Ollama) work via the OpenAI-compatible provider over loopback.
 
 - **Audit** — reviews your pipeline configuration and suggests optimizations
 - **Chat** — workspace-aware Q&A about your recipe, hardware, and Olive workflows
@@ -144,20 +144,20 @@ Set credentials in-app under Assistant → Settings, or via environment variable
 
 Create `.env` or `.env.local` in the project root. All are optional:
 
-| Variable | Purpose |
-| ---------- | --------- |
-| `GEMINI_API_KEY` | Google Gemini |
-| `OPENAI_API_KEY` | OpenAI / compatible |
-| `ANTHROPIC_API_KEY` | Anthropic Claude |
-| `HF_TOKEN` | Hugging Face (models + chat) |
-| `MISTRAL_API_KEY` | Mistral |
-| `XAI_API_KEY` | xAI Grok |
-| `OPENROUTER_API_KEY` | OpenRouter |
-| `GROQ_API_KEY` | Groq |
-| `TOGETHER_API_KEY` | Together AI |
-| `OLIVE_BIND` | Server bind address (default `127.0.0.1`; set to `0.0.0.0` only on a trusted LAN) |
-| `SYNC_KB_TOKEN` | Server-side secret for `POST /api/mcp/sync-kb` |
-| `VITE_SYNC_KB_TOKEN` | Client-side copy of `SYNC_KB_TOKEN` sent as `x-sync-token` |
+| Variable             | Purpose                                                                           |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`     | Google Gemini                                                                     |
+| `OPENAI_API_KEY`     | OpenAI / compatible                                                               |
+| `ANTHROPIC_API_KEY`  | Anthropic Claude                                                                  |
+| `HF_TOKEN`           | Hugging Face (models + chat)                                                      |
+| `MISTRAL_API_KEY`    | Mistral                                                                           |
+| `XAI_API_KEY`        | xAI Grok                                                                          |
+| `OPENROUTER_API_KEY` | OpenRouter                                                                        |
+| `GROQ_API_KEY`       | Groq                                                                              |
+| `TOGETHER_API_KEY`   | Together AI                                                                       |
+| `OLIVE_BIND`         | Server bind address (default `127.0.0.1`; set to `0.0.0.0` only on a trusted LAN) |
+| `SYNC_KB_TOKEN`      | Server-side secret for `POST /api/mcp/sync-kb`                                    |
+| `VITE_SYNC_KB_TOKEN` | Client-side copy of `SYNC_KB_TOKEN` sent as `x-sync-token`                        |
 
 Full list of supported keys in [AGENTS.md](AGENTS.md).
 
@@ -174,7 +174,7 @@ Full list of supported keys in [AGENTS.md](AGENTS.md).
 
 ## MCP server
 
-The repository includes `olive-mcp-server/`, a Python FastMCP server with 27 tools covering pass catalog, hardware guides, troubleshooting, compatibility checks, recipe validation, and job lifecycle.
+The repository includes `olive-mcp-server/`, a Python FastMCP server with 32 tools covering pass catalog, hardware guides, troubleshooting, compatibility checks, recipe validation, agent autonomy workflows, and job lifecycle.
 
 - Runs as a stdio server; the web app proxies calls via `POST /api/mcp/tool`
 - `.mcp.json` at repo root registers it for AI coding agents (Claude Code, Cursor, etc.)
@@ -189,14 +189,14 @@ See [olive-mcp-server/README.md](olive-mcp-server/README.md) for setup and tool 
 ```
 Olive-Studio/
 ├── src/
-│   ├── components/features/  # 26 React feature panels
+│   ├── components/features/  # React feature panels (zustand-connected)
 │   ├── lib/                  # Recipe builder, validation, stores, hooks
 │   └── server/
 │       ├── routes/           # Express route modules (ai, olive, mcp, env, system, arena)
 │       ├── services/         # AI providers (20), olive jobs, venv, MCP client
 │       └── middleware/       # bodyGuard, rateLimit, localOnly
 ├── server.ts                 # Express entry point
-├── olive-mcp-server/         # Python MCP server (27 tools)
+├── olive-mcp-server/         # Python MCP server (32 tools)
 ├── bin/                      # Production CLI
 ├── scripts/                  # Catalog generator, smoke tests, utilities
 └── docs/                     # Roadmap, release notes, architecture docs
@@ -206,18 +206,18 @@ Olive-Studio/
 
 ## Scripts
 
-| Command | Description |
-| --------- | ------------- |
-| `pnpm dev` | Development server (Vite + Express) |
-| `pnpm build` | Production build |
-| `pnpm start` | Serve production build |
-| `pnpm test` | Unit tests (vitest) |
-| `pnpm test:server` | Server unit tests |
-| `pnpm test:integration` | Integration tests |
-| `pnpm test:component` | Component tests (jsdom) |
-| `pnpm lint` | TypeScript + ESLint |
-| `pnpm lint:quick` | Fast lint (oxlint) |
-| `pnpm validate:recipe` | Recipe builder smoke test |
+| Command                 | Description                         |
+| ----------------------- | ----------------------------------- |
+| `pnpm dev`              | Development server (Vite + Express) |
+| `pnpm build`            | Production build                    |
+| `pnpm start`            | Serve production build              |
+| `pnpm test`             | Unit tests (vitest)                 |
+| `pnpm test:server`      | Server unit tests                   |
+| `pnpm test:integration` | Integration tests                   |
+| `pnpm test:component`   | Component tests (jsdom)             |
+| `pnpm lint`             | TypeScript + ESLint                 |
+| `pnpm lint:quick`       | Fast lint (oxlint)                  |
+| `pnpm validate:recipe`  | Recipe builder smoke test           |
 
 ---
 
@@ -229,20 +229,22 @@ Issues and pull requests welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Roadmap
 
-**v0.2** (next)
+**v0.4** (current)
 
-- Persistent MCP connection (replace subprocess spawn, ~5ms tool calls)
-- Typed pass configuration (discriminated union per pass type)
-- Component splits for large panels
-- GitHub issue triage and cleanup
+- olive-ai 0.13.0 upgrade (8 new passes, KQuant method, migration module)
+- Agent autonomy tools: plan, execute, diagnose, compare, model-info
+- Hardware detection fixes (CUDA, TensorRT, NVIDIA fallback)
+- Client bundle reduced 37.9% via tree-shaking and code splitting
+- Validation & test hardening for new cross-pass rules
 
-**Later**
+**v0.5** (next)
 
-- Stateful Olive Agent (plan, execute, observe, auto-retry)
-- Published MCP server (PyPI / Docker, usable without the GUI)
-- Tauri desktop packaging (signed installer, auto-update)
+- Unified Assistant experience (audit + chat merged, shared action contract)
+- Execute Agent mode toggle (Manual vs Agent, activity log)
 - Multi-model batch comparison view
-- Export optimization reports
+- Export optimization reports (PDF/Markdown)
+- MCP Docker deployment docs and PyPI publish
+- Tauri signed installer
 
 Full details in [docs/ROADMAP.md](docs/ROADMAP.md).
 

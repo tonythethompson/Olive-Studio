@@ -22,14 +22,14 @@ Always use **pnpm** (v11.17). Never use `npm install` — a `preinstall` guard s
 
 ### Test Commands
 
-| Command | Scope |
-|---------|-------|
-| `pnpm test` | Unit tests (src/lib/) |
-| `pnpm test:server` | Server unit tests (src/server/) |
-| `pnpm test:integration` | Integration tests (mocked externals, real Express) |
-| `pnpm test:component` | Component tests (jsdom, @testing-library/react) |
-| `pnpm validate:recipe` | Recipe builder smoke test |
-| `cd olive-mcp-server && python -m pytest tests -q` | Python MCP tests |
+| Command                                            | Scope                                              |
+| -------------------------------------------------- | -------------------------------------------------- |
+| `pnpm test`                                        | Unit tests (src/lib/)                              |
+| `pnpm test:server`                                 | Server unit tests (src/server/)                    |
+| `pnpm test:integration`                            | Integration tests (mocked externals, real Express) |
+| `pnpm test:component`                              | Component tests (jsdom, @testing-library/react)    |
+| `pnpm validate:recipe`                             | Recipe builder smoke test                          |
+| `cd olive-mcp-server && python -m pytest tests -q` | Python MCP tests                                   |
 
 ## Architecture Rules
 
@@ -87,5 +87,5 @@ src-tauri/                           Tauri 2 desktop shell (optional)
 - Use `cn()` from `@/lib/utils` for conditional Tailwind class merging.
 - Lazy load heavy panels with `React.lazy()` + `<Suspense>`.
 - Pattern matching (task inference, model type) uses ordered lookup tables — first regex match wins, order is significant.
-- ESLint allows up to 20 warnings (`--max-warnings 20`). Only non-zero exit or reported errors are failures.
+- ESLint uses `--max-warnings 0`. Any warning is a failure, same as an error.
 - `pnpm lint:quick` (oxlint) for fast local feedback; `pnpm lint` (tsc + eslint) for full check.
