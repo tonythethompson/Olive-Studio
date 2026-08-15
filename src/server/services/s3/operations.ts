@@ -9,12 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import {
-  GetObjectCommand,
-  ListObjectsV2Command,
-  HeadObjectCommand,
-  type _Object,
-} from "@aws-sdk/client-s3";
+import { GetObjectCommand, ListObjectsV2Command, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import {
   createS3Client,
