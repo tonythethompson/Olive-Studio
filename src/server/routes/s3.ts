@@ -114,15 +114,12 @@ export function mountS3Routes(router: Router): void {
 
     // Default destination: ./models/optimized/<basename>
     const basename = path.basename(key);
-    const destDir = rawDestDir?.trim() || path.resolve("models", "optimized");
-    const localPath = path.join(destDir, basename);
-
-    // Safety: ensure destination is not an absolute escape
-    const resolvedDest = path.resolve(localPath);
     const cwd = process.cwd();
-    if (!resolvedDest.startsWith(cwd) && !resolvedDest.startsWith(path.resolve(destDir))) {
-      return res.status(400).json({ error: "Destination path is outside allowed directories." });
+    const destDir = rawDestDir?.trim() ? path.resolve(cwd, rawDestDir.trim()) : path.resolve(cwd, "models", "optimized");
+    if (path.relative(cwd, destDir).startsWith("..")) {
+      return res.status(400).json({ error: "Destination path must be inside the project directory." });
     }
+    const localPath = path.join(destDir, basename);
 
     // Don't overwrite existing files without explicit intent
     if (fs.existsSync(localPath)) {
