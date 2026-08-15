@@ -12,6 +12,7 @@ import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,7 +34,7 @@ export function isGenaiVenvReady(): boolean {
 
 /** Path to the inference sidecar script. */
 export function sidecarScriptPath(): string {
-  return path.join(__dirname, "inference_sidecar.py");
+  return fileURLToPath(new URL("./inference_sidecar.py", import.meta.url));
 }
 
 // ─── Venv Setup ───────────────────────────────────────────────────────────────
