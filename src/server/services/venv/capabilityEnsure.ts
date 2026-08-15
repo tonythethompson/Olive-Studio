@@ -188,6 +188,14 @@ async function installCapabilityPackages(
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }
 
+      // MIGraphX: placeholder — full install logic in task 8.1
+      case "MIGraphXExecutionProvider":
+        return { ok: false, error: "MIGraphX capability install not yet implemented (requires Linux + ROCm + migraphx package)." };
+
+      // oneDNN: bundled in default ORT wheel — no additional install needed
+      case "DnnlExecutionProvider":
+        return { ok: true };
+
       default: {
         const _exhaustive: never = provider;
         return { ok: false, error: `Unsupported provider: ${_exhaustive}` };

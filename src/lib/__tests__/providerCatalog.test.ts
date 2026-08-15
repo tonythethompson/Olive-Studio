@@ -55,7 +55,10 @@ describe("PROVIDER_CATALOG", () => {
     expect(ids).toContain("TensorflowLiteExecutionProvider");
     expect(ids).toContain("XnnpackExecutionProvider");
     expect(ids).toContain("WasmExecutionProvider");
-    expect(ids).toHaveLength(16);
+    expect(ids).toContain("MIGraphXExecutionProvider");
+    expect(ids).toContain("DnnlExecutionProvider");
+    expect(ids).toContain("QnnAbiExecutionProvider");
+    expect(ids).toHaveLength(19);
   });
 
   it("returns the matching entry from getProviderCatalogEntry", () => {

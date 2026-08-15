@@ -657,6 +657,254 @@
         "Operator coverage differs from ONNX ORT EPs."
       ],
       "notes": "ONNX preparation profile for external TensorFlow Lite conversion (e.g. onnx2tf / TFLite converter). Studio marks TensorflowLiteExecutionProvider as an export target; do not treat the recommended Olive passes as a complete .tflite export chain."
+    },
+    {
+      "target": "AMD Instinct MI300X (MIGraphX)",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "MIGraphXExecutionProvider",
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxFloatToFloat16",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting vendor benchmark data",
+      "calibration_size": 128,
+      "optimal_batch_size": 32,
+      "memory_gb": 192,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "MatMul"
+      ],
+      "known_issues": [
+        "MIGraphX operator subset coverage: models with custom ops or dynamic control flow may fall back to ROCm EP.",
+        "Custom-op and dynamic-control-flow graphs are not supported by MIGraphX graph compilation."
+      ],
+      "notes": "MIGraphX performs graph-level compilation (analogous to TensorRT), preferred over ROCm EP when model operators are within MIGraphX coverage.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "AMD Instinct MI325X (MIGraphX)",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "MIGraphXExecutionProvider",
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxFloatToFloat16",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting vendor benchmark data",
+      "calibration_size": 128,
+      "optimal_batch_size": 64,
+      "memory_gb": 256,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "MatMul"
+      ],
+      "known_issues": [
+        "MIGraphX operator subset coverage: models with custom ops or dynamic control flow may fall back to ROCm EP.",
+        "Custom-op and dynamic-control-flow graphs are not supported by MIGraphX graph compilation."
+      ],
+      "notes": "MIGraphX performs graph-level compilation (analogous to TensorRT), preferred over ROCm EP when model operators are within MIGraphX coverage.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "AMD Instinct MI350X (MIGraphX)",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "MIGraphXExecutionProvider",
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxFloatToFloat16",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting vendor benchmark data (unreleased silicon)",
+      "calibration_size": 128,
+      "optimal_batch_size": 64,
+      "memory_gb": 288,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "MatMul"
+      ],
+      "known_issues": [
+        "MIGraphX operator subset coverage: models with custom ops or dynamic control flow may fall back to ROCm EP.",
+        "Custom-op and dynamic-control-flow graphs are not supported by MIGraphX graph compilation.",
+        "Unreleased silicon — specifications are based on AMD announcements and subject to change."
+      ],
+      "notes": "MIGraphX performs graph-level compilation (analogous to TensorRT), preferred over ROCm EP when model operators are within MIGraphX coverage.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "AMD Instinct MI355X (MIGraphX)",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "MIGraphXExecutionProvider",
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxFloatToFloat16",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting vendor benchmark data (unreleased silicon)",
+      "calibration_size": 128,
+      "optimal_batch_size": 64,
+      "memory_gb": 288,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention",
+        "LayerNormalization",
+        "MatMul"
+      ],
+      "known_issues": [
+        "MIGraphX operator subset coverage: models with custom ops or dynamic control flow may fall back to ROCm EP.",
+        "Custom-op and dynamic-control-flow graphs are not supported by MIGraphX graph compilation.",
+        "Unreleased silicon — specifications are based on AMD announcements and subject to change."
+      ],
+      "notes": "MIGraphX performs graph-level compilation (analogous to TensorRT), preferred over ROCm EP when model operators are within MIGraphX coverage.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "AMD Radeon RX 9070 XT",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxFloatToFloat16",
+        "GptqQuantizer",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting community ROCm benchmarks on RDNA 4",
+      "calibration_size": 128,
+      "optimal_batch_size": 8,
+      "memory_gb": 16,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention"
+      ],
+      "known_issues": [
+        "RDNA 4 (gfx12) has experimental ROCm support; stability and operator coverage may change between driver releases.",
+        "Operator coverage is narrower than CDNA-based Instinct GPUs — AWQ, mixed-precision FP16 accumulation, and structured 2:4 sparsity are unsupported.",
+        "ROCm driver versions below 6.2 may produce incorrect results or fail to load models on RDNA 4."
+      ],
+      "notes": "Consumer Radeon relies on community-maintained ROCm builds, narrower operator coverage than Instinct. Prefer GPTQ over AWQ for quantization on RDNA architectures.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "AMD Radeon RX 9070",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxFloatToFloat16",
+        "GptqQuantizer",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting community ROCm benchmarks on RDNA 4",
+      "calibration_size": 64,
+      "optimal_batch_size": 4,
+      "memory_gb": 12,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention"
+      ],
+      "known_issues": [
+        "RDNA 4 (gfx12) has experimental ROCm support; stability and operator coverage may change between driver releases.",
+        "Operator coverage is narrower than CDNA-based Instinct GPUs — AWQ, mixed-precision FP16 accumulation, and structured 2:4 sparsity are unsupported.",
+        "ROCm driver versions below 6.2 may produce incorrect results or fail to load models on RDNA 4."
+      ],
+      "notes": "Consumer Radeon relies on community-maintained ROCm builds, narrower operator coverage than Instinct. Prefer GPTQ over AWQ for quantization on RDNA architectures.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "AMD Radeon RX Consumer / ROCm",
+      "accelerator": "gpu",
+      "execution_providers": [
+        "ROCMExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "GptqQuantizer",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting community ROCm benchmarks",
+      "calibration_size": 64,
+      "optimal_batch_size": 8,
+      "memory_gb": 16,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "Attention"
+      ],
+      "known_issues": [
+        "AWQ quantization is unsupported on RDNA consumer GPUs — use GPTQ instead.",
+        "Consumer Radeon GPUs have narrower operator coverage than datacenter AMD Instinct GPUs."
+      ],
+      "notes": "Generic consumer Radeon profile (RX 6000/7000/9000 series). GPTQ INT4 recommended for LLMs; OnnxFloatToFloat16 for vision models.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
+    },
+    {
+      "target": "Intel Core (oneDNN)",
+      "accelerator": "cpu",
+      "execution_providers": [
+        "DnnlExecutionProvider",
+        "CPUExecutionProvider"
+      ],
+      "recommended_passes": [
+        "OnnxConversion",
+        "OnnxStaticQuantization",
+        "OnnxModelOptimizer"
+      ],
+      "typical_speedup": "TBD — awaiting oneDNN vs bare CPU benchmarks",
+      "calibration_size": 64,
+      "optimal_batch_size": 16,
+      "memory_gb": 32,
+      "ops_supported": [
+        "Conv",
+        "Gemm",
+        "MatMul",
+        "Attention",
+        "LayerNormalization"
+      ],
+      "known_issues": [
+        "DnnlExecutionProvider availability depends on the ORT build variant — present in default onnxruntime wheel but absent from onnxruntime-gpu and platform-specific builds that strip CPU-only EPs."
+      ],
+      "notes": "oneDNN requires no additional package installation beyond the default ONNX Runtime wheel. Suited for Intel CPU inference workloads without OpenVINO IR conversion.",
+      "_speedup_unverified": true,
+      "_data_source": "estimated — no official vendor benchmark"
     }
   ]
 }

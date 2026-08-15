@@ -66,6 +66,10 @@ function hardwareLabel(provider: IHVProvider): string {
       return "XNNPACK";
     case "WasmExecutionProvider":
       return "WASM";
+    case "MIGraphXExecutionProvider":
+      return "AMD MIGraphX";
+    case "DnnlExecutionProvider":
+      return "Intel oneDNN";
     case "CPUExecutionProvider":
       return "CPU";
     default: {

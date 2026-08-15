@@ -12,6 +12,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
+  "MIGraphXExecutionProvider",
   "WebGpuExecutionProvider",
   "DmlExecutionProvider",
 ];

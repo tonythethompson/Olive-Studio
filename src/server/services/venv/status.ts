@@ -510,6 +510,8 @@ export function capabilityForProvider(
       if (status.capabilities.qnnInference?.usable) return status.capabilities.qnnInference;
       return status.capabilities.qnnPreparation;
     case "ROCMExecutionProvider":
+    case "MIGraphXExecutionProvider":
+    case "DnnlExecutionProvider":
     case "WebGpuExecutionProvider":
     case "CoreMLExecutionProvider":
     case "NNAPIExecutionProvider":

@@ -469,6 +469,10 @@ export function mapProviderToCatalogDevice(provider: IHVProvider): string {
       return "WASM";
     case "QnnAbiExecutionProvider":
       return "QNN ABI";
+    case "MIGraphXExecutionProvider":
+      return "MIGraphX";
+    case "DnnlExecutionProvider":
+      return "oneDNN";
     case "CPUExecutionProvider":
       return "CPU";
     default: {

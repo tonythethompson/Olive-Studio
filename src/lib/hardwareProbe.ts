@@ -468,8 +468,8 @@ function undetectedProviderReason(provider: IHVProvider, probe?: HardwareProbeRe
             : "toolkit status unknown";
       if (!cudaEpUsable) {
         return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${toolkit?.available === false
-            ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
-            : ""
+          ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
+          : ""
           }`;
       }
       // 4. Toolkit + driver + ORT installed but the CUDA EP isn't in
@@ -503,6 +503,10 @@ function undetectedProviderReason(provider: IHVProvider, probe?: HardwareProbeRe
       return "WASM is an ONNX Runtime Web CPU export target, not a local Python EP.";
     case "DmlExecutionProvider":
       return "Windows DirectML was not detected (requires Windows + onnxruntime-directml in the default .venv). Use Install in Hardware.";
+    case "MIGraphXExecutionProvider":
+      return "AMD MIGraphX was not detected (requires Linux with AMD Instinct GPU + ROCm 5.7+ and the migraphx package in .venv). Install via Hardware panel or ensure ROCm stack is configured.";
+    case "DnnlExecutionProvider":
+      return "Intel oneDNN (DNNL) was not detected (requires an ORT build with DNNL support). The default onnxruntime wheel may not include DNNL — reinstall an ORT build with oneDNN enabled.";
     case "CPUExecutionProvider":
       return "";
     default: {

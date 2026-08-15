@@ -134,6 +134,20 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     },
   },
   {
+    id: "QnnAbiExecutionProvider",
+    name: "Qualcomm QNN ABI (QairtPipeline)",
+    shortName: "QNN ABI",
+    desc: "Single-pass QairtPipeline direct compilation for Snapdragon NPU context binaries.",
+    icon: CpuIcon,
+    tooltip: {
+      requirements:
+        "Snapdragon 8 Gen 2/3 or newer SoC. Windows ARM64 (on-device NPU) or Windows x64 (ahead-of-time preparation).",
+      quantMethods: "INT4 via QairtPipeline built-in quantization, INT8.",
+      recommendation:
+        "Use QNN ABI for new Snapdragon projects packaging model + runtime into a deployable context binary. Use standard QNN for existing pipelines needing individual pass configuration.",
+    },
+  },
+  {
     id: "ROCMExecutionProvider",
     name: "AMD ROCm",
     shortName: "ROCm",
@@ -144,6 +158,34 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
       quantMethods: "GPTQ INT4/INT8 (recommended), PTQ INT8. AWQ has limited ROCm support.",
       recommendation:
         "GPTQ provides the best ROCm compatibility and performance. Avoid AWQ — use GPTQ INT4 for optimal VRAM efficiency on AMD GPUs.",
+    },
+  },
+  {
+    id: "MIGraphXExecutionProvider",
+    name: "AMD MIGraphX",
+    shortName: "MIGraphX",
+    desc: "Graph-compiled inference on AMD Instinct datacenter GPUs via MIGraphX.",
+    icon: Layers,
+    tooltip: {
+      requirements:
+        "AMD Instinct MI200 or newer (MI300X, MI325X, MI350X, MI355X) with ROCm 5.7+ stack.",
+      quantMethods: "FP16 (recommended), INT8 static quantization.",
+      recommendation:
+        "Use FP16 for maximum throughput on Instinct GPUs. INT8 provides additional compression with minimal accuracy loss for batch inference workloads.",
+    },
+  },
+  {
+    id: "DnnlExecutionProvider",
+    name: "Intel oneDNN (DNNL)",
+    shortName: "oneDNN",
+    desc: "Intel CPU optimization with AVX-512/AMX instruction set acceleration.",
+    icon: CpuIcon,
+    tooltip: {
+      requirements:
+        "Intel CPU with AVX2 (minimum). AVX-512/AMX recommended for best performance.",
+      quantMethods: "INT8 static quantization, BF16 (AMX required for full BF16 throughput).",
+      recommendation:
+        "Use INT8 static quantization for best oneDNN throughput. BF16 yields smaller models but requires AMX-capable hardware (Sapphire Rapids+).",
     },
   },
   {
