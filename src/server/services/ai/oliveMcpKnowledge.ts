@@ -1,12 +1,24 @@
 /**
- * Olive MCP-first knowledge gathering for Assistant chat.
+ * Olive MCP-first knowledge gathering for Assistant chat and automatic review.
  *
  * Chat must prefer the local Olive MCP KB (+ live Olive docs via MCP) over model
  * memory. Optional external web search runs only when MCP coverage is thin and
- * a search backend is configured.
+ * a search backend is configured. Review uses a narrower, workspace-scoped
+ * retrieval profile so automatic Pipeline Review stays fast and relevant.
  */
 import type { AiWorkspaceContext } from "../../../lib/aiWorkspaceContext.ts";
 import { callOliveMcpTools, type McpToolRequest } from "../mcp/client.ts";
+
+export type RetrievalMeta = {
+  /** Effective retrieval mode used by the Olive MCP server. */
+  mode: "auto" | "keyword" | "semantic";
+  /** Effective retrieval mode after server resolution / fallback. */
+  effective?: string;
+  /** True when the server fell back to keyword search or MCP was unreachable. */
+  degraded: boolean;
+  /** Stable reason code when degraded is true. */
+  reason?: string;
+};
 
 export type OliveMcpKnowledgeResult = {
   /** Markdown/plain block injected into the system prompt. */
@@ -17,6 +29,8 @@ export type OliveMcpKnowledgeResult = {
   sufficient: boolean;
   /** Whether an optional web fallback was attempted. */
   usedWebFallback: boolean;
+  /** Retrieval metadata so callers can surface budget / availability degradation. */
+  retrieval: RetrievalMeta;
 };
 
 const MAX_SNIPPET_CHARS = 12_000;
@@ -272,6 +286,159 @@ function inferHardwareTarget(message: string, workspace: AiWorkspaceContext | nu
 }
 
 /**
+ * Respects OLIVE_MCP_RETRIEVAL_MODE and falls back to auto when unknown.
+ *
+ * @returns A valid retrieval mode for MCP search tools.
+ */
+export function getRetrievalMode(): "auto" | "keyword" | "semantic" {
+  const raw = (process.env.OLIVE_MCP_RETRIEVAL_MODE ?? "auto").trim().toLowerCase();
+  if (raw === "keyword") return "keyword";
+  if (raw === "semantic") return "semantic";
+  return "auto";
+}
+
+/**
+ * Map active UI pass toggles to the get_olive_passes filter categories.
+ *
+ * @param workspace - The workspace context
+ * @returns Category names accepted by get_olive_passes, ordered by relevance.
+ */
+function activePassCategoriesForReview(workspace: AiWorkspaceContext | null | undefined): string[] {
+  if (!workspace) return [];
+  const cats: string[] = [];
+  const p = workspace.passes;
+  if (p.quantization) cats.push("quantization");
+  if (p.conversion) cats.push("conversion");
+  if (p.pruning) cats.push("pruning");
+  if (p.peft || p.diffusionLora) cats.push("finetuning");
+  if (p.onnxTransforms) cats.push("graph_optimization");
+  if (p.splitting) cats.push("performance_tuning");
+  return cats;
+}
+
+/**
+ * Best-effort source_format hint for get_pass_chain.
+ *
+ * @param modelSource - The workspace model source
+ * @returns A source format string or undefined when unknown.
+ */
+function sourceFormatForPassChain(
+  modelSource: AiWorkspaceContext["modelSource"] | undefined,
+): string | undefined {
+  if (modelSource === "huggingface" || modelSource === "azure") return "hf";
+  return undefined;
+}
+
+/**
+ * Build a concise, scoping query for search_olive_documentation from workspace context.
+ *
+ * @param workspace - The workspace context
+ * @param targetHardware - Canonical hardware target
+ * @returns Query tokens (without stopwords).
+ */
+function buildReviewQuery(
+  workspace: AiWorkspaceContext | null | undefined,
+  targetHardware: string,
+): string[] {
+  if (!workspace) return [];
+  const terms: string[] = [];
+  const epShort = workspace.hardware.executionProviderShort;
+  if (epShort) terms.push(epShort);
+  if (targetHardware) terms.push(targetHardware);
+
+  const modelName = workspace.model.displayName;
+  if (modelName && modelName !== "(not set)") {
+    const short = modelName.split("/").pop() ?? modelName;
+    terms.push(short.split(/[^a-zA-Z0-9]+/).filter(Boolean).slice(0, 4).join(" "));
+  }
+
+  for (const label of workspace.activePassLabels.slice(0, 3)) {
+    const head = label.split(" ")[0]?.toLowerCase() ?? "";
+    if (head) terms.push(head);
+  }
+
+  return [...new Set(terms)].filter(Boolean);
+}
+
+/**
+ * Selects Olive MCP tools relevant to an automatic Pipeline Review for the given workspace.
+ *
+ * Queries are scoped to the active passes, selected execution provider, and detected
+ * hardware profile. Each documentation search is capped at top_k: 10.
+ *
+ * @param workspace - Workspace context derived from the current Olive Studio UI state
+ * @returns MCP tool requests for review-scoped knowledge
+ */
+export function selectOliveMcpToolsForReview(
+  workspace: AiWorkspaceContext | null | undefined,
+): McpToolRequest[] {
+  if (!workspace) return [];
+
+  const targetHardware = inferHardwareTarget("", workspace);
+  const quant = inferQuantArgs("", workspace);
+  const modelSize = inferModelSizeBucket("", workspace);
+  const passNames = canonicalPassNamesForChain(workspace);
+  const mode = getRetrievalMode();
+  const categories = activePassCategoriesForReview(workspace);
+
+  const requests: McpToolRequest[] = [];
+
+  if (categories.length > 0) {
+    requests.push({
+      toolName: "get_olive_passes",
+      args: { filter: categories[0] },
+    });
+  }
+
+  requests.push({
+    toolName: "get_hardware_optimization_guide",
+    args: {
+      target_hardware: targetHardware,
+      ...(modelSize ? { model_size: modelSize } : {}),
+    },
+  });
+
+  if (passNames.length > 0) {
+    requests.push({
+      toolName: "get_pass_chain",
+      args: {
+        pass_names: passNames,
+        ...(sourceFormatForPassChain(workspace.modelSource)
+          ? { source_format: sourceFormatForPassChain(workspace.modelSource) }
+          : {}),
+      },
+    });
+  }
+
+  if (workspace.passes.quantization) {
+    requests.push({
+      toolName: "get_quantization_strategy",
+      args: {
+        model_type: quant.model_type,
+        target_hardware: quant.target_hardware,
+        latency_budget: "<500ms",
+        accuracy_threshold: "<2% drop",
+      },
+    });
+  }
+
+  const queryTerms = buildReviewQuery(workspace, targetHardware);
+  if (queryTerms.length > 0) {
+    requests.push({
+      toolName: "search_olive_documentation",
+      args: {
+        query: queryTerms.join(" ").slice(0, 500),
+        top_k: 10,
+        live: true,
+        mode,
+      },
+    });
+  }
+
+  return requests;
+}
+
+/**
  * Selects Olive MCP tools relevant to a chat message and optional workspace context.
  *
  * @param message - The user's chat message
@@ -282,8 +449,12 @@ export function selectOliveMcpToolsForChat(
   message: string,
   workspace?: AiWorkspaceContext | null,
 ): McpToolRequest[] {
+  const mode = getRetrievalMode();
   const requests: McpToolRequest[] = [
-    { toolName: "search_olive_documentation", args: { query: message.slice(0, 500), top_k: 6, live: false } },
+    {
+      toolName: "search_olive_documentation",
+      args: { query: message.slice(0, 500), top_k: 20, live: false, mode },
+    },
   ];
 
   if (looksLikeError(message) || looksLikeStudioIssue(message)) {
@@ -382,48 +553,82 @@ export async function optionalWebSearchFallback(query: string): Promise<string |
 }
 
 /**
- * Gathers relevant Olive MCP knowledge and formats it for use in an assistant prompt.
+ * Build retrieval metadata from a search_olive_documentation tool result.
  *
- * @param message - The user's Olive Studio question or request
- * @param workspace - Optional workspace context used to select relevant knowledge
- * @returns The formatted knowledge block, tools used, coverage status, and web-fallback status
+ * @param searchResult - Raw tool result, or undefined/error sentinel
+ * @param requestedMode - The mode requested by the client
+ * @returns RetrievalMeta for the knowledge result
  */
-export async function gatherOliveMcpKnowledge(
-  message: string,
-  workspace?: AiWorkspaceContext | null,
-): Promise<OliveMcpKnowledgeResult> {
-  const requests = selectOliveMcpToolsForChat(message, workspace);
-  const results = await callOliveMcpTools(requests);
-
-  const sections: string[] = [];
-  const toolsUsed: string[] = [];
-  let docsOk = false;
-  let anyOk = false;
-
-  for (let i = 0; i < requests.length; i++) {
-    const req = requests[i]!;
-    const out = results[i];
-    if (!out || out.error || out.result === undefined) continue;
-    anyOk = true;
-    toolsUsed.push(req.toolName);
-    if (req.toolName === "search_olive_documentation" && docsSearchSufficient(out.result)) {
-      docsOk = true;
-    }
-    sections.push(`### MCP tool: ${req.toolName}\n\`\`\`json\n${clipJson(out.result)}\n\`\`\``);
+function retrievalMetaFromSearch(
+  searchResult: { result?: unknown; error?: string; unavailable?: boolean } | undefined,
+  requestedMode: "auto" | "keyword" | "semantic",
+): RetrievalMeta {
+  if (!searchResult || searchResult.unavailable) {
+    return { mode: requestedMode, effective: "keyword", degraded: true, reason: "mcp_unavailable" };
   }
+  if (searchResult.error) {
+    return { mode: requestedMode, effective: "keyword", degraded: true, reason: "mcp_error" };
+  }
+  const r = (searchResult.result ?? {}) as Record<string, unknown>;
+  const meta = (r.retrieval ?? {}) as Record<string, unknown>;
+  return {
+    mode: requestedMode,
+    effective: typeof meta.effective === "string" ? meta.effective : requestedMode,
+    degraded: meta.degraded === true,
+    reason: typeof meta.reason === "string" ? meta.reason : undefined,
+  };
+}
 
-  let usedWebFallback = false;
-  const sufficient = anyOk && (docsOk || toolsUsed.length >= 2 || looksLikeError(message));
-
-  if (!sufficient) {
-    const web = await optionalWebSearchFallback(message);
-    if (web) {
-      usedWebFallback = true;
-      sections.push(`### Web search fallback (secondary)\n${web}`);
-      // Still not "sufficient" Olive-KB coverage; prompt will tell the model to treat this as secondary.
+/**
+ * Merge multiple retrieval metadata objects into one summary.
+ *
+ * @param requestedMode - The mode the client requested
+ * @param metas - Per-tool retrieval metadata
+ * @returns Merged RetrievalMeta
+ */
+function mergeRetrievalMeta(
+  requestedMode: "auto" | "keyword" | "semantic",
+  metas: RetrievalMeta[],
+): RetrievalMeta {
+  let degraded = false;
+  let reason: string | undefined;
+  let effective: "auto" | "keyword" | "semantic" | undefined;
+  const isKnownMode = (v: string): v is "auto" | "keyword" | "semantic" =>
+    v === "auto" || v === "keyword" || v === "semantic";
+  for (const m of metas) {
+    if (m.degraded) {
+      degraded = true;
+      if (!reason) reason = m.reason;
+    }
+    if (m.effective === "semantic") {
+      effective = "semantic";
+      break;
+    }
+    if (!effective && m.effective && isKnownMode(m.effective)) {
+      effective = m.effective;
     }
   }
+  if (!effective) effective = requestedMode;
+  return { mode: requestedMode, effective, degraded, reason };
+}
 
+/**
+ * Formats a list of tool sections and coverage flags into the OliveMcpKnowledgeResult shape.
+ *
+ * @param sections - Markdown sections for each successful tool
+ * @param toolsUsed - Tool names that returned usable data
+ * @param sufficient - Whether the gathered knowledge is sufficient to answer
+ * @param usedWebFallback - Whether a web fallback was appended
+ * @param retrieval - Retrieval metadata
+ * @returns The formatted knowledge result
+ */
+function buildKnowledgeResult(
+  sections: string[],
+  toolsUsed: string[],
+  sufficient: boolean,
+  usedWebFallback: boolean,
+  retrieval: RetrievalMeta,
+): OliveMcpKnowledgeResult {
   if (sections.length === 0) {
     return {
       promptBlock:
@@ -432,6 +637,7 @@ export async function gatherOliveMcpKnowledge(
       toolsUsed: [],
       sufficient: false,
       usedWebFallback,
+      retrieval,
     };
   }
 
@@ -450,7 +656,100 @@ export async function gatherOliveMcpKnowledge(
     promptBlock = `${promptBlock.slice(0, MAX_SNIPPET_CHARS)}\n\n…(MCP context truncated)`;
   }
 
-  return { promptBlock, toolsUsed, sufficient, usedWebFallback };
+  return { promptBlock, toolsUsed, sufficient, usedWebFallback, retrieval };
+}
+
+/**
+ * Gather Olive MCP knowledge from a set of tool requests.
+ *
+ * @param requests - MCP tool requests to execute
+ * @param opts.webFallbackQuery - Optional query for the web fallback
+ * @param opts.sufficientFn - Optional override for sufficiency heuristics
+ * @returns The formatted knowledge result
+ */
+async function gatherFromRequests(
+  requests: McpToolRequest[],
+  opts: {
+    webFallbackQuery?: string;
+    sufficientFn?: (anyOk: boolean, docsOk: boolean, toolsUsed: string[]) => boolean;
+  } = {},
+): Promise<OliveMcpKnowledgeResult> {
+  const results = ((await callOliveMcpTools(requests)) as { result?: unknown; error?: string; unavailable?: boolean }[] | undefined) ??
+    [];
+  const requestedMode = getRetrievalMode();
+
+  const sections: string[] = [];
+  const toolsUsed: string[] = [];
+  let docsOk = false;
+  let anyOk = false;
+  const retrievalMetas: RetrievalMeta[] = [];
+
+  for (let i = 0; i < requests.length; i++) {
+    const req = requests[i]!;
+    const out = results[i];
+    if (req.toolName === "search_olive_documentation") {
+      retrievalMetas.push(retrievalMetaFromSearch(out, requestedMode));
+    }
+    if (!out || out.error || out.result === undefined) continue;
+    anyOk = true;
+    toolsUsed.push(req.toolName);
+    if (req.toolName === "search_olive_documentation" && docsSearchSufficient(out.result)) {
+      docsOk = true;
+    }
+    sections.push(`### MCP tool: ${req.toolName}\n\`\`\`json\n${clipJson(out.result)}\n\`\`\``);
+  }
+
+  let usedWebFallback = false;
+  const sufficientFn =
+    opts.sufficientFn ?? ((anyOk, docsOk_, toolsUsed_) => anyOk && (docsOk_ || toolsUsed_.length >= 2));
+  let sufficient = sufficientFn(anyOk, docsOk, toolsUsed);
+
+  if (!sufficient && opts.webFallbackQuery) {
+    const web = await optionalWebSearchFallback(opts.webFallbackQuery);
+    if (web) {
+      usedWebFallback = true;
+      sections.push(`### Web search fallback (secondary)\n${web}`);
+      // Still not "sufficient" Olive-KB coverage; prompt will tell the model to treat this as secondary.
+    }
+  }
+
+  // Recompute sufficiency after optional web fallback (web does not make MCP sufficient).
+  sufficient = sufficientFn(anyOk, docsOk, toolsUsed);
+
+  const retrieval = mergeRetrievalMeta(requestedMode, retrievalMetas);
+  return buildKnowledgeResult(sections, toolsUsed, sufficient, usedWebFallback, retrieval);
+}
+
+/**
+ * Gathers relevant Olive MCP knowledge and formats it for use in an assistant prompt.
+ *
+ * @param message - The user's Olive Studio question or request
+ * @param workspace - Optional workspace context used to select relevant knowledge
+ * @returns The formatted knowledge block, tools used, coverage status, and web-fallback status
+ */
+export async function gatherOliveMcpKnowledge(
+  message: string,
+  workspace?: AiWorkspaceContext | null,
+): Promise<OliveMcpKnowledgeResult> {
+  const requests = selectOliveMcpToolsForChat(message, workspace);
+  return gatherFromRequests(requests, {
+    webFallbackQuery: message,
+    sufficientFn: (anyOk, docsOk, toolsUsed) =>
+      anyOk && (docsOk || toolsUsed.length >= 2 || looksLikeError(message)),
+  });
+}
+
+/**
+ * Gathers review-scoped Olive MCP knowledge for automatic Pipeline Review.
+ *
+ * @param workspace - Workspace context derived from the current Olive Studio UI state
+ * @returns The formatted knowledge block and retrieval metadata
+ */
+export async function gatherOliveMcpKnowledgeForReview(
+  workspace: AiWorkspaceContext | null | undefined,
+): Promise<OliveMcpKnowledgeResult> {
+  const requests = selectOliveMcpToolsForReview(workspace);
+  return gatherFromRequests(requests, { sufficientFn: (anyOk, docsOk, toolsUsed) => anyOk && (docsOk || toolsUsed.length >= 2) });
 }
 
 /**

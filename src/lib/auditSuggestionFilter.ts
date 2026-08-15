@@ -6,6 +6,7 @@
 import type { AiWorkspaceContext } from "./aiWorkspaceContext.ts";
 import type { AuditAnalysis, AuditSuggestion } from "./auditAnalysis.ts";
 import { canonicalizeAutofixPass, isAuditAutofixApplyable } from "./auditAutofix.ts";
+import type { Finding } from "./types/findingTypes.ts";
 
 export type AuditFilterContext = Pick<AiWorkspaceContext, "model" | "hardware">;
 
@@ -150,4 +151,71 @@ export function filterAuditAnalysis(analysis: AuditAnalysis, ctx: AuditFilterCon
     suggestions: kept.slice(0, 3),
     summary,
   };
+}
+
+function findingText(finding: Finding): string {
+  const bits = [finding.title, finding.description, finding.evidence];
+  for (const action of finding.actions) {
+    if (action.kind === "applyPatch") {
+      bits.push(JSON.stringify(action.payload));
+    }
+  }
+  return bits.join("\n");
+}
+
+/**
+ * Determines whether a Finding is relevant to the active model and execution provider.
+ *
+ * @param finding - The finding to evaluate
+ * @param ctx - The active model and hardware context
+ * @returns `true` if the finding applies to the workspace, `false` otherwise
+ */
+export function isFindingRelevant(finding: Finding, ctx: AuditFilterContext): boolean {
+  const text = findingText(finding);
+  const model = ctx.model.displayName || ctx.model.huggingFaceId || "";
+  const ep = ctx.hardware.executionProvider;
+  const asr =
+    modelLooksLikeAsr(model) ||
+    ctx.model.hfTask === "automatic-speech-recognition" ||
+    ctx.model.hfTask === "speech-recognition";
+  const llm = modelLooksLikeLlm(model);
+
+  // Speech/ASR advice on non-ASR models.
+  if (!asr && (llm || model.length > 0) && SPEECH_JUNK.test(text)) {
+    return false;
+  }
+
+  // Already on NvTensorRT-RTX: no classic TRT EP, no TensorRTPass / engine-build cards.
+  if (ep === "NvTensorRTRTXExecutionProvider") {
+    if (CLASSIC_TRT.test(text) || TRT_AFTER_CUDA.test(text)) return false;
+    if (TRT_ENGINE_PASS_JUNK.test(text) || ADD_TRT_PASS.test(text)) return false;
+  }
+
+  // Already on CUDA classic: suggesting "add CUDA" is noise.
+  if (ep === "CUDAExecutionProvider" && /\badd\s+cuda\b/i.test(text)) {
+    return false;
+  }
+
+  // Cross-vendor EP noise on NVIDIA GPU targets.
+  if (isNvidiaFamilyEp(ep)) {
+    if (OPEN_VINO_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+openvino/i.test(text)) {
+      return false;
+    }
+    if (QNN_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+qnn/i.test(text)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Filters findings for the active model and execution provider.
+ *
+ * @param findings - The findings to filter
+ * @param ctx - The active model and execution-provider context
+ * @returns The filtered findings (max 3)
+ */
+export function filterFindings(findings: Finding[], ctx: AuditFilterContext): Finding[] {
+  return findings.filter((f) => isFindingRelevant(f, ctx)).slice(0, 3);
 }
