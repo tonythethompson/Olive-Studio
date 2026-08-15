@@ -23,6 +23,36 @@ import { resolveS3Config, resolvePublicS3Config } from "../services/s3/client.ts
 import { listUserModels, listPublicModels, pushModel, pullModel } from "../services/s3/operations.ts";
 import { resolveOliveOutputForDownload } from "../services/playground/oliveOutputScan.ts";
 
+/**
+ * Validates a pull destination directory against the project root.
+ * Rejects paths outside the root (including across Windows drives) and paths
+ * that traverse symlinks — a lexical containment check alone is insufficient
+ * because createWriteStream follows symlinks at write time.
+ */
+function validatePullDestDir(cwd: string, destDir: string): { ok: true } | { ok: false; error: string } {
+  // path.relative returns an absolute path across roots (Windows drives),
+  // which would slip past the ".." check — treat that as outside too.
+  const relativeToCwd = path.relative(cwd, destDir);
+  if (path.isAbsolute(relativeToCwd) || relativeToCwd.startsWith("..")) {
+    return { ok: false, error: "Destination path must be inside the project directory." };
+  }
+  let cursor = cwd;
+  for (const component of relativeToCwd ? relativeToCwd.split(path.sep) : []) {
+    cursor = path.join(cursor, component);
+    try {
+      if (fs.lstatSync(cursor).isSymbolicLink()) {
+        return { ok: false, error: "Destination path must not contain symlinks." };
+      }
+    } catch (err: unknown) {
+      if (!(err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT")) {
+        return { ok: false, error: "Destination path could not be validated." };
+      }
+      break;
+    }
+  }
+  return { ok: true };
+}
+
 export function mountS3Routes(router: Router): void {
   // ─── Status: check if S3 is configured ──────────────────────────────────
   router.get("/s3/status", studioLocalOnly, (_req, res) => {
@@ -121,28 +151,9 @@ export function mountS3Routes(router: Router): void {
     const basename = path.basename(key);
     const cwd = process.cwd();
     const destDir = rawDestDir?.trim() ? path.resolve(cwd, rawDestDir.trim()) : path.resolve(cwd, "models", "optimized");
-    // path.relative returns an absolute path across roots (Windows drives),
-    // which would slip past the ".." check — treat that as outside too.
-    const relativeToCwd = path.relative(cwd, destDir);
-    if (path.isAbsolute(relativeToCwd) || relativeToCwd.startsWith("..")) {
-      return res.status(400).json({ error: "Destination path must be inside the project directory." });
-    }
-    // Reject symlinked destination components. A lexical containment check is
-    // insufficient because createWriteStream follows symlinks at write time.
-    let cursor = cwd;
-    const relativeDest = relativeToCwd;
-    for (const component of relativeDest ? relativeDest.split(path.sep) : []) {
-      cursor = path.join(cursor, component);
-      try {
-        if (fs.lstatSync(cursor).isSymbolicLink()) {
-          return res.status(400).json({ error: "Destination path must not contain symlinks." });
-        }
-      } catch (err: unknown) {
-        if (!(err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT")) {
-          return res.status(400).json({ error: "Destination path could not be validated." });
-        }
-        break;
-      }
+    const destValidation = validatePullDestDir(cwd, destDir);
+    if (!destValidation.ok) {
+      return res.status(400).json({ error: destValidation.error });
     }
     const localPath = path.join(destDir, basename);
 

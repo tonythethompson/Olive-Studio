@@ -35,6 +35,26 @@ function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): bool
   }
 }
 
+/** Resolve the API key for a live model catalog request: body > runtime > env. */
+function resolveCatalogApiKey(provider: ProviderConfig["provider"], apiKey?: string): string {
+  const explicit = typeof apiKey === "string" ? apiKey.trim() : "";
+  if (explicit) return explicit;
+  const runtime = getRuntimeAiProvider();
+  if (runtime && runtime.provider === provider && runtime.apiKey?.trim()) {
+    return runtime.apiKey.trim();
+  }
+  const plugin = getProvider(provider);
+  return (plugin ? readEnvApiKey(...plugin.envVarNames) : undefined) ?? "";
+}
+
+/** Resolve the base URL candidate for a live model catalog request. */
+function resolveCatalogBaseUrlCandidate(provider: ProviderConfig["provider"], baseUrl?: string): string | undefined {
+  if (baseUrl) return baseUrl;
+  const runtime = getRuntimeAiProvider();
+  if (runtime && runtime.provider === provider && runtime.baseUrl) return runtime.baseUrl;
+  return getProvider(provider)?.defaultBaseUrl;
+}
+
 /** Whether this provider may activate without an API key (local / OAuth / CF flows). */
 function allowsEmptyApiKey(provider: string, normalizedBaseUrl?: string): boolean {
   if (
@@ -285,24 +305,12 @@ export function mountProviderRoutes(router: Router): void {
       const specialCatalog = await fetchSpecialProviderCatalog(provider);
       if (specialCatalog) return res.json(specialCatalog);
 
-      const plugin = getProvider(provider);
-      const runtime = getRuntimeAiProvider();
-      const runtimeKey =
-        runtime && runtime.provider === provider && runtime.apiKey?.trim()
-          ? runtime.apiKey.trim()
-          : undefined;
-      const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
-      const key =
-        (typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : "") || runtimeKey || envKey || "";
+      const key = resolveCatalogApiKey(provider, apiKey);
 
       let safeBaseUrl: string | undefined;
       try {
         // Prefer explicit body, then runtime saved base for openai-compat / local.
-        const candidate =
-          baseUrl ||
-          (runtime && runtime.provider === provider ? runtime.baseUrl : undefined) ||
-          plugin?.defaultBaseUrl;
-        safeBaseUrl = sanitizeProviderBaseUrl(provider, candidate);
+        safeBaseUrl = sanitizeProviderBaseUrl(provider, resolveCatalogBaseUrlCandidate(provider, baseUrl));
       } catch (err: unknown) {
         return res.status(400).json({
           models: [],
