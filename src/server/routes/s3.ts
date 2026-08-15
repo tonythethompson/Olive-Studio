@@ -119,6 +119,23 @@ export function mountS3Routes(router: Router): void {
     if (path.relative(cwd, destDir).startsWith("..")) {
       return res.status(400).json({ error: "Destination path must be inside the project directory." });
     }
+    // Reject symlinked destination components. A lexical containment check is
+    // insufficient because createWriteStream follows symlinks at write time.
+    let cursor = cwd;
+    const relativeDest = path.relative(cwd, destDir);
+    for (const component of relativeDest ? relativeDest.split(path.sep) : []) {
+      cursor = path.join(cursor, component);
+      try {
+        if (fs.lstatSync(cursor).isSymbolicLink()) {
+          return res.status(400).json({ error: "Destination path must not contain symlinks." });
+        }
+      } catch (err: unknown) {
+        if (!(err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT")) {
+          return res.status(400).json({ error: "Destination path could not be validated." });
+        }
+        break;
+      }
+    }
     const localPath = path.join(destDir, basename);
 
     // Don't overwrite existing files without explicit intent

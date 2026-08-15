@@ -230,6 +230,10 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
     },
     onResponse: (handler) => {
       responseHandlers.push(handler);
+      return () => {
+        const index = responseHandlers.indexOf(handler);
+        if (index >= 0) responseHandlers.splice(index, 1);
+      };
     },
     kill: () => {
       try {
