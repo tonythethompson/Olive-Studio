@@ -178,6 +178,8 @@ const ORT_PROVIDER_MAP: Record<string, IHVProvider> = {
   OpenVINOExecutionProvider: "OpenVINOExecutionProvider",
   QNNExecutionProvider: "QNNExecutionProvider",
   ROCMExecutionProvider: "ROCMExecutionProvider",
+  MIGraphXExecutionProvider: "MIGraphXExecutionProvider",
+  DnnlExecutionProvider: "DnnlExecutionProvider",
   WebGpuExecutionProvider: "WebGpuExecutionProvider",
   // Browser / OWR spellings are not local Python EPs; map if a probe ever reports them.
   WebGPUExecutionProvider: "WebGpuExecutionProvider",
@@ -460,16 +462,15 @@ function undetectedProviderReason(provider: IHVProvider, probe?: HardwareProbeRe
       const toolTip =
         toolkit?.available === true
           ? `toolkit ${toolkit.version ?? "available"}` +
-            (nvidia?.cudaVersion ? ` on driver CUDA ${nvidia.cudaVersion}` : "")
+          (nvidia?.cudaVersion ? ` on driver CUDA ${nvidia.cudaVersion}` : "")
           : toolkit?.available === false
             ? "toolkit (nvcc) not installed"
             : "toolkit status unknown";
       if (!cudaEpUsable) {
-        return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${
-          toolkit?.available === false
+        return `NVIDIA driver detected on ${gpus.map((g) => g.name).join(", ")}; ${toolTip}. The CUDA execution provider is not registered by onnxruntime-gpu in the project .venv — install the pinned wheel with \`${pinnedOrtGpuInstallCommand()}\` (you can also click "Install onnxruntime-gpu" in the Hardware panel).${toolkit?.available === false
             ? ` CUDA toolkit is also missing; for native builds grab it from ${CUDA_DOWNLOAD_LINKS.archive}.`
             : ""
-        }`;
+          }`;
       }
       // 4. Toolkit + driver + ORT installed but the CUDA EP isn't in
       // detectedProviders — likely driver/wheel mismatch (e.g. CUDA 13

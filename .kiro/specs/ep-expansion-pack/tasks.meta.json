@@ -1,0 +1,376 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add `MIGraphXExecutionProvider` and `DnnlExecutionProvider` to IHVProvider union in `src/types.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798778670
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798802532
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798903914
+      }
+    ],
+    "1.2 Update `getProviderRuntimeKind()` in `src/lib/providerRuntimeKind.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798778792
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798908377
+      }
+    ],
+    "1.3 Update `mandatoryFamilyForProvider()` and related exports in `src/lib/venvFamily.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779005
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798909102
+      }
+    ],
+    "1.4 Update `isGpuProvider()` in `src/lib/vramEstimate.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779249
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798909889
+      }
+    ],
+    "1.5 Update `GPU_PROVIDERS` and `providerToAccelerator()` in `src/lib/oliveRecipeBuilder.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779383
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798911534
+      }
+    ],
+    "1.6 Update `ORT_PROVIDER_MAP` in `src/lib/hardwareProbe.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779561
+      },
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798911908
+      }
+    ],
+    "1.7 Fix remaining exhaustive switch cases": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779727
+      }
+    ],
+    "2.1 Add MIGraphX entry to `PROVIDER_CATALOG` in `src/lib/providerCatalog.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779860
+      }
+    ],
+    "2.2 Add DnnlExecutionProvider entry to `PROVIDER_CATALOG` in `src/lib/providerCatalog.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798779992
+      }
+    ],
+    "2.3 Add QnnAbiExecutionProvider entry to `PROVIDER_CATALOG` in `src/lib/providerCatalog.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798780124
+      }
+    ],
+    "2.4 Write property test for catalog schema invariant": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798780313
+      }
+    ],
+    "3. Checkpoint - Verify type system compiles": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798780453
+      }
+    ],
+    "4.1 Add MIGraphX conflict rules to `getProviderConflicts()` in `src/lib/pipelineValidation.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798780664
+      }
+    ],
+    "4.2 Add oneDNN conflict rules to `getProviderConflicts()` in `src/lib/pipelineValidation.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798780797
+      }
+    ],
+    "4.3 Add MIGraphX and oneDNN to `PASS_VALIDATIONS` in `src/components/features/ihv/hardwarePassCompatibility.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798782380
+      }
+    ],
+    "4.4 Add ROCm consumer/datacenter validation differentiation": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798782547
+      }
+    ],
+    "4.5 Write property tests for MIGraphX conflict detection": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798782699
+      }
+    ],
+    "4.6 Write property tests for MIGraphX compatible pass allowance": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798782950
+      }
+    ],
+    "4.7 Write property tests for oneDNN conflict detection": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798785952
+      }
+    ],
+    "4.8 Write property test for oneDNN GPU quant method blocking": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798788543
+      }
+    ],
+    "5.1 Add QNN ABI selection coercion rules to `AUTO_COERCE_RULES` in `src/lib/pipelineStateCommit.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798788680
+      }
+    ],
+    "5.2 Add oneDNN quant method auto-coercion in `src/lib/pipelineStateCommit.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798788797
+      }
+    ],
+    "5.3 Write property test for QNN ABI coercion invariant": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798788971
+      }
+    ],
+    "5.4 Write property test for QNN plugin inverse coercion": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798789108
+      }
+    ],
+    "6. Checkpoint - Verify validation logic": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798789230
+      }
+    ],
+    "7.1 Extend `HardwareProbeResult` interface with `migraphx` and `dnnl` sections": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798789356
+      }
+    ],
+    "7.2 Implement MIGraphX detection logic in the hardware probe": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798789522
+      }
+    ],
+    "7.3 Implement oneDNN detection logic in the hardware probe": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798789725
+      }
+    ],
+    "8.1 Add MIGraphX capability install logic in `src/server/services/venv/capabilityEnsure.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798789903
+      }
+    ],
+    "8.2 Add DnnlExecutionProvider capability ensure logic in `src/server/services/venv/capabilityEnsure.ts`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798790137
+      }
+    ],
+    "9.1 Add AMD Instinct hardware profiles to `olive-mcp-server/olive_mcp_server/knowledge_base/hardware_profiles.json`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798790347
+      }
+    ],
+    "9.2 Add AMD Radeon RX 9xxx hardware profiles to `olive-mcp-server/olive_mcp_server/knowledge_base/hardware_profiles.json`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798790579
+      }
+    ],
+    "9.3 Add AMD Radeon RX Consumer / ROCm generic profile to `hardware_profiles.json`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798790772
+      }
+    ],
+    "9.4 Add Intel Core (oneDNN) hardware profile to `hardware_profiles.json`": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798790954
+      }
+    ],
+    "9.5 Add \"AMD Radeon RX Consumer\" recipe template to MCP integration_recipes knowledge base": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798791176
+      }
+    ],
+    "9.6 Add `_speedup_unverified: true` marker to all new hardware profiles": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798791345
+      }
+    ],
+    "9.7 Write property test for hardware profile schema completeness": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798791493
+      }
+    ],
+    "9.8 Add EP selection guidance knowledge entry to MCP knowledge base": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798791617
+      }
+    ],
+    "10. Checkpoint - Verify knowledge base and server": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798791791
+      }
+    ],
+    "11.1 Add \"Qualcomm Snapdragon\" grouped section to the IHV provider card grid": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798791916
+      }
+    ],
+    "11.2 Add IHV panel logic for MIGraphX install-needed indicator": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792032
+      }
+    ],
+    "11.3 Add IHV panel logic for oneDNN unavailable state": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792160
+      }
+    ],
+    "11.4 Add inline notification for QNN ABI pass coercion": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792342
+      }
+    ],
+    "11.5 Ensure tooltip visibility behavior for QNN ABI card": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792483
+      }
+    ],
+    "12.1 Write unit tests for provider runtime kind and venv family": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792619
+      }
+    ],
+    "12.2 Write unit tests for GPU classification and accelerator mapping": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792743
+      }
+    ],
+    "12.3 Write property test for GPU provider accelerator mapping": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792862
+      }
+    ],
+    "13. Final checkpoint - Verify all tests and compilation": [
+      {
+        "executionId": "47842c37-e8bf-4f49-8112-e28bcd8ce2a4",
+        "chatSessionId": "sess_3dfb18b1-f855-4381-a957-23e6f9f685f3",
+        "timestamp": 1786798792971
+      }
+    ]
+  }
+}

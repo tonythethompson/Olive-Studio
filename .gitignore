@@ -94,3 +94,4 @@ install.sh
 QWEN.md
 .superdesign/design_iterations/default_ui_darkmode.css
 Assets/logo_large.png
+infra/terraform/terraform.tfstate.backup

@@ -40,6 +40,8 @@ export type IHVProvider =
   | "QNNExecutionProvider"
   | "QnnAbiExecutionProvider"
   | "ROCMExecutionProvider"
+  | "MIGraphXExecutionProvider"
+  | "DnnlExecutionProvider"
   | "WebGpuExecutionProvider"
   | "CoreMLExecutionProvider"
   | "NNAPIExecutionProvider"
