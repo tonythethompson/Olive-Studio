@@ -3,8 +3,8 @@
   "dim": 384,
   "indexes": {
     "docs_kb": {
-      "content_hash": "192658843ab943214a6b5236516e6c1cf3b812da76e5b20d2bb0780f3344b00e",
-      "count": 4385
+      "content_hash": "64e82a35f784279d64e76b4c09de4b7d0d60658b04afd6e81ed1c76b19e95299",
+      "count": 4411
     },
     "ts_olive": {
       "content_hash": "bdea6364e803addd4bec02eeb28f4e52315227ed4eda459c87f791f63b144b70",

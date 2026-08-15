@@ -167,10 +167,11 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     desc: "Apple Neural Engine / GPU via CoreML on macOS and iOS (platform-local when ORT lists it).",
     icon: CpuIcon,
     tooltip: {
-      requirements: "macOS or iOS with onnxruntime CoreML EP. Prefer fixed input shapes.",
-      quantMethods: "PTQ INT8 (per-channel recommended), FP16.",
+      requirements:
+        "macOS Apple Silicon (M1/M2/M3/M4). Prefer fixed input shapes for optimal ANE scheduling.",
+      quantMethods: "PTQ INT8, FP16. KQuant, RTN, HQQ, QAT also supported.",
       recommendation:
-        "Build recipes for Apple edge deploy. Execute Live only when the probe reports CoreMLExecutionProvider (Darwin + ORT CoreML).",
+        "Suitable for Apple edge deployment. Fixed input shapes enable optimal Neural Engine scheduling. Execute Live requires Darwin host with ORT CoreML EP.",
     },
   },
   {

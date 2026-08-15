@@ -2,16 +2,13 @@
  * Provider → family ensure + capability-specific package preparation.
  */
 import type { IHVProvider } from "../../../types.ts";
-import {
-  humanFamilyLabel,
-  resolveVenvFamily,
-  type VenvFamily,
-} from "../../../lib/venvFamily.ts";
+import { humanFamilyLabel, resolveVenvFamily, type VenvFamily } from "../../../lib/venvFamily.ts";
 import { ensureOpenVino } from "../olive/openvino.ts";
 import { ensureOnnxRuntimeGpu } from "../olive/cuda.ts";
 import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
+import { ensureCoremltools } from "../olive/coreml.ts";
 import { isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { isExportTargetProvider, isPlatformLocalProvider } from "../../../lib/providerRuntimeKind.ts";
@@ -86,18 +83,21 @@ export async function ensureProviderCapability(
     };
   }
 
-  const capResult = await installCapabilityPackages(provider, onLine);
-  if (!capResult.ok) {
-    return { ok: false, error: capResult.error, family, python: getVenvPython(family) };
+  // coremltools is macOS-only. On other hosts, skip package installation and
+  // let the ORT provider check below return the actionable registration error.
+  if (provider !== "CoreMLExecutionProvider" || dual.platform === "darwin") {
+    const capResult = await installCapabilityPackages(provider, onLine);
+    if (!capResult.ok) {
+      return { ok: false, error: capResult.error, family, python: getVenvPython(family) };
+    }
   }
 
   invalidateRuntimeStatusCache();
   const status = await probeFamilyStatus(family);
   const usage = opts?.usage ?? "inference";
-  const cap =
-    isQnnIhvProvider(provider)
-      ? qnnCapabilityForUsage(status, usage)
-      : capabilityForProvider(status, provider);
+  const cap = isQnnIhvProvider(provider)
+    ? qnnCapabilityForUsage(status, usage)
+    : capabilityForProvider(status, provider);
 
   // Providers without a capability slot:
   // - export targets are rejected above
@@ -129,9 +129,7 @@ export async function ensureProviderCapability(
   if (!cap.usable) {
     return {
       ok: false,
-      error:
-        cap.detail ??
-        `${provider} capability not usable in ${humanFamilyLabel(family)} (${cap.reason})`,
+      error: cap.detail ?? `${provider} capability not usable in ${humanFamilyLabel(family)} (${cap.reason})`,
       family,
       python: getVenvPython(family),
     };
@@ -150,7 +148,6 @@ async function installCapabilityPackages(
       case "DmlExecutionProvider":
       case "ROCMExecutionProvider":
       case "WebGpuExecutionProvider":
-      case "CoreMLExecutionProvider":
       case "NNAPIExecutionProvider":
       case "VitisAIExecutionProvider":
       case "SNPEExecutionProvider":
@@ -158,6 +155,11 @@ async function installCapabilityPackages(
       case "XnnpackExecutionProvider":
       case "WasmExecutionProvider":
         return { ok: true };
+
+      case "CoreMLExecutionProvider": {
+        const result = await ensureCoremltools(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
       // QNN ABI shares the QNN venv family / plugin stack with QNNExecutionProvider.
       case "QNNExecutionProvider":
