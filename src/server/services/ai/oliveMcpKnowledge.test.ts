@@ -125,6 +125,24 @@ describe("selectOliveMcpToolsForReview", () => {
     expect((search.args as Record<string, string>).query).toMatch(/NvTensorRTRTXExecutionProvider|RTX|NVIDIA/i);
   });
 
+  it("resolves quantization method to the concrete Olive pass name", () => {
+    const tools = selectOliveMcpToolsForReview(
+      makeWorkspace({
+        passes: { quantization: true, conversion: false, quantMethod: "awq" },
+      }),
+    );
+    const chain = tools.find((t) => t.toolName === "get_pass_chain");
+    expect(chain).toBeDefined();
+    expect((chain!.args as Record<string, string[]>).pass_names).toContain("AutoAWQQuantizer");
+  });
+
+  it("does not send a source_format hint for ambiguous azure/local sources", () => {
+    const tools = selectOliveMcpToolsForReview(makeWorkspace({ modelSource: "azure" }));
+    const chain = tools.find((t) => t.toolName === "get_pass_chain");
+    expect(chain).toBeDefined();
+    expect(Object.keys(chain!.args as Record<string, unknown>)).not.toContain("source_format");
+  });
+
   it("passes the retrieval mode in search args", () => {
     const tools = selectOliveMcpToolsForReview(makeWorkspace());
     const search = tools.find((t) => t.toolName === "search_olive_documentation")!;

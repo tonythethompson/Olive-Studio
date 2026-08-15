@@ -65,6 +65,47 @@ function isNvidiaFamilyEp(ep: string): boolean {
   return /CUDAExecutionProvider|NvTensorRTRTXExecutionProvider|TensorrtExecutionProvider/.test(ep);
 }
 
+function modelFromContext(ctx: AuditFilterContext): string {
+  return ctx.model.displayName || ctx.model.huggingFaceId || "";
+}
+
+function isAsrModel(ctx: AuditFilterContext): boolean {
+  const model = modelFromContext(ctx);
+  return (
+    modelLooksLikeAsr(model) ||
+    ctx.model.hfTask === "automatic-speech-recognition" ||
+    ctx.model.hfTask === "speech-recognition"
+  );
+}
+
+function isLlmModel(ctx: AuditFilterContext): boolean {
+  return modelLooksLikeLlm(modelFromContext(ctx));
+}
+
+function looksLikeAsrAdvice(text: string, ctx: AuditFilterContext): boolean {
+  const model = modelFromContext(ctx);
+  return !isAsrModel(ctx) && (isLlmModel(ctx) || model.length > 0) && SPEECH_JUNK.test(text);
+}
+
+function isClassicTrtNoise(text: string, ep: string): boolean {
+  if (ep !== "NvTensorRTRTXExecutionProvider") return false;
+  return (
+    CLASSIC_TRT.test(text) || TRT_AFTER_CUDA.test(text) || TRT_ENGINE_PASS_JUNK.test(text) || ADD_TRT_PASS.test(text)
+  );
+}
+
+function isAddCudaNoise(text: string, ep: string): boolean {
+  return ep === "CUDAExecutionProvider" && /\badd\s+cuda\b/i.test(text);
+}
+
+function isCrossVendorNoise(text: string, ep: string): boolean {
+  if (!isNvidiaFamilyEp(ep)) return false;
+  return (
+    (OPEN_VINO_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+openvino/i.test(text)) ||
+    (QNN_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+qnn/i.test(text))
+  );
+}
+
 /**
  * Determines whether an audit suggestion is relevant to the active model and execution provider.
  *
@@ -74,42 +115,19 @@ function isNvidiaFamilyEp(ep: string): boolean {
  */
 export function isAuditSuggestionRelevant(suggestion: AuditSuggestion, ctx: AuditFilterContext): boolean {
   const text = suggestionText(suggestion);
-  const model = ctx.model.displayName || ctx.model.huggingFaceId || "";
   const ep = ctx.hardware.executionProvider;
-  const asr =
-    modelLooksLikeAsr(model) ||
-    ctx.model.hfTask === "automatic-speech-recognition" ||
-    ctx.model.hfTask === "speech-recognition";
-  const llm = modelLooksLikeLlm(model);
 
-  // Speech/ASR advice on non-ASR models (classic junk for Llama audits).
-  if (!asr && (llm || model.length > 0) && SPEECH_JUNK.test(text)) {
+  if (looksLikeAsrAdvice(text, ctx)) return false;
+  if (isClassicTrtNoise(text, ep)) return false;
+  if (
+    ep === "NvTensorRTRTXExecutionProvider" &&
+    /execution_providers|tensor_rt/i.test(suggestion.autofix.pass) &&
+    /tensorrt|trt/i.test(text)
+  ) {
     return false;
   }
-
-  // Already on NvTensorRT-RTX: no classic TRT EP, no TensorRTPass / engine-build cards.
-  if (ep === "NvTensorRTRTXExecutionProvider") {
-    if (CLASSIC_TRT.test(text) || TRT_AFTER_CUDA.test(text)) return false;
-    if (TRT_ENGINE_PASS_JUNK.test(text) || ADD_TRT_PASS.test(text)) return false;
-    if (/execution_providers|tensor_rt/i.test(suggestion.autofix.pass) && /tensorrt|trt/i.test(text)) {
-      return false;
-    }
-  }
-
-  // Already on CUDA classic: suggesting "add CUDA" is noise; classic TRT may still be ok.
-  if (ep === "CUDAExecutionProvider" && /\badd\s+cuda\b/i.test(text)) {
-    return false;
-  }
-
-  // Cross-vendor EP noise on NVIDIA GPU targets.
-  if (isNvidiaFamilyEp(ep)) {
-    if (OPEN_VINO_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+openvino/i.test(text)) {
-      return false;
-    }
-    if (QNN_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+qnn/i.test(text)) {
-      return false;
-    }
-  }
+  if (isAddCudaNoise(text, ep)) return false;
+  if (isCrossVendorNoise(text, ep)) return false;
 
   return true;
 }
@@ -172,39 +190,12 @@ function findingText(finding: Finding): string {
  */
 export function isFindingRelevant(finding: Finding, ctx: AuditFilterContext): boolean {
   const text = findingText(finding);
-  const model = ctx.model.displayName || ctx.model.huggingFaceId || "";
   const ep = ctx.hardware.executionProvider;
-  const asr =
-    modelLooksLikeAsr(model) ||
-    ctx.model.hfTask === "automatic-speech-recognition" ||
-    ctx.model.hfTask === "speech-recognition";
-  const llm = modelLooksLikeLlm(model);
 
-  // Speech/ASR advice on non-ASR models.
-  if (!asr && (llm || model.length > 0) && SPEECH_JUNK.test(text)) {
-    return false;
-  }
-
-  // Already on NvTensorRT-RTX: no classic TRT EP, no TensorRTPass / engine-build cards.
-  if (ep === "NvTensorRTRTXExecutionProvider") {
-    if (CLASSIC_TRT.test(text) || TRT_AFTER_CUDA.test(text)) return false;
-    if (TRT_ENGINE_PASS_JUNK.test(text) || ADD_TRT_PASS.test(text)) return false;
-  }
-
-  // Already on CUDA classic: suggesting "add CUDA" is noise.
-  if (ep === "CUDAExecutionProvider" && /\badd\s+cuda\b/i.test(text)) {
-    return false;
-  }
-
-  // Cross-vendor EP noise on NVIDIA GPU targets.
-  if (isNvidiaFamilyEp(ep)) {
-    if (OPEN_VINO_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+openvino/i.test(text)) {
-      return false;
-    }
-    if (QNN_ON_NVIDIA.test(text) && /execution_provider|switch\s+to|use\s+qnn/i.test(text)) {
-      return false;
-    }
-  }
+  if (looksLikeAsrAdvice(text, ctx)) return false;
+  if (isClassicTrtNoise(text, ep)) return false;
+  if (isAddCudaNoise(text, ep)) return false;
+  if (isCrossVendorNoise(text, ep)) return false;
 
   return true;
 }

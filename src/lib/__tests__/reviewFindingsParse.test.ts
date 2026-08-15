@@ -108,6 +108,31 @@ describe("parseAiReviewReply", () => {
     expect(parsed.findings).toEqual([]);
   });
 
+  it("converts topicKey-only documentation actions to explain", () => {
+    const json = JSON.stringify({
+      score: 60,
+      level: "Suboptimal",
+      summary: "Topic only.",
+      findings: [
+        {
+          id: "review-5",
+          title: "Docs topic",
+          description: "No URL available.",
+          severity: "info",
+          evidence: "Topic.",
+          actions: [{ kind: "documentation", label: "Docs", payload: { topicKey: "quantization" } }],
+        },
+      ],
+    });
+
+    const parsed = parseAiReviewReply(json);
+    expect(parsed.findings[0]!.actions).toHaveLength(1);
+    expect(parsed.findings[0]!.actions[0]!).toMatchObject({
+      kind: "explain",
+      payload: { body: expect.stringContaining("quantization") },
+    });
+  });
+
   it("ignores invalid actions and keeps valid ones", () => {
     const json = JSON.stringify({
       score: 60,

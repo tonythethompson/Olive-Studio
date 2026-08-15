@@ -33,13 +33,47 @@ function normalizeSeverity(raw: unknown): FindingSeverity {
   return "info";
 }
 
+function normalizeActionLabel(raw: unknown, fallbackLabel?: string): string {
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.trim().slice(0, 80);
+  }
+  return (fallbackLabel ?? "View details").slice(0, 80);
+}
+
+function parseApplyPatchAction(payload: Record<string, unknown>, label: string): Action | null {
+  const patch = sanitizeChatActionPatch(payload);
+  if (!patch) return null;
+  return { kind: "applyPatch", label, payload: patch };
+}
+
+function parseNavigateAction(payload: Record<string, unknown>, label: string): Action | null {
+  if (typeof payload.targetPanel !== "string" || !payload.targetPanel.trim()) return null;
+  return { kind: "navigate", label, payload: { targetPanel: payload.targetPanel.trim() } };
+}
+
+function parseExplainAction(payload: Record<string, unknown>, label: string): Action | null {
+  if (typeof payload.body !== "string" || !payload.body.trim()) return null;
+  return { kind: "explain", label, payload: { body: payload.body.trim() } };
+}
+
+function parseDocumentationAction(payload: Record<string, unknown>, label: string): Action | null {
+  const url = typeof payload.url === "string" && payload.url.trim() ? payload.url.trim() : undefined;
+  const topicKey = typeof payload.topicKey === "string" && payload.topicKey.trim() ? payload.topicKey.trim() : undefined;
+  if (!url && !topicKey) return null;
+  // topicKey-only documentation is inert (no registered UI listener); surface as an explanation instead.
+  if (!url && topicKey) {
+    return { kind: "explain", label: label || "Learn more", payload: { body: `See documentation topic: ${topicKey}` } };
+  }
+  return { kind: "documentation", label, payload: { url, topicKey } };
+}
+
 /**
  * Validate a single action and coerce it into the shared Action contract.
  *
  * - applyPatch payloads must pass `sanitizeChatActionPatch`.
  * - navigate requires `targetPanel`.
- * - explain requires `body`.
- * - documentation requires `url` or `topicKey`.
+ * - explain requires a non-empty `body`.
+ * - documentation requires a `url`; a `topicKey` alone is converted to `explain` because it has no UI handler.
  */
 function parseAction(raw: unknown, fallbackLabel?: string): Action | null {
   if (!isRecord(raw)) return null;
@@ -48,30 +82,21 @@ function parseAction(raw: unknown, fallbackLabel?: string): Action | null {
   if (kind !== "applyPatch" && kind !== "navigate" && kind !== "explain" && kind !== "documentation") {
     return null;
   }
-  const label = typeof raw.label === "string" && raw.label.trim() ? raw.label.trim().slice(0, 80) : (fallbackLabel ?? "View details").slice(0, 80);
+  const label = normalizeActionLabel(raw.label, fallbackLabel);
   const payload = isRecord(raw.payload) ? raw.payload : {};
 
-  if (kind === "applyPatch") {
-    const patch = sanitizeChatActionPatch(payload);
-    if (!patch) return null;
-    return { kind, label, payload: patch };
+  switch (kind) {
+    case "applyPatch":
+      return parseApplyPatchAction(payload, label);
+    case "navigate":
+      return parseNavigateAction(payload, label);
+    case "explain":
+      return parseExplainAction(payload, label);
+    case "documentation":
+      return parseDocumentationAction(payload, label);
+    default:
+      return null;
   }
-
-  if (kind === "navigate") {
-    if (typeof payload.targetPanel !== "string" || !payload.targetPanel.trim()) return null;
-    return { kind, label, payload: { targetPanel: payload.targetPanel.trim() } };
-  }
-
-  if (kind === "explain") {
-    if (typeof payload.body !== "string") return null;
-    return { kind, label, payload: { body: payload.body.trim() } };
-  }
-
-  // documentation
-  const url = typeof payload.url === "string" && payload.url.trim() ? payload.url.trim() : undefined;
-  const topicKey = typeof payload.topicKey === "string" && payload.topicKey.trim() ? payload.topicKey.trim() : undefined;
-  if (!url && !topicKey) return null;
-  return { kind, label, payload: { url, topicKey } };
 }
 
 function parseFinding(raw: unknown, index: number): Finding | null {
@@ -199,7 +224,7 @@ Schema:
         },
         { "kind": "navigate", "label": "Open settings", "payload": { "targetPanel": "ihv" } },
         { "kind": "explain", "label": "Learn more", "payload": { "body": "markdown explanation" } },
-        { "kind": "documentation", "label": "Docs", "payload": { "topicKey": "quantization" } }
+        { "kind": "documentation", "label": "Docs", "payload": { "url": "https://oliveos.dev/docs/quantization" } }
       ]
     }
   ]
@@ -207,7 +232,7 @@ Schema:
 Rules:
 - findings count (hard): 0 to 3. Prefer fewer. Only include a finding if it is concrete, applyable, and would materially improve THIS workspace.
 - Never invent filler to reach 3. If the pipeline is already solid, return findings:[].
-- Every finding MUST have 1-10 actions. If no safe applyPatch can be produced, include an explain or documentation action; never return an empty actions array.
+- Every finding MUST have 1-10 actions. If no safe applyPatch can be produced, include an explain action or a documentation action with a valid URL; never return an empty actions array.
 - applyPatch payloads must be valid Olive Studio UIState patches. Use only these top-level keys: ihvProvider, cudaVersion, memoryOffload, modelSource, hfModelId, hfDataset, cacheDir. Use only these passes keys: quantization, quantMethod, quantPrecision, conversion, conversionFormat, conversionOpset, conversionInputTargetTypes, pruning, pruningType, pruningMethod, pruningSparsity, peft, peftMethod, splitting, onnxTransforms, gptqBlockSize, gptqGroupSize, gptqDescAct, awqGroupSize, awqDampPercent, awqSym, qatQuantPrecision, qatCalibrateMethod, qatCalibrateSteps, quantPreset.
 - Do not put nested Olive JSON paths like passes.conversion.config.input_model_dtype or systems.local_system.config.accelerators in an applyPatch payload.
 - Relevance rules: Only suggest changes for the Model and execution provider in the workspace. Never mention speech recognition / ASR / Whisper unless the model is an ASR model.

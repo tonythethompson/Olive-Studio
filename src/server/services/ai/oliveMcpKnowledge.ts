@@ -7,6 +7,8 @@
  * retrieval profile so automatic Pipeline Review stays fast and relevant.
  */
 import type { AiWorkspaceContext } from "../../../lib/aiWorkspaceContext.ts";
+import { resolvePassName } from "../../../lib/olivePassNameResolver.ts";
+import type { UIState } from "../../../types.ts";
 import { callOliveMcpTools, type McpToolRequest } from "../mcp/client.ts";
 
 export type RetrievalMeta = {
@@ -215,25 +217,46 @@ function inferModelSizeBucket(
 }
 
 /**
- * Derives up to eight canonical pass names from the workspace recipe or active pass labels.
+ * Derives up to eight canonical pass names from the workspace recipe or active pass toggles.
  *
- * @param workspace - Workspace context containing recipe pass types or active pass labels
+ * Respects the selected quantization/pruning/PEFT method and conversion format so the
+ * review asks the MCP server to validate the actual pass type that would be emitted.
+ *
+ * @param workspace - Workspace context containing recipe pass types or active pass toggles
  * @returns An array of canonical pass names
  */
 function canonicalPassNamesForChain(workspace: AiWorkspaceContext | null | undefined): string[] {
   const fromRecipe = workspace?.recipeSnapshot?.passTypes?.filter(Boolean);
   if (fromRecipe?.length) return fromRecipe.slice(0, 8);
-  return (workspace?.activePassLabels ?? [])
-    .map((label) => {
-      const head = label.split(" ")[0]?.toLowerCase() ?? "";
-      if (head === "conversion") return "OnnxConversion";
-      if (head === "quantization") return "OnnxQuantization";
-      if (head === "pruning") return "OnnxMatMul4Quantizer";
-      if (head === "peft") return "LoRA";
-      if (head === "onnx") return "OnnxModelOptimizer";
-      return label.split(" ")[0] ?? label;
-    })
-    .slice(0, 8);
+  if (!workspace) return [];
+
+  const state = workspace as unknown as UIState;
+  const names: string[] = [];
+  if (state.passes.conversion) {
+    const resolved = resolvePassName("conversion", state);
+    if (resolved) names.push(resolved);
+  }
+  if (state.passes.quantization) {
+    const resolved = resolvePassName("quantization", state);
+    if (resolved) names.push(resolved);
+  }
+  if (state.passes.pruning) {
+    const resolved = resolvePassName("pruning", state);
+    if (resolved) names.push(resolved);
+  }
+  if (state.passes.onnxTransforms) {
+    const resolved = resolvePassName("transformer_opt", state);
+    if (resolved) names.push(resolved);
+  }
+  if (state.passes.splitting) {
+    const resolved = resolvePassName("splitting", state);
+    if (resolved) names.push(resolved);
+  }
+  if (state.passes.peft) {
+    const resolved = resolvePassName("peft", state);
+    if (resolved) names.push(resolved);
+  }
+  return names.slice(0, 8);
 }
 
 /**
@@ -319,13 +342,17 @@ function activePassCategoriesForReview(workspace: AiWorkspaceContext | null | un
 /**
  * Best-effort source_format hint for get_pass_chain.
  *
+ * Only "huggingface" maps unambiguously to the "hf" token used by passes.json.
+ * Azure / local paths are not inspected, so we omit the hint and let the chain
+ * validation fall back to warnings rather than a false incompatibility error.
+ *
  * @param modelSource - The workspace model source
  * @returns A source format string or undefined when unknown.
  */
 function sourceFormatForPassChain(
   modelSource: AiWorkspaceContext["modelSource"] | undefined,
 ): string | undefined {
-  if (modelSource === "huggingface" || modelSource === "azure") return "hf";
+  if (modelSource === "huggingface") return "hf";
   return undefined;
 }
 
