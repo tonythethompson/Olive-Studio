@@ -275,7 +275,12 @@ async function downloadFromCdn(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      writer.write(Buffer.from(value));
+      if (!writer.write(Buffer.from(value))) {
+        await new Promise<void>((resolve, reject) => {
+          writer.once("drain", resolve);
+          writer.once("error", reject);
+        });
+      }
       loaded += value.byteLength;
       onProgress?.(loaded);
     }

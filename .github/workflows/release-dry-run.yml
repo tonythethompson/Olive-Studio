@@ -70,29 +70,37 @@ jobs:
       # ─── Optional version override ────────────────────────────────────
       - name: Apply version override
         if: inputs.version_override != ''
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
         shell: bash
         run: |
-          VER="${{ inputs.version_override }}"
+          VER="$VERSION_OVERRIDE"
+          if [[ ! "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version_override: $VER" >&2
+            exit 1
+          fi
           echo "Overriding version to: $VER"
 
           # package.json
-          node -e "
+          VERSION_OVERRIDE="$VER" node -e "
             const fs = require('fs');
+            const version = process.env.VERSION_OVERRIDE;
             const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-            pkg.version = '$VER';
+            pkg.version = version;
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
           # tauri.conf.json
-          node -e "
+          VERSION_OVERRIDE="$VER" node -e "
             const fs = require('fs');
+            const version = process.env.VERSION_OVERRIDE;
             const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8'));
-            conf.version = '$VER';
+            conf.version = version;
             fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(conf, null, 2) + '\n');
           "
 
           # Cargo.toml
-          sed -i.bak "s/^version = \".*\"/version = \"$VER\"/" src-tauri/Cargo.toml
+          VERSION_OVERRIDE="$VER" python -c 'from pathlib import Path; import os; p=Path("src-tauri/Cargo.toml"); s=p.read_text(); lines=s.splitlines(True); p.write_text("".join((f"version = \\\"{os.environ[\\\"VERSION_OVERRIDE\\\"]}\\\"\\n" if l.startswith("version = ") else l) for l in lines))'
           rm -f src-tauri/Cargo.toml.bak
 
           echo "Versions updated:"

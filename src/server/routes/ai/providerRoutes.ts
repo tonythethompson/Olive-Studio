@@ -22,6 +22,8 @@ import type { ProviderConfig } from "../../types.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
 import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 import { fetchLiveModelCatalog } from "./modelCatalog.ts";
+import { ensureGenaiVenv, isGenaiVenvReady } from "../../services/genai/venv.ts";
+import { downloadModel, getModelStatus, DEFAULT_GENAI_MODEL } from "../../services/genai/modelDownload.ts";
 
 /** Local openai-compat endpoints may omit API keys for model listing. */
 function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): boolean {
@@ -147,6 +149,20 @@ function resolveProviderCredentials(
 }
 
 export function mountProviderRoutes(router: Router): void {
+  router.get("/ai/genai/status", (_req, res) => {
+    return res.json({ venvReady: isGenaiVenvReady(), model: getModelStatus(DEFAULT_GENAI_MODEL) });
+  });
+
+  router.post("/ai/genai/setup", authActionRateLimit, async (_req, res) => {
+    const result = await ensureGenaiVenv((line) => console.info(line));
+    return res.status(result.ok ? 200 : 500).json(result);
+  });
+
+  router.post("/ai/genai/download", authActionRateLimit, async (_req, res) => {
+    const result = await downloadModel(DEFAULT_GENAI_MODEL);
+    return res.status(result.ok ? 200 : 500).json(result);
+  });
+
   router.get("/ai/provider", (_req, res) => {
     const envCredentials = envCredentialsPayload();
     const runtime = getRuntimeAiProvider();

@@ -34,7 +34,11 @@ export function isGenaiVenvReady(): boolean {
 
 /** Path to the inference sidecar script. */
 export function sidecarScriptPath(): string {
-  return fileURLToPath(new URL("./inference_sidecar.py", import.meta.url));
+  const bundled = fileURLToPath(new URL("./inference_sidecar.py", import.meta.url));
+  if (fs.existsSync(bundled)) return bundled;
+  const resource = path.join(process.resourcesPath ?? "", "genai", "inference_sidecar.py");
+  if (fs.existsSync(resource)) return resource;
+  return bundled;
 }
 
 // ─── Venv Setup ───────────────────────────────────────────────────────────────

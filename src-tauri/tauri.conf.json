@@ -66,6 +66,7 @@
     ],
     "resources": {
       "../dist": "dist",
+      "../src/server/services/genai/inference_sidecar.py": "genai/inference_sidecar.py",
       "../scripts": "scripts",
       "../olive-mcp-server/olive_mcp_server": "olive-mcp-server/olive_mcp_server",
       "../olive-mcp-server/schemas": "olive-mcp-server/schemas",

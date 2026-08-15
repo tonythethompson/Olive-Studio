@@ -108,7 +108,7 @@ async function call(
       }
     }
 
-    sidecar.onResponse(handleResponse);
+    unsubscribe = sidecar.onResponse(handleResponse);
 
     // Send the inference request
     sidecar.send({

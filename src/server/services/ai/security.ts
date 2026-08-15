@@ -81,6 +81,10 @@ export function isPrivateOrLocalHostname(hostname: string): boolean {
 export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): string | undefined {
   const trimmed = rawBaseUrl?.trim();
   if (!trimmed) return undefined;
+  if (provider === "bedrock") {
+    if (!/^[a-z]{2}-[a-z]+-\d+$/.test(trimmed)) throw new Error("Invalid AWS Bedrock region");
+    return trimmed;
+  }
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
