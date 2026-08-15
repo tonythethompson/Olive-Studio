@@ -118,11 +118,25 @@ export async function listPublicModels(): Promise<S3ModelEntry[] | null> {
 // ─── Push (Upload) ────────────────────────────────────────────────────────────
 
 /**
+ * Resolves the S3 key for a push. destKey is treated as prefix-relative and
+ * is always placed under the configured OLIVE_S3_PREFIX so pushed models stay
+ * discoverable by listUserModels.
+ */
+function resolveDestKey(prefix: string, fallbackName: string, destKey?: string): string {
+  const relative = (destKey ?? fallbackName).trim().replace(/^\/+/, "");
+  const segments = relative.split("/");
+  if (!relative || segments.some((segment) => segment === "" || segment === "..")) {
+    throw new Error("Invalid destKey: must be a relative key under the configured S3 prefix.");
+  }
+  return `${prefix}${relative}`;
+}
+
+/**
  * Uploads a local file to the user's private S3 bucket.
  * Uses multipart upload for large files (>5MB automatically).
  *
  * @param localPath - Absolute path to the file on disk.
- * @param destKey - Optional custom key. Defaults to prefix + basename.
+ * @param destKey - Optional custom key, relative to the configured prefix.
  * @param onProgress - Optional progress callback.
  * @returns The full S3 key of the uploaded object.
  */
@@ -137,7 +151,7 @@ export async function pushModel(
   const stat = fs.statSync(localPath);
   if (!stat.isFile()) throw new Error(`Not a file: ${localPath}`);
 
-  const key = destKey || `${cfg.prefix}${path.basename(localPath)}`;
+  const key = resolveDestKey(cfg.prefix, path.basename(localPath), destKey);
   const client = createS3Client(cfg.region);
   const fileStream = fs.createReadStream(localPath);
 

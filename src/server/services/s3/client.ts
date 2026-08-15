@@ -67,9 +67,11 @@ export function createS3Client(region: string): S3Client {
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
 
   if (accessKeyId && secretAccessKey) {
+    // Assumed-role / temporary credentials require the session token.
+    const sessionToken = process.env.AWS_SESSION_TOKEN?.trim() || undefined;
     return new S3Client({
       region,
-      credentials: { accessKeyId, secretAccessKey },
+      credentials: { accessKeyId, secretAccessKey, sessionToken },
     });
   }
 

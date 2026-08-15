@@ -135,7 +135,9 @@ export async function ensureGenaiVenv(
     const installResult = await execFileAsync(
       genaiPythonPath(),
       ["-m", "pip", "install", "--no-cache-dir", "onnxruntime-genai"],
-      { timeout: 300_000 }, // 5 minutes for large wheels
+      // pip progress output can exceed execFile's 1 MiB default buffer, which
+      // would fail the call even when the install itself succeeded.
+      { timeout: 300_000, maxBuffer: 16 * 1024 * 1024 }, // 5 minutes for large wheels
     );
     if (installResult.stderr && installResult.stderr.includes("ERROR")) {
       onLine(`[genai] pip warnings: ${installResult.stderr.slice(0, 200)}`);

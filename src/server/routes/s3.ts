@@ -156,8 +156,12 @@ export function mountS3Routes(router: Router): void {
       return res.status(400).json({ error: destValidation.error });
     }
     const localPath = path.join(destDir, basename);
+    // Request-owned temp file: concurrent pulls can never clobber each other's
+    // active download, and the final file only appears once fully downloaded.
+    const tmpPath = `${localPath}.${process.pid}-${Date.now()}.tmp`;
 
-    // Don't overwrite existing files without explicit intent
+    // Fast-fail for the common case; the exclusive publish below is the
+    // authoritative guard against concurrent pulls.
     if (fs.existsSync(localPath)) {
       return res.status(409).json({
         error: `File already exists: ${basename}`,
@@ -167,7 +171,20 @@ export function mountS3Routes(router: Router): void {
     }
 
     try {
-      await pullModel(key, localPath, source);
+      await pullModel(key, tmpPath, source);
+      try {
+        // COPYFILE_EXCL fails if the destination appeared in the meantime.
+        fs.copyFileSync(tmpPath, localPath, fs.constants.COPYFILE_EXCL);
+      } catch (err: unknown) {
+        if (!(err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "EEXIST")) {
+          throw err;
+        }
+        return res.status(409).json({
+          error: `File already exists: ${basename}`,
+          localPath,
+          hint: "Delete the existing file or specify a different destDir.",
+        });
+      }
       const stat = fs.statSync(localPath);
       return res.json({
         ok: true,
@@ -176,12 +193,16 @@ export function mountS3Routes(router: Router): void {
         source,
       });
     } catch (err: unknown) {
-      // Clean up partial downloads
+      // Clean up only this request's temp file.
       try {
-        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
       } catch { /* ignore cleanup failure */ }
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ error: `Download failed: ${msg}` });
+    } finally {
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch { /* already promoted or removed */ }
     }
   });
 }
