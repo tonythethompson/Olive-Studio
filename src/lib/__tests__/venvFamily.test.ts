@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   emptyFamilyFlags,
+  KNOWN_IHV_PROVIDERS,
   mandatoryFamilyForProvider,
   normalizeIhvProvider,
   resolveRequiredFamilies,
@@ -108,5 +109,21 @@ describe("venvFamily policy", () => {
     expect(resolveRequiredFamilies(["CUDAExecutionProvider"])).toEqual(["cuda"]);
     expect(resolveRequiredFamilies(["WebGpuExecutionProvider"])).toEqual([]);
     expect(resolveRequiredFamilies([])).toEqual([]);
+  });
+
+  it("maps MIGraphXExecutionProvider to mandatory family 'default'", () => {
+    expect(mandatoryFamilyForProvider("MIGraphXExecutionProvider")).toBe("default");
+  });
+
+  it("maps DnnlExecutionProvider to mandatory family null", () => {
+    expect(mandatoryFamilyForProvider("DnnlExecutionProvider")).toBeNull();
+  });
+
+  it("includes MIGraphXExecutionProvider in KNOWN_IHV_PROVIDERS", () => {
+    expect(KNOWN_IHV_PROVIDERS).toContain("MIGraphXExecutionProvider");
+  });
+
+  it("includes DnnlExecutionProvider in KNOWN_IHV_PROVIDERS", () => {
+    expect(KNOWN_IHV_PROVIDERS).toContain("DnnlExecutionProvider");
   });
 });

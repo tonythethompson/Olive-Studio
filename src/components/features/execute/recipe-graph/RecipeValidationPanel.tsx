@@ -54,6 +54,10 @@ function getHardwareTargetFromProvider(provider: IHVProvider): string {
       return "Qualcomm Snapdragon NPU";
     case "ROCMExecutionProvider":
       return "AMD MI300X / ROCm";
+    case "MIGraphXExecutionProvider":
+      return "AMD Instinct (MIGraphX)";
+    case "DnnlExecutionProvider":
+      return "Intel CPU (oneDNN)";
     case "WebGpuExecutionProvider":
       return "WebGPU (Browser)";
     case "CoreMLExecutionProvider":
@@ -267,7 +271,7 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     prevIssueCountRef.current = count;
 
     const logLines = criticalIssues.map((i) => `[VALIDATION] ${i.title}: ${i.description}`);
-    void fetchDiagnostic(logLines).catch(() => {});
+    void fetchDiagnostic(logLines).catch(() => { });
   }, [validation.issues, modelSelected, fetchDiagnostic, clearDiagnostic]);
 
   // Hardware-specific parameter validation (synchronous, cheap — runs every render with state)
@@ -371,11 +375,10 @@ export function RecipeValidationPanel({ state, setState }: RecipeValidationPanel
     <div
       id="recipe-validation-panel"
       data-testid="recipe-validation-panel"
-      className={`rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden transition-all duration-300 ease-out ${
-        emphasized
+      className={`rounded-lg border border-slate-700 bg-slate-900/80 overflow-hidden transition-all duration-300 ease-out ${emphasized
           ? "ring-2 ring-sky-400 ring-offset-4 ring-offset-slate-950 bg-sky-400/15 border-sky-400 shadow-[0_0_24px_rgba(56,189,248,0.35)]"
           : ""
-      }`}
+        }`}
     >
       {/* Header */}
       <div className="w-full flex items-center justify-between p-2 hover:bg-slate-800/50 transition-colors">

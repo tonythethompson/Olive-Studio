@@ -1,6 +1,6 @@
 import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
-import { getProviderAvailabilityBlock, type HardwareProbeResult } from "@/lib/hardwareProbe";
+import { getProviderAvailabilityBlock, type HardwareProbeResult, type GpuInfo } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod, hasOnnxGraphProducer } from "@/lib/oliveRecipeBuilder";
 import { isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
 import { assessQnnRecipeReadiness, isQnnIhvProvider, type QnnReadinessIssue } from "@/lib/qnnReadiness";
@@ -101,14 +101,40 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
 
   add(
     passes.conversion &&
-      passes.conversionFormat === "openvino" &&
-      !isConversionFormatAllowed("openvino", providerId),
+    passes.conversionFormat === "openvino" &&
+    !isConversionFormatAllowed("openvino", providerId),
     {
       passKey: "conversionFormat",
       passName: "OpenVINO IR Conversion",
       reason: "OpenVINO IR requires the Intel OpenVINO execution provider.",
       severity: "critical",
       autofix: () => ({ conversionFormat: "onnx" }),
+    },
+  );
+
+  add(
+    passes.conversion &&
+    passes.conversionFormat === "tensorrt" &&
+    !isConversionFormatAllowed("tensorrt", providerId),
+    {
+      passKey: "conversionFormat",
+      passName: "TensorRT Conversion",
+      reason: "TensorRT conversion and quantization passes require an NVIDIA TensorRT or CUDA execution provider.",
+      severity: "critical",
+      autofix: () => ({ conversionFormat: "onnx" }),
+    },
+  );
+
+  add(
+    passes.qairtPipeline &&
+    providerId !== "QNNExecutionProvider" &&
+    providerId !== "QnnAbiExecutionProvider",
+    {
+      passKey: "qairtPipeline",
+      passName: "QairtPipeline",
+      reason: "QairtPipeline is a Qualcomm QNN-only pass and is incompatible with the selected execution provider.",
+      severity: "critical",
+      autofix: () => ({ qairtPipeline: false }),
     },
   );
 
@@ -154,8 +180,8 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
 
   add(
     passes.quantization &&
-      (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
-      !isQuantMethodAllowed(passes.quantMethod, providerId),
+    (passes.quantMethod === "spinquant" || passes.quantMethod === "quarot") &&
+    !isQuantMethodAllowed(passes.quantMethod, providerId),
     {
       passKey: "quantMethod",
       passName: passes.quantMethod === "spinquant" ? "SpinQuant Quantization" : "QuaRot Quantization",
@@ -205,6 +231,63 @@ export function getProviderConflicts(providerId: IHVProvider, passes: UIState["p
     severity: "warning",
     autofix: () => ({ peft: false }),
   });
+
+  // ─── DnnlExecutionProvider (Intel oneDNN) ───────────────────────────────────
+  if (providerId === "DnnlExecutionProvider") {
+    add(passes.conversion && passes.conversionFormat === "tensorrt", {
+      passKey: "conversionFormat",
+      passName: "TensorRT Conversion",
+      reason: "TensorRT conversion targets NVIDIA GPUs and is incompatible with Intel oneDNN CPU inference.",
+      severity: "critical",
+      autofix: () => ({ conversionFormat: "onnx" }),
+    });
+
+    add(passes.qairtPipeline, {
+      passKey: "qairtPipeline",
+      passName: "QairtPipeline",
+      reason: "QairtPipeline compiles models for Qualcomm Snapdragon NPUs and is incompatible with Intel oneDNN.",
+      severity: "critical",
+      autofix: () => ({ qairtPipeline: false }),
+    });
+
+    add(passes.simplifiedLayerNormToRMSNorm, {
+      passKey: "simplifiedLayerNormToRMSNorm",
+      passName: "SimplifiedLayerNormToRMSNorm",
+      reason:
+        "SimplifiedLayerNormToRMSNorm is a QNN-targeted graph surgery for Snapdragon NPUs and is incompatible with Intel oneDNN.",
+      severity: "critical",
+      autofix: () => ({ simplifiedLayerNormToRMSNorm: false }),
+    });
+
+    add(passes.mobiusBuilder, {
+      passKey: "mobiusBuilder",
+      passName: "MobiusBuilder",
+      reason:
+        "MobiusBuilder produces ORT GenAI composite packages targeting CPU/CUDA runtimes, not the oneDNN execution provider.",
+      severity: "critical",
+      autofix: () => ({ mobiusBuilder: false }),
+    });
+
+    const ONEDNN_BLOCKED_QUANT_METHODS = ["awq", "gptq", "hqq", "spinquant", "quarot"] as const;
+    const blockedMethod = passes.quantMethod as (typeof ONEDNN_BLOCKED_QUANT_METHODS)[number];
+    add(passes.quantization && passes.quantMethod && ONEDNN_BLOCKED_QUANT_METHODS.includes(blockedMethod), {
+      passKey: "quantMethod",
+      passName: `${(passes.quantMethod ?? "").toUpperCase()} Quantization`,
+      reason:
+        "Intel oneDNN only supports INT8 static quantization (OnnxStaticQuantization). PyTorch-native methods (AWQ, GPTQ, HQQ, SpinQuant, QuaRoT) require GPU acceleration.",
+      severity: "critical",
+      autofix: () => ({ quantMethod: "ptq" }),
+    });
+
+    add(passes.quantization && passes.quantPrecision === "fp16", {
+      passKey: "quantPrecision",
+      passName: "OnnxFloatToFloat16",
+      reason:
+        "BF16/FP16 inference on Intel oneDNN may be significantly degraded without AMX-capable hardware (Sapphire Rapids or newer). INT8 static quantization is recommended for best oneDNN throughput.",
+      severity: "warning",
+      autofix: () => ({}),
+    });
+  }
 
   return conflicts;
 }
@@ -272,8 +355,8 @@ export function prepareProviderChange(
     ihvProvider: providerId,
     ...(providerId === "OpenVINOExecutionProvider"
       ? {
-          openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
-        }
+        openvinoTargetDevice: pickOpenVinoTargetFromDevices(probe?.openvino?.devices),
+      }
       : {}),
     ...(hasCritical ? { passes: applyProviderConflictAutofixes(providerId, state.passes) } : {}),
   };
@@ -483,6 +566,17 @@ const CROSS_PASS_RULES: CrossPassRule[] = [
     affectedTabs: ["conversion"],
     affectedPasses: ["mobiusBuilder", "provider"],
     actionLabel: "Disable MobiusBuilder",
+  },
+  {
+    ...autoCoercion("dnnl-gpu-quant-method-blocked"),
+    autoCoerce: true,
+    severity: "critical",
+    title: "PyTorch-native quantization incompatible with oneDNN",
+    description:
+      "Intel oneDNN only supports INT8 static quantization (OnnxStaticQuantization). PyTorch-native GPU methods (AWQ, GPTQ, HQQ, SpinQuant, QuaRoT) require CUDA/ROCm acceleration unavailable on CPU-only providers.",
+    affectedTabs: ["quantization"],
+    affectedPasses: ["quantMethod", "provider"],
+    actionLabel: "Switch to INT8 Static Quantization",
   },
 ];
 
@@ -881,11 +975,121 @@ export function getLocalExecutionIssues(
   return [];
 }
 
+// ─── ROCm Consumer/Datacenter Differentiation ────────────────────────────
+
+/** RDNA 1/2/3 consumer ISA families (gfx10xx, gfx103x, gfx11xx). */
+const RDNA_CONSUMER_ISA = /^gfx1[0-3]/;
+/** RDNA 4 ISA family (gfx12xx — experimental ROCm support). */
+const RDNA4_ISA = /^gfx12/;
+/** CDNA datacenter ISA family (gfx9xx — full vendor ROCm stack). */
+const CDNA_ISA = /^gfx9/;
+
 /**
- * Removes duplicate pipeline issues, retaining the critical issue when duplicate severities differ.
+ * Determines whether a GPU ISA belongs to a consumer RDNA architecture
+ * (as opposed to datacenter CDNA Instinct cards with full ROCm support).
+ */
+function isConsumerRdna(isaFamily: string): boolean {
+  return RDNA_CONSUMER_ISA.test(isaFamily) || RDNA4_ISA.test(isaFamily);
+}
+
+/**
+ * Validates ROCm-specific hardware differentiation between consumer Radeon
+ * (RDNA) and datacenter Instinct (CDNA) GPUs. Produces PipelineIssues for
+ * known limitations of consumer RDNA architectures under ROCm.
  *
- * @param issues - The pipeline issues to deduplicate
- * @returns The deduplicated pipeline issues
+ * Skips differentiation entirely when the probe lacks `isaFamily` data,
+ * falling back to existing provider-level ROCm rules (Requirement 12.4).
+ */
+export function validateRocmConsumerHardware(
+  state: UIState,
+  probe?: HardwareProbeResult | null,
+): PipelineIssue[] {
+  if (state.ihvProvider !== "ROCMExecutionProvider") return [];
+  if (!probe?.rocm?.gpus?.length) return [];
+
+  // Find the first GPU with an ISA family identifier
+  const gpuWithIsa: GpuInfo | undefined = probe.rocm.gpus.find((g) => g.isaFamily);
+  if (!gpuWithIsa?.isaFamily) return []; // Requirement 12.4: skip if no architecture field
+
+  const isa = gpuWithIsa.isaFamily;
+  const issues: PipelineIssue[] = [];
+  const { passes } = state;
+
+  // ── Requirement 12.1: RDNA 1/2/3 limited consumer support ──
+  if (RDNA_CONSUMER_ISA.test(isa)) {
+    issues.push({
+      id: "rocm-rdna-consumer-limited",
+      severity: "warning",
+      title: "Consumer RDNA GPU detected",
+      description:
+        "ROCm support on consumer RDNA GPUs is limited; some passes may fail at runtime.",
+      affectedPasses: ["provider"],
+    });
+  }
+
+  // ── Requirement 12.2: RDNA 4 experimental support ──
+  if (RDNA4_ISA.test(isa)) {
+    issues.push({
+      id: "rocm-rdna4-experimental",
+      severity: "info",
+      title: "RDNA 4 experimental ROCm support",
+      description:
+        "RDNA 4 ROCm support is experimental. Prefer GPTQ over AWQ for better compatibility.",
+      affectedPasses: ["provider"],
+    });
+  }
+
+  // ── Requirement 12.3: ROCm + AWQ recommendation to use GPTQ ──
+  if (passes.quantization && passes.quantMethod === "awq" && isConsumerRdna(isa)) {
+    issues.push({
+      id: "rocm-awq-gptq-recommendation",
+      severity: "info",
+      title: "Consider GPTQ over AWQ on AMD ROCm",
+      description:
+        "GPTQ has better operator coverage on AMD ROCm GPUs. Consider using GPTQ for improved compatibility.",
+      affectedPasses: ["quantization", "provider"],
+    });
+  }
+
+  // ── Requirement 12.5: Structured 2:4 sparsity on non-CDNA ──
+  if (passes.pruning && passes.pruningType === "structured" && !CDNA_ISA.test(isa)) {
+    issues.push({
+      id: "rocm-structured-sparsity-non-cdna",
+      severity: "critical",
+      title: "Structured sparsity unavailable on consumer RDNA",
+      description:
+        "Structured sparsity unavailable on non-CDNA architectures.",
+      affectedPasses: ["pruning", "provider"],
+      actionLabel: "Switch to unstructured",
+      autofix: { passes: { ...passes, pruningType: "unstructured" } },
+    });
+  }
+
+  // ── Requirement 12.5: FP16 accumulation on consumer RDNA ──
+  if (
+    passes.quantization &&
+    passes.quantPrecision === "fp16" &&
+    isConsumerRdna(isa)
+  ) {
+    issues.push({
+      id: "rocm-fp16-accumulation-consumer-rdna",
+      severity: "critical",
+      title: "FP16 accumulation unsupported on consumer RDNA",
+      description:
+        "Mixed-precision FP16 accumulation unsupported on consumer RDNA.",
+      affectedPasses: ["quantization", "provider"],
+      actionLabel: "Switch to INT8",
+      autofix: { passes: { ...passes, quantPrecision: "int8" } },
+    });
+  }
+
+  return issues;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Collapse duplicate issues, keeping the highest severity when ids collide.
  */
 function dedupeIssues(issues: PipelineIssue[]): PipelineIssue[] {
   const byId = new Map<string, PipelineIssue>();
@@ -916,6 +1120,7 @@ export function getPipelineValidation(
     ...getCrossPassIssues(state),
     ...getProviderIssues(state),
     ...getProviderHardwareIssues(state, options?.hardwareProbe),
+    ...validateRocmConsumerHardware(state, options?.hardwareProbe),
     ...getQnnRecipeReadinessIssues(state, recipe, options?.hardwareProbe),
     ...getLocalExecutionIssues(state, options?.forLocalExecution, options?.hardwareProbe),
     ...getAdvisoryIssues(state),
@@ -963,8 +1168,8 @@ export function applyIssueAutofix(state: UIState, issue: PipelineIssue): Partial
 export function sanitizePipelineState(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
-    state.openvinoTargetDevice === "GPU" ||
-    state.openvinoTargetDevice === "NPU"
+      state.openvinoTargetDevice === "GPU" ||
+      state.openvinoTargetDevice === "NPU"
       ? state.openvinoTargetDevice
       : "CPU";
 

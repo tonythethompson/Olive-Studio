@@ -19,6 +19,10 @@ export interface ProviderCatalogEntry {
   icon: LucideIcon;
   /** Detailed tooltip information for the provider card */
   tooltip: ProviderTooltipInfo;
+  /** Optional group heading for visually grouping related providers (e.g. "Qualcomm Snapdragon"). */
+  group?: string;
+  /** Optional workflow subtitle displayed beneath the provider name to differentiate variants. */
+  workflowSubtitle?: string;
 }
 
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -58,7 +62,7 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     // providerCatalog.test.ts guard test enforces this.
     name: "NVIDIA TensorRT RTX",
     shortName: "TRT RTX",
-    desc: "JIT TensorRT engines via tensorrt-rtx — no full SDK. Runs on NVIDIA GPUs with compute capability ≥ 7.5 (Turing / GeForce RTX 20xx or newer; primary target Ampere/Ada/Blackwell consumer RTX).",
+    desc: "JIT TensorRT engines via tensorrt-rtx for NVIDIA GPUs ≥ SM 7.5 (Turing+). No full SDK needed.",
     icon: Layers,
     tooltip: {
       requirements:
@@ -80,7 +84,7 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     // surfaces.
     name: "NVIDIA TensorRT",
     shortName: "TensorRT",
-    desc: "Full TensorRT 10.x SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs ≥ compute capability 7.5 (Turing / GeForce RTX 20xx or newer; also Quadro, Datacenter, H100/B100).",
+    desc: "Full TensorRT 10.x SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs ≥ SM 7.5 (Turing+).",
     icon: Layers,
     tooltip: {
       requirements:
@@ -125,12 +129,30 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     shortName: "QNN",
     desc: "Hexagon NPU acceleration on Snapdragon edge and mobile devices.",
     icon: CpuIcon,
+    group: "Qualcomm Snapdragon",
+    workflowSubtitle: "Multi-pass plugin workflow (OnnxConversion → quantization → QNN compilation)",
     tooltip: {
       requirements:
         "Qualcomm Snapdragon 8 Gen 2/3 or newer with Hexagon NPU. Snapdragon Dev Kit or Android device.",
       quantMethods: "AWQ INT4 with symmetric quantization (awqSym=true), GPTQ INT4.",
       recommendation:
         "AWQ INT4 with awqSym=true is required for correct QNN inference. INT8 may cause excessive accuracy drops (5-10%).",
+    },
+  },
+  {
+    id: "QnnAbiExecutionProvider",
+    name: "Qualcomm QNN ABI (QairtPipeline)",
+    shortName: "QNN ABI",
+    desc: "Single-pass QairtPipeline direct compilation for Snapdragon NPU context binaries.",
+    icon: CpuIcon,
+    group: "Qualcomm Snapdragon",
+    workflowSubtitle: "Single-pass QairtPipeline (direct model-to-context-binary)",
+    tooltip: {
+      requirements:
+        "Snapdragon 8 Gen 2/3 or newer SoC. Windows ARM64 (on-device NPU) or Windows x64 (ahead-of-time preparation).",
+      quantMethods: "INT4 via QairtPipeline built-in quantization, INT8.",
+      recommendation:
+        "Use QNN ABI for new Snapdragon projects packaging model + runtime into a deployable context binary. Use standard QNN for existing pipelines needing individual pass configuration.",
     },
   },
   {
@@ -144,6 +166,34 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
       quantMethods: "GPTQ INT4/INT8 (recommended), PTQ INT8. AWQ has limited ROCm support.",
       recommendation:
         "GPTQ provides the best ROCm compatibility and performance. Avoid AWQ — use GPTQ INT4 for optimal VRAM efficiency on AMD GPUs.",
+    },
+  },
+  {
+    id: "MIGraphXExecutionProvider",
+    name: "AMD MIGraphX",
+    shortName: "MIGraphX",
+    desc: "Graph-compiled inference on AMD Instinct and supported Radeon GPUs via MIGraphX.",
+    icon: Layers,
+    tooltip: {
+      requirements:
+        "AMD Instinct (MI100+) or Radeon RX 7xxx / RX 9xxx (RDNA3/RDNA4) — Linux x86_64 with ROCm 6.1+ (RDNA3) or ROCm 7.x (RDNA4).",
+      quantMethods: "FP16 (recommended), INT8 static quantization.",
+      recommendation:
+        "Use FP16 for maximum throughput. INT8 provides additional compression with minimal accuracy loss for batch inference workloads.",
+    },
+  },
+  {
+    id: "DnnlExecutionProvider",
+    name: "Intel oneDNN (DNNL)",
+    shortName: "oneDNN",
+    desc: "Intel CPU optimization with AVX-512/AMX instruction set acceleration.",
+    icon: CpuIcon,
+    tooltip: {
+      requirements:
+        "Intel CPU with AVX2 (minimum). AVX-512/AMX recommended for best performance.",
+      quantMethods: "INT8 static quantization, BF16 (AMX required for full BF16 throughput).",
+      recommendation:
+        "Use INT8 static quantization for best oneDNN throughput. BF16 yields smaller models but requires AMX-capable hardware (Sapphire Rapids+).",
     },
   },
   {

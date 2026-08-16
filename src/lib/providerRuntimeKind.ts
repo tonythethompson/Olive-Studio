@@ -31,6 +31,8 @@ export function getProviderRuntimeKind(provider: IHVProvider): ProviderRuntimeKi
     case "DmlExecutionProvider":
     case "OpenVINOExecutionProvider":
     case "ROCMExecutionProvider":
+    case "MIGraphXExecutionProvider":
+    case "DnnlExecutionProvider":
       return "local";
     default: {
       const _exhaustive: never = provider;

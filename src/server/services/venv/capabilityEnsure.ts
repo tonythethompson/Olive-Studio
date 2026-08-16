@@ -9,6 +9,7 @@ import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
 import { ensureCoremltools } from "../olive/coreml.ts";
+import { ensureMigraphx } from "../olive/migraphx.ts";
 import { isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { isExportTargetProvider, isPlatformLocalProvider } from "../../../lib/providerRuntimeKind.ts";
@@ -48,6 +49,80 @@ function qnnCapabilityForUsage(
   if (usage === "preparation") return status.capabilities.qnnPreparation;
   // Fail-closed: inference must not fall back to preparation capability.
   return status.capabilities.qnnInference;
+}
+
+/**
+ * Resolve providers that have no capability slot in the status map:
+ * - export targets are rejected upstream in ensureProviderCapability
+ * - platform-local (CoreML/VitisAI) must appear in this family's ORT providers
+ * - ROCm is best-effort on the default family base
+ * - oneDNN / MIGraphX are verified against the probed ORT providers list
+ */
+function resolveMissingCapabilitySlot(
+  provider: IHVProvider,
+  family: VenvFamily,
+  ortProviders: string[],
+): EnsureProviderCapabilityResult {
+  if (isPlatformLocalProvider(provider)) {
+    const python = getVenvPython(family);
+    if (!ortProviders.includes(provider)) {
+      return {
+        ok: false,
+        error: `${provider} is not registered in ${humanFamilyLabel(family)} ORT; export the recipe or run on a host where the hardware probe detects it`,
+        family,
+        python,
+      };
+    }
+    return { ok: true, family, python };
+  }
+  if (provider === "ROCMExecutionProvider") {
+    return { ok: true, family, python: getVenvPython(family) };
+  }
+
+  // oneDNN: bundled in the default ORT wheel — no separate install needed.
+  // Verify EP availability via the probed ORT providers list (already fetched
+  // within the ORT probe timeout). If absent, the wheel lacks DNNL support.
+  if (provider === "DnnlExecutionProvider") {
+    const python = getVenvPython(family);
+    if (ortProviders.includes("DnnlExecutionProvider")) {
+      return { ok: true, family, python };
+    }
+    return {
+      ok: false,
+      error:
+        "DnnlExecutionProvider is not registered by the installed ORT wheel. " +
+        "Reinstall onnxruntime with oneDNN/DNNL support enabled (e.g. the official onnxruntime wheel built with --use_dnnl).",
+      family,
+      python,
+    };
+  }
+
+  // MIGraphX: the migraphx pip package installs its own ORT build that
+  // registers MIGraphXExecutionProvider. Verify the registration exactly like
+  // DNNL above — the package import succeeding is not enough, the EP must be
+  // present in the probed ORT providers list.
+  if (provider === "MIGraphXExecutionProvider") {
+    const python = getVenvPython(family);
+    if (ortProviders.includes("MIGraphXExecutionProvider")) {
+      return { ok: true, family, python };
+    }
+    return {
+      ok: false,
+      error:
+        "MIGraphXExecutionProvider is not registered by the installed ORT wheel. " +
+        "MIGraphX requires Linux x86_64 with the ROCm stack and a supported AMD GPU — " +
+        "Instinct (CDNA) or Radeon RDNA3/RDNA4 (RX 7xxx / RX 9xxx); RDNA1/2 and Vega are not supported. " +
+        "Reinstall the migraphx package in the default runtime and re-run the hardware probe.",
+      family,
+      python,
+    };
+  }
+  return {
+    ok: false,
+    error: `Provider ${provider} has no capability slot in ${humanFamilyLabel(family)} (status mismatch)`,
+    family,
+    python: getVenvPython(family),
+  };
 }
 
 /**
@@ -99,32 +174,11 @@ export async function ensureProviderCapability(
     ? qnnCapabilityForUsage(status, usage)
     : capabilityForProvider(status, provider);
 
-  // Providers without a capability slot:
-  // - export targets are rejected above
-  // - platform-local (CoreML/VitisAI) must appear in this family's ORT providers
-  // - ROCm is best-effort on the default family base
+  // Providers without a capability slot are resolved by the dedicated handler
+  // (platform-local ORT registration check, ROCm best-effort, oneDNN/MIGraphX
+  // EP verification against the probed ORT providers list).
   if (cap === undefined) {
-    if (isPlatformLocalProvider(provider)) {
-      const python = getVenvPython(family);
-      if (!status.ortProviders.includes(provider)) {
-        return {
-          ok: false,
-          error: `${provider} is not registered in ${humanFamilyLabel(family)} ORT; export the recipe or run on a host where the hardware probe detects it`,
-          family,
-          python,
-        };
-      }
-      return { ok: true, family, python };
-    }
-    if (provider === "ROCMExecutionProvider") {
-      return { ok: true, family, python: getVenvPython(family) };
-    }
-    return {
-      ok: false,
-      error: `Provider ${provider} has no capability slot in ${humanFamilyLabel(family)} (status mismatch)`,
-      family,
-      python: getVenvPython(family),
-    };
+    return resolveMissingCapabilitySlot(provider, family, status.ortProviders);
   }
   if (!cap.usable) {
     return {
@@ -187,6 +241,16 @@ async function installCapabilityPackages(
         const result = await ensureTensorRtRtx(onLine);
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }
+
+      // MIGraphX: Linux x64 only — ROCm + migraphx package
+      case "MIGraphXExecutionProvider": {
+        const result = await ensureMigraphx(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
+
+      // oneDNN: bundled in default ORT wheel — no additional install needed
+      case "DnnlExecutionProvider":
+        return { ok: true };
 
       default: {
         const _exhaustive: never = provider;

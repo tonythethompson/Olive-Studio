@@ -200,10 +200,12 @@ export function isGpuProvider(provider: IHVProvider): boolean {
     case "NvTensorRTRTXExecutionProvider":
     case "TensorrtExecutionProvider":
     case "ROCMExecutionProvider":
+    case "MIGraphXExecutionProvider":
     case "WebGpuExecutionProvider":
     case "DmlExecutionProvider":
       return true;
     case "CPUExecutionProvider":
+    case "DnnlExecutionProvider":
     case "OpenVINOExecutionProvider":
     case "QNNExecutionProvider":
     case "QnnAbiExecutionProvider":

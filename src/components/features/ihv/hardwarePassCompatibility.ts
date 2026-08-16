@@ -25,6 +25,10 @@ export const QUANT_METHOD_BY_PASS_ID: Partial<
   >
 > = {
   "awq-quantization": "awq",
+  "gptq-quantization": "gptq",
+  "spinquant-quantization": "spinquant",
+  "quarot-quantization": "quarot",
+  "hqq-quantization": "hqq",
   "qat-quantization": "qat",
 };
 
@@ -43,6 +47,23 @@ export interface OptimizationPassValidation {
 
 export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
   {
+    id: "onnx-conversion",
+    name: "ONNX Model Conversion",
+    category: "Conversion",
+    description:
+      "Converts PyTorch, TensorFlow, or JAX models to the ONNX format for cross-platform inference.",
+    isUnsupported: () => false,
+    getIncompatibilityReason: () => "",
+    isActive: (passes) => passes.conversion && passes.conversionFormat === "onnx",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, conversion: false }
+        : { ...passes, conversion: true, conversionFormat: "onnx" },
+    requiresExplanation:
+      "Standard ONNX conversion is universally supported across all execution providers that consume ONNX models.",
+    estimates: { speedup: "1.0x", vram: "No Change", efficiency: "100%" },
+  },
+  {
     id: "openvino-format",
     name: "OpenVINO IR Conversion Stage",
     category: "Conversion",
@@ -60,6 +81,54 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
     estimates: { speedup: "3.1x", vram: "Host Shared", efficiency: "98%" },
   },
   {
+    id: "onnx-float-to-float16",
+    name: "ONNX Float-to-Float16 Conversion",
+    category: "Quantization",
+    description:
+      "Converts FP32 model weights and activations to FP16, halving memory footprint with minimal accuracy loss.",
+    isUnsupported: () => false,
+    getIncompatibilityReason: () => "",
+    isActive: (passes) => passes.quantization && passes.quantPrecision === "fp16",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantPrecision: "int8" }
+        : { ...passes, quantization: true, quantPrecision: "fp16" },
+    requiresExplanation:
+      "FP16 conversion is broadly supported. On Intel oneDNN without AMX, BF16 throughput may be degraded.",
+    estimates: { speedup: "1.8x", vram: "-50% VRAM", efficiency: "97%" },
+  },
+  {
+    id: "onnx-static-quantization",
+    name: "ONNX Static Quantization (PTQ)",
+    category: "Quantization",
+    description:
+      "Applies post-training static quantization using calibration data to produce INT8/INT4 models with fixed scale factors.",
+    isUnsupported: () => false,
+    getIncompatibilityReason: () => "",
+    isActive: (passes) => passes.quantization && passes.quantMethod === "ptq",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantization: false }
+        : { ...passes, quantization: true, quantMethod: "ptq" },
+    requiresExplanation:
+      "Static quantization with calibration data is universally supported for ONNX models across all providers.",
+    estimates: { speedup: "2.2x", vram: "-70% VRAM", efficiency: "90%" },
+  },
+  {
+    id: "onnx-model-optimizer",
+    name: "ONNX Graph Optimization",
+    category: "Compression",
+    description:
+      "Applies graph-level optimizations including constant folding, operator fusion, and dead-node elimination.",
+    isUnsupported: () => false,
+    getIncompatibilityReason: () => "",
+    isActive: (passes) => passes.onnxTransforms,
+    toggle: (passes, active) => (active ? { ...passes, onnxTransforms: false } : { ...passes, onnxTransforms: true }),
+    requiresExplanation:
+      "ONNX graph-level optimizations are universally applicable and improve inference performance on all targets.",
+    estimates: { speedup: "1.3x", vram: "-10%", efficiency: "100%" },
+  },
+  {
     id: "awq-quantization",
     name: "AWQ Activation-Aware Quantization",
     category: "Quantization",
@@ -75,6 +144,74 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
     requiresExplanation:
       "AWQ is fine-tuned for heavy linear layers utilizing specialized CUDA or ROCm GPU acceleration matrices.",
     estimates: { speedup: "2.5x", vram: "-72% VRAM", efficiency: "92%" },
+  },
+  {
+    id: "gptq-quantization",
+    name: "GPTQ Post-Training Quantization",
+    category: "Quantization",
+    description:
+      "Layer-wise quantization using approximate second-order information to minimize quantization error on large language models.",
+    isUnsupported: (provider) => !isQuantMethodAllowed("gptq", provider),
+    getIncompatibilityReason: () => "Requires NVIDIA/AMD high-performance GPU compute host.",
+    isActive: (passes) => passes.quantization && passes.quantMethod === "gptq",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantMethod: "ptq" }
+        : { ...passes, quantization: true, quantMethod: "gptq", pruning: false },
+    requiresExplanation:
+      "GPTQ performs GPU-accelerated layer-wise calibration requiring CUDA or ROCm compute capabilities.",
+    estimates: { speedup: "2.4x", vram: "-75% VRAM", efficiency: "91%" },
+  },
+  {
+    id: "spinquant-quantization",
+    name: "SpinQuant Rotation-Based Quantization",
+    category: "Quantization",
+    description:
+      "Applies learned rotation matrices before quantization to reduce outlier magnitudes and improve low-bit accuracy.",
+    isUnsupported: (provider) => !isQuantMethodAllowed("spinquant", provider),
+    getIncompatibilityReason: () => "Requires NVIDIA/AMD GPU for rotation-based calibration.",
+    isActive: (passes) => passes.quantization && passes.quantMethod === "spinquant",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantMethod: "ptq" }
+        : { ...passes, quantization: true, quantMethod: "spinquant" },
+    requiresExplanation:
+      "SpinQuant rotation calibration demands GPU compute for matrix decomposition during quantization.",
+    estimates: { speedup: "2.3x", vram: "-70% VRAM", efficiency: "93%" },
+  },
+  {
+    id: "quarot-quantization",
+    name: "QuaRot Quantization with Rotation",
+    category: "Quantization",
+    description:
+      "Applies orthogonal rotation to weight matrices before quantization, spreading outlier information across channels.",
+    isUnsupported: (provider) => !isQuantMethodAllowed("quarot", provider),
+    getIncompatibilityReason: () => "Requires NVIDIA/AMD GPU for rotation computation.",
+    isActive: (passes) => passes.quantization && passes.quantMethod === "quarot",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantMethod: "ptq" }
+        : { ...passes, quantization: true, quantMethod: "quarot" },
+    requiresExplanation:
+      "QuaRot requires GPU compute for orthogonal rotation matrix calibration and weight transformation.",
+    estimates: { speedup: "2.3x", vram: "-70% VRAM", efficiency: "92%" },
+  },
+  {
+    id: "hqq-quantization",
+    name: "HQQ Half-Quadratic Quantization",
+    category: "Quantization",
+    description:
+      "Zero-shot data-free quantization using half-quadratic optimization to find optimal quantization parameters without calibration data.",
+    isUnsupported: (provider) => !isQuantMethodAllowed("hqq", provider),
+    getIncompatibilityReason: () => "Requires CPU, CUDA, CoreML, or MIGraphX execution provider.",
+    isActive: (passes) => passes.quantization && passes.quantMethod === "hqq",
+    toggle: (passes, active) =>
+      active
+        ? { ...passes, quantMethod: "ptq" }
+        : { ...passes, quantization: true, quantMethod: "hqq" },
+    requiresExplanation:
+      "HQQ is currently supported on CPU, CUDA, CoreML, and MIGraphX providers for half-quadratic optimization inference.",
+    estimates: { speedup: "2.0x", vram: "-68% VRAM", efficiency: "89%" },
   },
   {
     id: "qat-quantization",

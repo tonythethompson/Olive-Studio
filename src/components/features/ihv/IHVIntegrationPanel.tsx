@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { ProviderCardGrid } from "./ProviderCardGrid";
 import { MemoryOffloadControls } from "./MemoryOffloadControls";
+import { QnnAbiCoercionNotice } from "./QnnAbiCoercionNotice";
 
 export { getProviderConflicts };
 
@@ -107,6 +108,40 @@ export function IHVIntegrationPanel({
       },
     );
   }, [hardwareProbe, setState]);
+
+  // ─── QNN ABI Coercion Notification ───────────────────────────────────────────
+  // Track which passes were coerced off by QNN ABI selection so we can show
+  // a transient inline notification per requirement 9.7. Derived during render
+  // by comparing the current provider/passes against the previous render's
+  // values (the React "adjusting state when a prop changes" pattern), instead
+  // of setting state synchronously in an effect.
+  const [qnnAbiCoercedPasses, setQnnAbiCoercedPasses] = useState<string[]>([]);
+  const [prevProviderForNotice, setPrevProviderForNotice] = useState(state.ihvProvider);
+  const [prevPassesForNotice, setPrevPassesForNotice] = useState(state.passes);
+
+  if (state.ihvProvider !== prevProviderForNotice || state.passes !== prevPassesForNotice) {
+    const prevProvider = prevProviderForNotice;
+    const prevPasses = prevPassesForNotice;
+    setPrevProviderForNotice(state.ihvProvider);
+    setPrevPassesForNotice(state.passes);
+
+    // Only fire when switching TO QnnAbiExecutionProvider from a different provider
+    if (state.ihvProvider === "QnnAbiExecutionProvider" && prevProvider !== "QnnAbiExecutionProvider") {
+      // Determine which passes were coerced off
+      const coerced: string[] = [];
+      if (prevPasses.conversion && !state.passes.conversion) coerced.push("conversion");
+      if (prevPasses.quantization && !state.passes.quantization) coerced.push("quantization");
+      if (prevPasses.onnxDiscrepancyCheck && !state.passes.onnxDiscrepancyCheck) coerced.push("onnxDiscrepancyCheck");
+
+      if (coerced.length > 0) {
+        setQnnAbiCoercedPasses(coerced);
+      }
+    }
+  }
+
+  const dismissQnnAbiNotice = useCallback(() => {
+    setQnnAbiCoercedPasses([]);
+  }, []);
 
   // Forces a fresh probe, bypassing the server-side cache. Passed to the
   // install hooks (onProbeRefresh) and the manual rescan button; the initial
@@ -423,6 +458,12 @@ export function IHVIntegrationPanel({
           </p>
 
           <div className="grid gap-4 mt-2 min-w-0 w-full">
+            {qnnAbiCoercedPasses.length > 0 && (
+              <QnnAbiCoercionNotice
+                coercedPasses={qnnAbiCoercedPasses}
+                onDismiss={dismissQnnAbiNotice}
+              />
+            )}
             <ProviderCardGrid
               probeLoading={probeLoading}
               localAccelerators={localAccelerators}

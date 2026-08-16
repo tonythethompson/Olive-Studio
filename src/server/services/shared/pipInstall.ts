@@ -38,23 +38,37 @@ export async function pipInstallViaPython(
   args: string[],
   onLine: (line: string) => void,
   env: NodeJS.ProcessEnv = process.env,
+  signal?: AbortSignal,
 ): Promise<void> {
+  const label = args.join(" ");
+  if (signal?.aborted) {
+    throw new Error(`pip install ${label} aborted`);
+  }
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(python, ["-m", "pip", "install", ...args], { stdio: "pipe", env });
+    const abort = () => {
+      proc.kill();
+      reject(new Error(`pip install ${label} aborted`));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
     proc.stdout.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
     proc.stderr.on("data", (d: Buffer) => onLine("[deps] " + d.toString().trim()));
-    proc.on("error", (err: Error) =>
+    proc.on("error", (err: Error) => {
+      signal?.removeEventListener("abort", abort);
       reject(
         new Error(
           `Failed to launch ${python} -m pip: ${err.message}. Create the project runtime via Setup first.`,
         ),
-      ),
-    );
-    proc.on("close", (code: number | null) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`pip install ${args.join(" ")} failed (exit ${code})`)),
-    );
+      );
+    });
+    proc.on("close", (code: number | null) => {
+      signal?.removeEventListener("abort", abort);
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`pip install ${label} failed (exit ${code})`));
+      }
+    });
   });
 }
 
@@ -91,15 +105,19 @@ export async function pipInstallForFamily(
   python: string,
   args: string[],
   onLine: (line: string) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return withFamilyPipInstallMutex(family, async () => {
+    if (signal?.aborted) {
+      throw new Error(`pip install ${args.join(" ")} aborted`);
+    }
     enforcePackageConstraintsOrThrow(family, args);
     const initialOrtError = await assertFamilyOrtConstraints(family, python);
     if (initialOrtError) throw new Error(initialOrtError);
     const constrained = withFamilyPipConstraintArgs(family, args);
     const env = envForFamily(family);
     try {
-      await pipInstallViaPython(python, constrained.args, onLine, env);
+      await pipInstallViaPython(python, constrained.args, onLine, env, signal);
     } finally {
       constrained.cleanup();
     }
@@ -112,7 +130,7 @@ export async function pipInstallForFamily(
     const spec = getFamilySpec(family);
     const conflicts = conflictingOrtDistributions(spec.ortDistribution);
     await pipUninstallViaPython(python, [...conflicts], onLine, env);
-    await pipInstallViaPython(python, [...spec.packageConstraints], onLine, env);
+    await pipInstallViaPython(python, [...spec.packageConstraints], onLine, env, signal);
     ortError = await assertFamilyOrtConstraints(family, python);
     if (ortError) {
       throw new Error(`ORT constraints still violated after heal: ${ortError}`);

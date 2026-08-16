@@ -291,6 +291,9 @@ function hardwareDetailFor(
   if (providerId === "ROCMExecutionProvider") {
     return hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ") ?? null;
   }
+  if (providerId === "MIGraphXExecutionProvider") {
+    return hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ") ?? null;
+  }
   if (providerId === "OpenVINOExecutionProvider" && hardwareProbe?.openvino?.version) {
     const devices = hardwareProbe.openvino.devices?.length
       ? ` (${hardwareProbe.openvino.devices.join(", ")})`
@@ -763,6 +766,48 @@ function ProviderPluginInstalls({
       </div>
     );
   }
+  if (
+    providerId === "MIGraphXExecutionProvider" &&
+    isProviderDetectedLocally("MIGraphXExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.migraphx?.loadable !== true
+  ) {
+    return (
+      <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400/90">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          Not installed
+        </span>
+        {isExpanded && (
+          <p className="text-xs text-slate-400 leading-relaxed">
+            AMD GPU detected ({hardwareProbe?.rocm?.gpus.map((g) => g.name).join(", ")}). The MIGraphX
+            runtime is not installed in the project{" "}
+            <code className="text-slate-500">.venv</code>. Select this provider to trigger automatic
+            installation on first run, or install manually with{" "}
+            <code className="text-slate-500">pip install migraphx</code> into this project{" "}
+            <code className="text-slate-500">.venv</code>.
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (
+    providerId === "DnnlExecutionProvider" &&
+    hardwareProbe?.platform?.cpuFeatures?.avx2 === false
+  ) {
+    return (
+      <div className="mt-2 space-y-1.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-400/90">
+          <XCircle className="h-3.5 w-3.5 shrink-0" />
+          Unavailable
+        </span>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          AVX2 is the minimum required instruction set for Intel oneDNN (DNNL). This CPU does not
+          support AVX2 — oneDNN cannot accelerate inference on this hardware. Use the CPU execution
+          provider or OpenVINO instead.
+        </p>
+      </div>
+    );
+  }
   return null;
 }
 
@@ -922,13 +967,20 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
     computeDirectMlHardwareReady({ os: hardwareProbe?.platform.os ?? "" }) &&
     Boolean(hardwareProbe) &&
     !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
+  // MIGraphX install-needed is gated on the provider being detected at all
+  // (MIGraphX-supported hardware: CDNA / RDNA3 / RDNA4) — unsupported AMD GPUs
+  // never show the CTA.
+  const migraphxNeedsInstall =
+    isProviderDetectedLocally("MIGraphXExecutionProvider", hardwareProbe) &&
+    hardwareProbe?.migraphx?.loadable !== true;
   const needsPluginInstall =
     (p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||
     (p.id === "TensorrtExecutionProvider" && trtNeedsInstall) ||
     (p.id === "OpenVINOExecutionProvider" && openvinoNeedsInstall) ||
     (p.id === "QNNExecutionProvider" && qnnNeedsInstall) ||
     (p.id === "DmlExecutionProvider" && directMlNeedsInstall) ||
-    (p.id === "CUDAExecutionProvider" && cudaNeedsOrtGpuInstall);
+    (p.id === "CUDAExecutionProvider" && cudaNeedsOrtGpuInstall) ||
+    (p.id === "MIGraphXExecutionProvider" && migraphxNeedsInstall);
 
   // DML on Windows: hardware is compatible (DX12 guaranteed) even though runtime isn't detected yet.
   // This lets the badge show green "Compatible, runtime available" instead of gray "Not on this system".
@@ -983,9 +1035,17 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
               {badgeText}
             </span>
           </div>
+          {p.workflowSubtitle ? (
+            <p className="text-[11px] text-slate-500 font-medium leading-snug">
+              {p.workflowSubtitle}
+            </p>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
-              <p className="text-sm text-slate-400 leading-relaxed pr-6 cursor-help border-b border-dashed border-slate-700 hover:border-slate-500 transition-colors">
+              <p
+                tabIndex={0}
+                className="text-sm text-slate-400 leading-relaxed pr-6 cursor-help border-b border-dashed border-slate-700 hover:border-slate-500 focus:border-slate-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-electric-blue/50 transition-colors"
+              >
                 {p.desc}
               </p>
             </TooltipTrigger>

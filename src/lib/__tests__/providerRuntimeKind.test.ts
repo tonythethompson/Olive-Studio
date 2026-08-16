@@ -38,6 +38,14 @@ describe("providerRuntimeKind", () => {
     expect(isPlatformLocalProvider("QNNExecutionProvider")).toBe(true);
     expect(isPlatformLocalProvider("QnnAbiExecutionProvider")).toBe(true);
   });
+
+  it("classifies MIGraphXExecutionProvider as local", () => {
+    expect(getProviderRuntimeKind("MIGraphXExecutionProvider")).toBe("local");
+  });
+
+  it("classifies DnnlExecutionProvider as local", () => {
+    expect(getProviderRuntimeKind("DnnlExecutionProvider")).toBe("local");
+  });
 });
 
 describe("export-target probe carve-outs", () => {

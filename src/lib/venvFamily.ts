@@ -24,7 +24,9 @@ export const KNOWN_IHV_PROVIDERS: readonly IHVProvider[] = [
   "OpenVINOExecutionProvider",
   "QNNExecutionProvider",
   "QnnAbiExecutionProvider",
+  "MIGraphXExecutionProvider",
   "ROCMExecutionProvider",
+  "DnnlExecutionProvider",
   "WebGpuExecutionProvider",
   "CoreMLExecutionProvider",
   "NNAPIExecutionProvider",
@@ -52,7 +54,9 @@ const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
   ["qnnabiexecutionprovider", "QnnAbiExecutionProvider"],
   ["qnnabi", "QnnAbiExecutionProvider"],
   ["qnn-abi", "QnnAbiExecutionProvider"],
+  ["migraphxexecutionprovider", "MIGraphXExecutionProvider"],
   ["rocmexecutionprovider", "ROCMExecutionProvider"],
+  ["dnnlexecutionprovider", "DnnlExecutionProvider"],
   ["webgpuexecutionprovider", "WebGpuExecutionProvider"],
   ["coremlexecutionprovider", "CoreMLExecutionProvider"],
   ["nnapiexecutionprovider", "NNAPIExecutionProvider"],
@@ -72,6 +76,9 @@ const PROVIDER_ALIASES: ReadonlyMap<string, IHVProvider> = new Map([
   ["openvino", "OpenVINOExecutionProvider"],
   ["qnn", "QNNExecutionProvider"],
   ["rocm", "ROCMExecutionProvider"],
+  ["migraphx", "MIGraphXExecutionProvider"],
+  ["dnnl", "DnnlExecutionProvider"],
+  ["onednn", "DnnlExecutionProvider"],
   ["webgpu", "WebGpuExecutionProvider"],
   ["coreml", "CoreMLExecutionProvider"],
   ["nnapi", "NNAPIExecutionProvider"],
@@ -131,8 +138,10 @@ export function mandatoryFamilyForProvider(provider: IHVProvider): VenvFamily | 
       return "qnn";
     case "DmlExecutionProvider":
     case "ROCMExecutionProvider":
+    case "MIGraphXExecutionProvider":
       return "default";
     case "CPUExecutionProvider":
+    case "DnnlExecutionProvider":
     case "WebGpuExecutionProvider":
     case "CoreMLExecutionProvider":
     case "NNAPIExecutionProvider":

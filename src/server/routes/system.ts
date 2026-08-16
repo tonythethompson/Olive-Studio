@@ -17,6 +17,7 @@ import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
   computeOpenVinoCompatibleHardware,
   computeQnnCompatibleHardware,
+  isMigraphxSupportedGpu,
   isNvidiaGpuTensorRtFamily,
   mergeDetectedProviders,
   pickRecommendedProvider,
@@ -43,6 +44,73 @@ import {
 const execFileAsync = promisify(execFile);
 
 const ORT_PROBE_TIMEOUT_MS = 30_000;
+
+// ─── CPU feature detection ─────────────────────────────────────────────────
+
+const CPU_FEATURES_PROBE_SCRIPT = [
+  "import json, sys, platform",
+  "result = {}",
+  "try:",
+  "    if sys.platform == 'linux':",
+  "        with open('/proc/cpuinfo', 'r') as f:",
+  "            flags_line = ''",
+  "            for line in f:",
+  "                if line.startswith('flags'):",
+  "                    flags_line = line.lower()",
+  "                    break",
+  "            result['avx2'] = 'avx2' in flags_line",
+  "            result['avx512'] = 'avx512f' in flags_line",
+  "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+  "    elif sys.platform == 'win32':",
+  "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+  "            try:",
+  "                import ctypes",
+  "                k32 = ctypes.windll.kernel32",
+  "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+  "                try:",
+  "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+  "                except Exception:",
+  "                    pass",
+  "            except Exception:",
+  "                pass",
+  "    elif sys.platform == 'darwin':",
+  "        import subprocess",
+  "        try:",
+  "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+  "                               capture_output=True, text=True, timeout=5)",
+  "            features = r.stdout.lower()",
+  "            result['avx2'] = 'avx2' in features",
+  "            result['avx512'] = 'avx512f' in features",
+  "            result['amx'] = False",
+  "        except Exception:",
+  "            pass",
+  "except Exception:",
+  "    pass",
+  "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+].join("\n");
+
+/**
+ * Probes CPU instruction set features via a lightweight Python script.
+ * Returns undefined on any failure — absence never blocks provider selection.
+ */
+async function probeCpuFeatures(
+  python: string | undefined,
+): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+  if (!python) return undefined;
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+      timeout: 10_000,
+    });
+    const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+    const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+    if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+    if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+    if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // ─── GPU probes ────────────────────────────────────────────────────────────
 
@@ -113,6 +181,57 @@ async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefi
   }
 }
 
+/**
+ * Best-effort capture of ROCm GPU ISA family identifiers (e.g. "gfx942").
+ *
+ * Tries `rocminfo` first (canonical gfx names on the GPU agent lines), then
+ * falls back to the amdgpu KFD sysfs `gfx_target_version` (decimal "MMNNRR")
+ * reconstructed as `gfx<major><minor hex><revision hex>`.
+ *
+ * Returns an empty array when neither source is available — absence is treated
+ * as "unknown architecture" and simply skips consumer/datacenter differentiation.
+ */
+async function probeRocmIsaFamilies(): Promise<string[]> {
+  try {
+    const { stdout } = await execFileAsync("rocminfo", [], { timeout: ORT_PROBE_TIMEOUT_MS });
+    const names = stdout
+      .split("\n")
+      .map((line) => line.match(/^\s*Name:\s*(gfx\d\w*)\s*$/i)?.[1])
+      .filter((name): name is string => Boolean(name));
+    if (names.length > 0) return names;
+  } catch {
+    /* rocminfo not available */
+  }
+
+  try {
+    const nodeDir = "/sys/class/kfd/kfd/topology/nodes";
+    const nodes = await fs.promises.readdir(nodeDir);
+    const names: string[] = [];
+    for (const node of nodes) {
+      if (!/^\d+$/.test(node)) continue;
+      const props = await fs.promises.readFile(`${nodeDir}/${node}/properties`, "utf8").catch(() => null);
+      if (!props) continue;
+      const match = props.match(/gfx_target_version\s+(\d+)/);
+      if (!match) continue;
+      const value = match[1];
+      // gfx_target_version is decimal major*10000 + minor*100 + revision
+      // (gfx942 → 90402, gfx1030 → 100300), so valid GPUs are always ≥5
+      // digits. "0" is the CPU node; shorter values are malformed — skip.
+      if (value === "0" || value.length < 5) continue;
+      const revision = parseInt(value.slice(-2), 10);
+      const minor = parseInt(value.slice(-4, -2), 10);
+      const major = parseInt(value.slice(0, -4), 10);
+      if (!Number.isFinite(major) || major === 0) continue;
+      names.push(`gfx${major}${minor.toString(16)}${revision.toString(16)}`);
+    }
+    if (names.length > 0) return names;
+  } catch {
+    /* no KFD sysfs */
+  }
+
+  return [];
+}
+
 async function probeRocmGpus(): Promise<HardwareProbeResult["rocm"] | undefined> {
   try {
     const { stdout } = await execFileAsync("rocm-smi", ["--showproductname"]);
@@ -122,6 +241,17 @@ async function probeRocmGpus(): Promise<HardwareProbeResult["rocm"] | undefined>
       .filter((line) => line.length > 0 && !line.startsWith("=") && !line.toLowerCase().includes("product"))
       .map((name) => ({ name }));
     if (gpus.length === 0) return undefined;
+    // Attach ISA family identifiers only when the counts line up (one name per
+    // rocm-smi entry) — a mismatch is better left unclassified than misaligned.
+    const isaFamilies = await probeRocmIsaFamilies();
+    if (isaFamilies.length === gpus.length) {
+      return {
+        gpus: gpus.map((gpu, i) => {
+          const isaFamily = isaFamilies[i];
+          return isaFamily ? { ...gpu, isaFamily } : gpu;
+        }),
+      };
+    }
     return { gpus };
   } catch {
     return undefined;
@@ -682,7 +812,7 @@ async function probeVenvCapabilities(
 async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
   const notes: string[] = [];
   const cpus = os.cpus();
-  const platform = {
+  const platform: HardwareProbeResult["platform"] = {
     os: `${process.platform} ${os.release()}`,
     arch: os.arch(),
     cpuModel: cpus[0]?.model?.trim() || "Unknown CPU",
@@ -724,6 +854,14 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   if (qnnPythonExists) pythonCandidates.push(qnnPython);
   const systemPython = await findSystemPython();
   if (systemPython) pythonCandidates.push(systemPython);
+
+  // CPU instruction set features (AVX2/AVX-512/AMX) gate oneDNN in the IHV
+  // panel. Absence never blocks provider selection — the panel only reacts
+  // to an explicit `avx2: false`.
+  const cpuFeatures = await probeCpuFeatures(pythonCandidates[0] ?? systemPython);
+  if (cpuFeatures) {
+    platform.cpuFeatures = cpuFeatures;
+  }
 
   for (const python of pythonCandidates) {
     const isDefault = python === defaultPython;
@@ -779,12 +917,44 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     ),
   });
 
+  // MIGraphX serves CDNA (Instinct) plus consumer RDNA3/RDNA4 (RX 7xxx /
+  // RX 9xxx) GPUs on a supported ROCm stack. RDNA1/2 and legacy Vega boxes
+  // must not be advertised as MIGraphX-capable — the migraphx wheel cannot
+  // provide the EP on them.
+  const hasMigraphxSupportedGpu = Boolean(rocm?.gpus.some((gpu) => isMigraphxSupportedGpu(gpu)));
+  // Loadability reflects the default-family ORT runtime only — Execute Live
+  // uses the default Olive runtime, so family-isolated ORT listings must not
+  // authorize the install-needed state.
+  const migraphxLoadable = Boolean(state.defaultOrtProviders?.includes("MIGraphXExecutionProvider"));
+  const dnnlAvailable = Boolean(state.defaultOrtProviders?.includes("DnnlExecutionProvider"));
+
+  if (rocm?.gpus.length) {
+    if (hasMigraphxSupportedGpu) {
+      notes.push(
+        migraphxLoadable
+          ? "MIGraphX execution provider ready."
+          : "MIGraphX-capable AMD GPU detected — MIGraphX runtime not in .venv yet (Install in Hardware or on first MIGraphX run).",
+      );
+    } else {
+      notes.push(
+        "AMD GPU detected — not a MIGraphX target (requires Instinct CDNA, Radeon RDNA3/RDNA4 with a supported ROCm stack).",
+      );
+    }
+  }
+  if (dnnlAvailable) {
+    notes.push("oneDNN (DNNL) execution provider available.");
+  } else if (platform.cpuFeatures?.avx2 === false) {
+    notes.push("oneDNN (DNNL) unavailable — CPU lacks the required AVX2 instruction set.");
+  }
+
   // Execute Live uses the default Olive runtime for platform-local EPs. Do not
   // let providers from system/CUDA/OpenVINO/QNN runtimes authorize that path.
   const detectedProviders = mergeDetectedProviders({
     onnxRuntimeProviders: state.defaultOrtProviders,
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
+    hasMigraphxSupportedGpu,
+    migraphxLoadable,
     hasOpenVino: Boolean(state.openvino?.available),
     hasOpenVinoCompatibleHardware,
     // hasDirectMl must reflect default-family ORT reporting DmlExecutionProvider
@@ -807,6 +977,12 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     platform,
     nvidia,
     rocm,
+    ...(rocm && hasMigraphxSupportedGpu
+      ? { migraphx: { loadable: migraphxLoadable } }
+      : {}),
+    ...(dnnlAvailable
+      ? { dnnl: { available: true, provider: "DnnlExecutionProvider" } }
+      : {}),
     openvino: state.openvino
       ? { ...state.openvino, available: state.openvinoVenvAvailable, loadable: state.openvinoVenvAvailable }
       : undefined,
