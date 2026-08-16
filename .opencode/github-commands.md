@@ -81,29 +81,43 @@ the current pull request.
      GitHub Action auto-commits and pushes any uncommitted changes to the PR branch; you do
      not need to `git commit`/`git push` yourself (though committing yourself is also fine —
      the action detects it and pushes).
-   - **Not valid, not fixable, or already handled** → do not change code for it.
+   - **Not valid, not fixable, or already handled** → do not change code for it, but it still
+     counts as addressed (addressed *as not valid*): reply on the thread with the reason and
+     resolve it (step 3).
    - **Not an inline-resolvable thread but still contains real feedback to address** (e.g. a
-     timeline comment or a general review-body request) → address it with a commit too when
-     the feedback is valid, and record it in the summary.
+      timeline comment or a general review-body request) → address it with a commit too when
+      the feedback is valid, and record it in the summary.
 3. **Resolve addressed review threads.** A review thread (inline review comment chain) is
-   resolvable; timeline comments are not. Use `gh`:
+   resolvable; timeline comments are not. "Addressed" includes threads you **explicitly
+   skip**: a comment judged not valid, already handled, or intentionally not applicable is
+   still addressed (as not valid) and gets resolved too. For every thread you resolve, reply
+   on the thread with the reason first (a fix summary, or the justification for skipping)
+   when possible — the thread then keeps its rationale and the author sees it in place. Use
+   `gh`:
 
    ```bash
-   # 1. List threads and their comment databaseIds
+   # 1. List threads, their resolved state, and the first comment's databaseId
    gh api graphql -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:10){nodes{databaseId}}}}}}}' -F owner=... -F repo=... -F number=...
 
-   # 2. Resolve a thread whose comments you fully addressed
+   # 2. Reply to the thread with the reason before resolving
+   gh api graphql -f query='mutation($id:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id,body:$body}){comment{id}}}' -F id=THREAD_ID -f body=REASON
+   #    REST equivalent (reply to the first comment in the thread):
+   #    gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies -f body=REASON
+
+   # 3. Resolve the thread
    gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -F id=THREAD_ID
    ```
 
-   Only resolve threads you actually addressed. Leave open any thread you could not fully
-   address, and say why in the summary.
+   Write the reason to a temp file (`thread.md`) and pass `-f body=@thread.md` when it is
+   long, so multiline Markdown survives intact. Only leave open a thread you genuinely could
+   not address — no fix and no justification — and say why in the summary.
 4. **Your final reply text IS the single summary comment** (the action posts it). Do NOT post
    extra per-finding comments. The summary must cover **everything**:
    - **Fixed** — for each addressed item: the change made (file:line) and whether its thread
      was resolved.
-   - **Not fixed** — for each comment you skipped: a brief reason (invalid, already handled,
-     duplicate, out of scope, not fixable).
+   - **Not fixed (resolved as not valid)** — for each comment you skipped: a brief reason
+     (invalid, already handled, duplicate, out of scope, not fixable) and a note that its
+     thread was replied to and resolved.
    - **Addressed non-thread feedback** — any feedback that wasn't an inline thread but still
      warranted a code change: list the change made.
    - A short overall assessment of remaining risk.
@@ -113,5 +127,7 @@ the current pull request.
 - Ground every judgment in the actual diff and files. Verify a comment is still valid against
   the current code before acting on it.
 - Keep fixes minimal and targeted to the feedback. Do not refactor unrelated code.
-- Do not resolve threads you did not address. Do not modify files for invalid or duplicate
-  feedback.
+- Resolve every thread you addressed — fixed or explicitly skipped (skipping with a reason
+  is addressing *as not valid*) — and reply on each thread with the reason when possible.
+  Do not resolve a thread you genuinely could not address. Do not modify files for invalid
+  or duplicate feedback.
