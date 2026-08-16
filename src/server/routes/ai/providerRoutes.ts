@@ -197,7 +197,9 @@ function resolveProviderCredentials(
 
 export function mountProviderRoutes(router: Router): void {
   router.get("/ai/genai/status", (_req, res) => {
-    return res.json({ venvReady: isGenaiVenvReady(), model: getModelStatus(DEFAULT_GENAI_MODEL) });
+    const modelStatus = getModelStatus(DEFAULT_GENAI_MODEL);
+    const { localPath: _unused, ...safeModel } = modelStatus;
+    return res.json({ venvReady: isGenaiVenvReady(), model: safeModel });
   });
 
   // Loopback-gated: these heavy endpoints trigger multi-GB disk/network work

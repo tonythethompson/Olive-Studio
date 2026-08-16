@@ -114,7 +114,13 @@ export function ensureGenaiVenv(onLine: SetupListener): Promise<{ ok: boolean; e
   if (!activeVenvSetup) {
     activeVenvSetup = (async () => {
       const operation = runGenaiVenvSetup((line) => {
-        for (const listener of setupListeners) listener(line);
+        for (const listener of setupListeners) {
+          try {
+            listener(line);
+          } catch {
+            // One bad listener must not abort the shared setup for everyone.
+          }
+        }
       });
       return operation;
     })().finally(() => {
@@ -422,21 +428,19 @@ export async function shutdownSidecar(): Promise<void> {
   // kill() sends the shutdown command now and SIGTERM after 2s; cap the wait
   // so a wedged sidecar can never hang server shutdown.
   let timedOut = false;
-  await Promise.race([
-    sidecar.exitPromise.then(() => {
-      timedOut = false;
-    }),
-    new Promise<void>((resolve) =>
-      setTimeout(() => {
-        timedOut = true;
-        resolve();
-      }, 5000),
-    ),
-  ]);
+  const timeoutPromise = new Promise<void>((resolve) => {
+    setTimeout(() => {
+      timedOut = true;
+      resolve();
+    }, 5000);
+  });
+  await Promise.race([sidecar.exitPromise.then(() => { timedOut = false; }), timeoutPromise]);
   // A sidecar that ignores the graceful shutdown (command + SIGTERM) would
   // keep its loaded model in memory after Studio exits — escalate to SIGKILL.
   if (timedOut) {
     console.warn("[genai-sidecar] shutdown timed out; sending SIGKILL.");
     sidecar.killHard();
+    // Re-await the exit promise to ensure the process is fully gone.
+    await sidecar.exitPromise;
   }
 }

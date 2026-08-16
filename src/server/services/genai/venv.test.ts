@@ -138,6 +138,10 @@ describe("spawnSidecar lifecycle", () => {
     const kills: string[] = [];
     (proc as unknown as Record<string, unknown>).kill = (sig?: string) => {
       kills.push(sig ?? "");
+      if (sig === "SIGKILL") {
+        // After SIGKILL, the process exits — resolve exitPromise
+        process.nextTick(() => proc.emit("exit", 137));
+      }
       return true;
     };
     mocks.spawnImpl = () => proc;
