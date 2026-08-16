@@ -5,6 +5,25 @@ GitHub Action and begins with `/oc` (or `/opencode`). The message usually carrie
 `<pull_request>` context block (title, body, changed files, comments, reviews) — read it
 carefully before answering.
 
+## Model routing
+
+The workflow probes and selects the agent model per command (see `.github/workflows/opencode.yml`):
+
+| Command      | Primary model                          | Fallback chain                                                          |
+| ------------ | -------------------------------------- | ---------------------------------------------------------------------- |
+| `/oc review` | `opencode/gpt-5.6-luna` (`variant: max`) | `opencode/big-pickle` → `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max` |
+| `/oc fix`    | `opencode/big-pickle`                  | `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max`                |
+
+Each model is probed with a minimal request before the run; a disabled or unavailable model
+falls through to the next in the chain. `/oc review` runs are short and judgment-heavy, so
+the cost-efficient `gpt-5.6-luna` runs with `max` reasoning effort to maximize finding
+quality while keeping per-run cost in the tens of cents; `/oc fix` runs are long agentic
+edit loops, where the free big-pickle keeps cost at $0. Note that `big-pickle` advertises no
+reasoning-effort variants, so `variant: max` is only applied when `gpt-5.6-luna` is actually
+selected — the probe clears it on any fallback. Review runs send code snippets to an
+OpenAI-hosted model — acceptable for public repos; keep in mind OpenAI may retain requests
+for evaluation purposes.
+
 ## `/oc review`
 
 When a user message is exactly `/oc review` or begins with `/oc review`, treat it as a
@@ -17,24 +36,60 @@ request to review the current pull request. Extra text after the shortcut, e.g.
 
 1. Identify the actionable findings. An actionable finding is one where you can point at a
    concrete problem in the code and, when feasible, propose a specific change.
-2. Post each actionable finding as its **own comment** on the PR via the `gh` CLI
-   (preinstalled in GitHub Actions; the `GITHUB_TOKEN` env var is available, no login needed):
+2. Post each actionable finding as its **own resolvable review thread** via the `gh` CLI
+   (preinstalled in GitHub Actions; the `GITHUB_TOKEN` env var is available, no login
+   needed). Fall back down this ladder until the finding is posted:
 
-   ```bash
-   gh api repos/{owner}/{repo}/issues/{pr_number}/comments -F body=@finding.md
-   ```
+   a. **Inline line comment** (preferred) — pins the finding to a line in the PR diff and
+      creates a resolvable thread. Use the PR head SHA (`Head: { Sha: ... }` in the
+      `<pull_request>` context) as `commit_id`, plus the file and line the finding is
+      about:
+
+      ```bash
+      gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
+        -f body=@finding.md \
+        -f path="src/example.ts" \
+        -F line=42 \
+        -f commit_id="$HEAD_SHA"
+      ```
+
+      For a finding spanning a line range, add `-F start_line=<first line>` (and, for a
+      deletion, `-f start_side=LEFT`).
+
+   b. **File-level comment** — if the line is not part of the diff (the call above returns a
+      422), retry against the file without a line number:
+
+      ```bash
+      gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
+        -f body=@finding.md \
+        -f path="src/example.ts" \
+        -f subject_type=file
+      ```
+
+   c. **Issue comment** (last resort) — if the file is not in the PR diff either, post to
+      the timeline (not a resolvable thread) and flag it in the "Out of diff" section of
+      the summary:
+
+      ```bash
+      gh api repos/{owner}/{repo}/issues/{pr_number}/comments -F body=@finding.md
+      ```
 
    Derive `owner`/`repo` from `baseRepository.nameWithOwner` in the `<pull_request>`
-   context (split on `/`), and `pr_number` from `Number:`. Write the finding body to a
-   temp file (`finding.md`) rather than passing a giant `-f body=` string, so multiline
-   Markdown and code blocks survive intact. Post comments one at a time and keep a list of
-   the posted comment IDs/URLs. If a `gh` call fails, do not stop the review — fall back to
-   including that finding in the final summary comment instead.
+   context (split on `/`), `pr_number` from `Number:`, and `HEAD_SHA` from
+   `Head: { Sha: ... }`. Write the finding body to a temp file (`finding.md`) rather than
+   passing a giant `-f body=` string, so multiline Markdown and code blocks survive intact.
+   Post threads one at a time — this endpoint is secondary-rate-limited if you post too
+   fast — and keep a list of the posted comment IDs/URLs and of which findings fell back to
+   an issue comment. If a `gh` call fails at every level, do not stop the review — record
+   the finding in the "Out of diff" section of the summary instead.
 3. **Your final reply text** (what the action posts as the single reply comment) must be a
-   **short summary index**: overall assessment, plus one line per posted finding with its
-   file:line, severity, and a link to that finding's comment (`gh api .../issues/{n}/comments`
-   responses include the `html_url`). Keep it tight — the detail lives in the per-finding
-   comments.
+   **short summary index**: overall assessment; one line per threaded finding with its
+   file:line, severity, and a link to that finding's comment (both endpoint responses
+   include the `html_url`); and an **"Out of diff"** section listing every finding that
+   could not be posted as a review thread — fallback issue comments and any finding with no
+   diff location (e.g. missing tests, missing docs, cross-file concerns) — with its
+   severity, the file name(s) and line(s) it covers, and the issue found. Keep the rest
+   tight — the detail lives in the per-finding comments.
 4. Group low-severity nits and non-actionable observations into the final summary comment
    instead of posting more comments.
 
@@ -45,9 +100,20 @@ You are reviewing, not editing:
 - **Do NOT modify any files and do NOT leave the working tree dirty.** The action auto-commits
   and pushes any uncommitted changes to the PR branch — that is not wanted here.
 - Include a **committable suggestion** in each finding comment when it is feasible to write
-  one for that specific finding: a concrete diff (lines with `+`/`-`) or exact replacement
-  snippet the author can apply. If a finding does not have a cut-and-dried fix, say so and
-  describe the change needed instead of inventing code.
+  one for that specific finding. Wrap the exact replacement in a GitHub `suggestion`
+  fenced block so GitHub renders a one-click **Commit suggestion** button right in the
+  comment:
+
+  ````
+  ```suggestion
+  <exact replacement lines — must match the current file content>
+  ```
+  ````
+
+  Use one contiguous block per finding, matching the existing lines it replaces; GitHub
+  applies it to the file on commit. If a finding does not have a cut-and-dried fix — no
+  contiguous single-file replacement — say so and describe the change needed instead of
+  inventing code.
 
 ### Finding comment format
 
@@ -56,7 +122,8 @@ Each finding comment should contain:
 1. **Severity** — `high` / `medium` / `low` (or `critical`).
 2. **Location** — `file:line` (or a line range).
 3. **Problem** — why it is wrong, grounded in the actual code.
-4. **Suggested fix** — a committable diff or snippet when feasible.
+4. **Suggested fix** — a GitHub `suggestion` fenced block (see "Committing behavior")
+   when the fix is a contiguous replacement, otherwise a description of the change needed.
 
 ### Review scope
 
