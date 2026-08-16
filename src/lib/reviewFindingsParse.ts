@@ -1,9 +1,10 @@
 /**
  * Parse and validate the AI review response into the shared Finding/Action contract.
  *
- * The server-side parser enforces the same invariants as the frontend's
+ * The server-side parser enforces the same *core* invariants as the frontend's
  * `parseFindings`/`parseActions` helpers, including `sanitizeChatActionPatch`
- * validation for every applyPatch payload.
+ * validation for every applyPatch payload, while still being permissive about
+ * missing/invalid fields so the API can return a safe fallback result.
  *
  * @module reviewFindingsParse
  */
