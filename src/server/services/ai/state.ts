@@ -73,6 +73,8 @@ export function restoreProviderFromPreference(pref: AiPreference): ProviderConfi
     pref.provider === "openai-compat" ||
     pref.provider === "codex" ||
     pref.provider === "devin" ||
+    // Bedrock can restore on the default AWS credential chain alone.
+    pref.provider === "bedrock" ||
     Boolean(pref.baseUrl && /localhost|127\.0\.0\.1/i.test(pref.baseUrl));
 
   if (pref.provider === "cloudflare") {
