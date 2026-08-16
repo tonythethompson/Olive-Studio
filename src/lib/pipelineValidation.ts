@@ -975,11 +975,6 @@ export function getLocalExecutionIssues(
   return [];
 }
 
-/**
- * Removes duplicate pipeline issues, retaining the critical issue when duplicate severities differ.
- *
- * @param issues - The pipeline issues to deduplicate
- * @returns The deduplicated pipeline issues
 // ─── ROCm Consumer/Datacenter Differentiation ────────────────────────────
 
 /** RDNA 1/2/3 consumer ISA families (gfx10xx, gfx103x, gfx11xx). */

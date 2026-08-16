@@ -111,32 +111,33 @@ export function IHVIntegrationPanel({
 
   // ─── QNN ABI Coercion Notification ───────────────────────────────────────────
   // Track which passes were coerced off by QNN ABI selection so we can show
-  // a transient inline notification per requirement 9.7.
+  // a transient inline notification per requirement 9.7. Derived during render
+  // by comparing the current provider/passes against the previous render's
+  // values (the React "adjusting state when a prop changes" pattern), instead
+  // of setting state synchronously in an effect.
   const [qnnAbiCoercedPasses, setQnnAbiCoercedPasses] = useState<string[]>([]);
-  const prevProviderRef = useRef(state.ihvProvider);
-  const prevPassesRef = useRef(state.passes);
+  const [prevProviderForNotice, setPrevProviderForNotice] = useState(state.ihvProvider);
+  const [prevPassesForNotice, setPrevPassesForNotice] = useState(state.passes);
 
-  useEffect(() => {
-    const prevProvider = prevProviderRef.current;
-    const prevPasses = prevPassesRef.current;
-    prevProviderRef.current = state.ihvProvider;
-    prevPassesRef.current = state.passes;
+  if (state.ihvProvider !== prevProviderForNotice || state.passes !== prevPassesForNotice) {
+    const prevProvider = prevProviderForNotice;
+    const prevPasses = prevPassesForNotice;
+    setPrevProviderForNotice(state.ihvProvider);
+    setPrevPassesForNotice(state.passes);
 
     // Only fire when switching TO QnnAbiExecutionProvider from a different provider
-    if (state.ihvProvider !== "QnnAbiExecutionProvider" || prevProvider === "QnnAbiExecutionProvider") {
-      return;
-    }
+    if (state.ihvProvider === "QnnAbiExecutionProvider" && prevProvider !== "QnnAbiExecutionProvider") {
+      // Determine which passes were coerced off
+      const coerced: string[] = [];
+      if (prevPasses.conversion && !state.passes.conversion) coerced.push("conversion");
+      if (prevPasses.quantization && !state.passes.quantization) coerced.push("quantization");
+      if (prevPasses.onnxDiscrepancyCheck && !state.passes.onnxDiscrepancyCheck) coerced.push("onnxDiscrepancyCheck");
 
-    // Determine which passes were coerced off
-    const coerced: string[] = [];
-    if (prevPasses.conversion && !state.passes.conversion) coerced.push("conversion");
-    if (prevPasses.quantization && !state.passes.quantization) coerced.push("quantization");
-    if (prevPasses.onnxDiscrepancyCheck && !state.passes.onnxDiscrepancyCheck) coerced.push("onnxDiscrepancyCheck");
-
-    if (coerced.length > 0) {
-      setQnnAbiCoercedPasses(coerced);
+      if (coerced.length > 0) {
+        setQnnAbiCoercedPasses(coerced);
+      }
     }
-  }, [state.ihvProvider, state.passes]);
+  }
 
   const dismissQnnAbiNotice = useCallback(() => {
     setQnnAbiCoercedPasses([]);
