@@ -10,10 +10,11 @@ import { callAI } from "../../services/ai/index.ts";
 import {
   buildOliveAssistantSystemPrompt,
   gatherOliveMcpKnowledge,
+  gatherOliveMcpKnowledgeForReview,
 } from "../../services/ai/oliveMcpKnowledge.ts";
 import { parseJsonFromAiResponse } from "../../../lib/aiResponse.ts";
-import { parseAuditAnalysisReply } from "../../../lib/auditAnalysis.ts";
-import { filterAuditAnalysis } from "../../../lib/auditSuggestionFilter.ts";
+import { parseAiReviewReply, REVIEW_FINDINGS_RESPONSE_CONTRACT } from "../../../lib/reviewFindingsParse.ts";
+import { filterFindings } from "../../../lib/auditSuggestionFilter.ts";
 import {
   buildAiWorkspaceContext,
   formatAiWorkspaceContextForPrompt,
@@ -89,6 +90,7 @@ export function mountChatRoutes(router: Router): void {
           toolsUsed: mcpKnowledge.toolsUsed,
           sufficient: mcpKnowledge.sufficient,
           usedWebFallback: mcpKnowledge.usedWebFallback,
+          retrieval: mcpKnowledge.retrieval,
         },
       });
     } catch (err: unknown) {
@@ -134,35 +136,51 @@ export function mountChatRoutes(router: Router): void {
       const ctx = buildAiWorkspaceContext(state);
       // Cap context so small models still have room for full-sentence JSON.
       const ctxSummary = formatAiWorkspaceContextForPrompt(ctx).slice(0, 3500);
-      const system =
-        "You analyze Olive optimization pipelines for ONNX Runtime / TensorRT / quantization. " +
-        "Reply with ONE JSON object only (no markdown, no prose outside JSON). Schema: " +
-        '{"score":0-100,"level":"Optimized"|"Suboptimal"|"Critical","summary":string,"suggestions":[{"title":string,"description":string,"impact":"High"|"Medium"|"Low","type":"warning"|"success"|"suggestion"|"info","autofix":{"pass":string,"value":string}}]}. ' +
-        "Writing rules: summary must be 1-2 complete sentences. Each title must be a short readable phrase (not a bare field name like opset/dtype/cache). " +
-        "Each description must be 1-2 complete sentences explaining why and what to change. Keep JSON valid with commas between elements. " +
-        "Suggestion count (hard): Return 0 to 3 suggestions. Prefer fewer. Only include a suggestion if it is concrete, applyable, and would materially improve THIS workspace. " +
-        "Never invent filler to reach 3. If the pipeline is already solid, return suggestions:[]. If only one real improvement exists, return exactly one. " +
-        "Relevance rules (hard): Only suggest changes for the Model and execution provider in the workspace. " +
-        "Never mention speech recognition / ASR / Whisper unless the model is an ASR model. " +
-        "If execution provider is NvTensorRTRTXExecutionProvider, do NOT suggest TensorRTExecutionProvider, TensorRTPass, tensor_rt, TRT engine build/caching, or adding TensorRT after CUDA. That EP already is the consumer RTX path. " +
-        "autofix.pass must be a UI field (e.g. quantMethod, quantPrecision, conversionInputTargetTypes, conversionOpset, ihvProvider), never a nested Olive JSON path like passes.conversion.config.input_model_dtype or systems.local_system.config.accelerators.";
+
+      // Review uses the same Olive MCP knowledge source as chat, scoped to the active workspace.
+      const mcpKnowledge = await gatherOliveMcpKnowledgeForReview(ctx);
+
+      const system = buildOliveAssistantSystemPrompt({
+        mcpBlock: mcpKnowledge.promptBlock,
+        workspaceBlock: ctxSummary,
+        responseContract: REVIEW_FINDINGS_RESPONSE_CONTRACT,
+      });
+
       let reply = await callAI(system, [{ role: "user", content: ctxSummary }], true);
-      let parsed = parseAuditAnalysisReply(reply);
-      let analysis = filterAuditAnalysis(parsed, ctx);
-      // Retry once only when parse fell back to unstructured text (empty suggestions).
-      const looksSoft = !parsed.structured && parsed.suggestions.length === 0;
-      if (looksSoft) {
+      let parsed = parseAiReviewReply(reply);
+      // Retry once only when the model returned unstructured or malformed JSON.
+      if (!parsed.structured) {
         reply = await callAI(
-          `${system}\nRetry with valid JSON only. Example with ONE suggestion (0 is also fine; do not pad to 3): ` +
-            '{"score":60,"level":"Suboptimal","summary":"The pipeline can better match TensorRT RTX with AWQ int4 quantization.",' +
-            '"suggestions":[{"title":"Enable AWQ quantization","description":"Switch the quant method to AWQ so weights fit TensorRT RTX more efficiently.","impact":"High","type":"suggestion","autofix":{"pass":"quantMethod","value":"awq"}}]}',
+          `${system}\nRetry with valid JSON only. Example with ONE finding (0 is also fine; do not pad to 3): ` +
+            '{"score":70,"level":"Suboptimal","summary":"The pipeline can be tightened by aligning the conversion settings with the active provider.","findings":[{"id":"review-1","title":"Raise the conversion opset","description":"A newer opset unlocks more graph optimizations for the selected provider.","severity":"warning","evidence":"Selected conversion opset is below the recommended range.","actions":[{"kind":"applyPatch","label":"Apply opset update","payload":{"passes":{"conversion":true,"conversionOpset":17}}}]}]}',
           [{ role: "user", content: ctxSummary }],
           true,
         );
-        parsed = parseAuditAnalysisReply(reply);
-        analysis = filterAuditAnalysis(parsed, ctx);
+        parsed = parseAiReviewReply(reply);
       }
-      return res.json(analysis);
+
+      const filteredFindings = filterFindings(parsed.findings, ctx);
+      const dropped = parsed.findings.length - filteredFindings.length;
+      let summary = parsed.summary;
+      if (dropped > 0) {
+        const note = `Removed ${dropped} off-topic finding${dropped === 1 ? "" : "s"} that did not match this model/EP.`;
+        // Reserve room for the note so it is never truncated away.
+        const base = summary.replace(/\s+$/, "").slice(0, Math.max(0, 1200 - note.length - 1));
+        summary = `${base} ${note}`.slice(0, 1200);
+      }
+
+      return res.json({
+        score: parsed.score,
+        level: parsed.level,
+        summary,
+        findings: filteredFindings,
+        mcp: {
+          toolsUsed: mcpKnowledge.toolsUsed,
+          sufficient: mcpKnowledge.sufficient,
+          usedWebFallback: mcpKnowledge.usedWebFallback,
+          retrieval: mcpKnowledge.retrieval,
+        },
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return res.status(500).json({ error: msg });
