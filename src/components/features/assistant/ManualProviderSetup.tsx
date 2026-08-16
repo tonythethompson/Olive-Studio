@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS, PROVIDER_OPTIONS, type ProviderId } from "./aiProviderCatalog";
 import { CodexAccountPanel } from "./CodexAccountPanel";
 import { DevinAccountPanel } from "./DevinAccountPanel";
+import { GenaiEnginePanel } from "./GenaiEnginePanel";
 import { ModelCombobox } from "./ModelCombobox";
 import type { AiProviderSettings } from "./useAiProviderSettings";
 
@@ -18,6 +19,9 @@ interface ProvidersProp {
  * @param providers - Provider settings and selection handler used to control the dropdown
  */
 function ProviderSelect({ providers }: ProvidersProp) {
+  // Category headers render once even when a category is non-contiguous
+  // (e.g. "custom" holds both the built-in engine and openai-compat).
+  const emittedCategories = new Set<string>();
   return (
     <div>
       <label htmlFor="gemini-settings-provider" className="text-sm text-slate-400 mb-1 block">
@@ -30,11 +34,13 @@ function ProviderSelect({ providers }: ProvidersProp) {
         onChange={(e) => providers.selectProvider(e.target.value as ProviderId)}
         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue cursor-pointer"
       >
-        {PROVIDER_OPTIONS.reduce<ReactNode[]>((acc, p, i) => {
-          const prev = i > 0 ? PROVIDER_OPTIONS[i - 1] : null;
-          if (!prev || prev.category !== p.category) {
+        {PROVIDER_OPTIONS.reduce<ReactNode[]>((acc, p) => {
+          // Non-contiguous categories (e.g. custom) must emit one header only.
+          const headerKey = `cat-${p.category}`;
+          if (!emittedCategories.has(p.category)) {
+            emittedCategories.add(p.category);
             acc.push(
-              <option key={`cat-${p.category}`} value="" disabled className="text-slate-500 font-bold">
+              <option key={headerKey} value="" disabled className="text-slate-500 font-bold">
                 ── {CATEGORY_LABELS[p.category] ?? p.category} ──
               </option>,
             );
@@ -202,39 +208,66 @@ function ApiKeyForm({ providers }: ProvidersProp) {
         </div>
       )}
 
-      <div>
-        <label
-          htmlFor="gemini-settings-api-key"
-          className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
-        >
-          <Key className="h-3 w-3" />
-          API Key
-          {envUsable && !settingsApiKey.trim() ? (
-            <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
-              Env available: {envCred!.envVar}
-            </span>
-          ) : envPresentOnly ? (
-            <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
-              Found {envCred!.envVar} (incomplete)
-            </span>
-          ) : "keyEnvVar" in providerOption && providerOption.keyEnvVar ? (
-            <span className="text-[9px] text-slate-600">
-              (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
-            </span>
-          ) : null}
-        </label>
-        <input
-          id="gemini-settings-api-key"
-          type="password"
-          autoComplete="off"
-          placeholder={keyPlaceholder}
-          value={settingsApiKey}
-          onChange={(e) => providers.setSettingsApiKey(e.target.value)}
-          onBlur={() => providers.refreshModelsForTypedApiKey()}
-          onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-        />
-      </div>
+      {settingsProvider === "bedrock" && (
+        <div>
+          <label htmlFor="gemini-settings-base-url" className="text-sm text-slate-400 mb-1 block">
+            AWS Region
+          </label>
+          <input
+            id="gemini-settings-base-url"
+            type="text"
+            autoComplete="off"
+            placeholder="us-east-1"
+            value={settingsBaseUrl}
+            onChange={(e) => providers.setSettingsBaseUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+          />
+          <p className="text-[11px] text-slate-600 mt-1">
+            Optional — defaults to AWS_REGION, then us-east-1. Keys use the format accessKeyId:secretAccessKey
+            (add :sessionToken for assumed-role credentials), or leave blank for the default AWS credential
+            chain.
+          </p>
+        </div>
+      )}
+
+      {settingsProvider !== "genai" && (
+        <div>
+          <label
+            htmlFor="gemini-settings-api-key"
+            className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
+          >
+            <Key className="h-3 w-3" />
+            API Key
+            {envUsable && !settingsApiKey.trim() ? (
+              <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
+                Env available: {envCred!.envVar}
+              </span>
+            ) : envPresentOnly ? (
+              <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+                Found {envCred!.envVar} (incomplete)
+              </span>
+            ) : "keyEnvVar" in providerOption && providerOption.keyEnvVar ? (
+              <span className="text-[9px] text-slate-600">
+                (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
+              </span>
+            ) : null}
+          </label>
+          <input
+            id="gemini-settings-api-key"
+            type="password"
+            autoComplete="off"
+            placeholder={keyPlaceholder}
+            value={settingsApiKey}
+            onChange={(e) => providers.setSettingsApiKey(e.target.value)}
+            onBlur={() => providers.refreshModelsForTypedApiKey()}
+            onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+          />
+        </div>
+      )}
+
+      {settingsProvider === "genai" && <GenaiEnginePanel />}
 
       {settingsProvider === "cloudflare" && (
         <div>

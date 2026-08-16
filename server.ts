@@ -7,6 +7,7 @@ import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
 
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { shutdownMcpClient } from "./src/server/services/mcp/client.ts";
+import { shutdownSidecar } from "./src/server/services/genai/venv.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai/index.ts";
@@ -32,24 +33,26 @@ const app = express();
 app.use(express.json({ limit: "10mb", strict: false }));
 
 // Security headers with a CSP that allows the app's own assets + CDN for ORT WASM.
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://esm.sh"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://huggingface.co", "https://*.hf.co"],
-      workerSrc: ["'self'", "blob:"],
-      childSrc: ["'self'", "blob:"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'self'"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://esm.sh"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://huggingface.co", "https://*.hf.co"],
+        workerSrc: ["'self'", "blob:"],
+        childSrc: ["'self'", "blob:"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+      },
     },
-  },
-}));
+  }),
+);
 
 // Prevent indexing if accidentally exposed to the public internet
 app.use((_req, res, next) => {
@@ -184,13 +187,7 @@ async function startServer() {
       server: {
         middlewareMode: true,
         watch: {
-          ignored: [
-            "**/.venv/**",
-            ANY_DOT_VENV_DIR,
-            "**/node_modules/**",
-            "**/models/**",
-            "**/.cache/**",
-          ],
+          ignored: ["**/.venv/**", ANY_DOT_VENV_DIR, "**/node_modules/**", "**/models/**", "**/.cache/**"],
         },
       },
       appType: "spa",
@@ -265,7 +262,7 @@ async function startServer() {
   // end of startServer() so errors from Vite, static middleware, and all
   // application middleware are handled here.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("[express] unhandled error:", err instanceof Error ? err.stack ?? err.message : err);
+    console.error("[express] unhandled error:", err instanceof Error ? (err.stack ?? err.message) : err);
     if (res.headersSent) return;
     res.status(500).json({ error: "Internal server error" });
   });
@@ -305,16 +302,20 @@ async function startServer() {
   });
 }
 
-process.on("SIGINT", () => {
+/** Stop child processes (GenAI inference sidecar) and the MCP client, then exit. */
+async function gracefulShutdown(signal: string): Promise<void> {
   // eslint-disable-next-line no-console -- intentional shutdown logging
-  console.log("\n[SIGINT] Shutting down.");
-  void shutdownMcpClient().finally(() => process.exit(0));
+  console.log(`\n[${signal}] Shutting down.`);
+  await Promise.allSettled([shutdownSidecar(), shutdownMcpClient()]);
+  process.exit(0);
+}
+
+process.on("SIGINT", () => {
+  void gracefulShutdown("SIGINT");
 });
 
 process.on("SIGTERM", () => {
-  // eslint-disable-next-line no-console -- intentional shutdown logging
-  console.log("\n[SIGTERM] Shutting down.");
-  void shutdownMcpClient().finally(() => process.exit(0));
+  void gracefulShutdown("SIGTERM");
 });
 
 process.on("exit", () => {

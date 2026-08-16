@@ -19,7 +19,8 @@ import { cloudflareAiBaseUrl, isValidCloudflareAccountId } from "../../../lib/cl
 import { getCodexAppServer } from "../../../lib/codex/CodexAppServerClient.ts";
 import { listDevinModels } from "../../../lib/devin/client.ts";
 import type { ProviderConfig } from "../../types.ts";
-import { authActionRateLimit } from "../../middleware/rateLimit.ts";
+import { authActionRateLimit, heavyCommandRateLimit } from "../../middleware/rateLimit.ts";
+import { studioLocalOnly } from "../../middleware/localOnly.ts";
 import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 import { fetchLiveModelCatalog } from "./modelCatalog.ts";
 import { ensureGenaiVenv, isGenaiVenvReady } from "../../services/genai/venv.ts";
@@ -48,7 +49,10 @@ function resolveCatalogApiKey(provider: ProviderConfig["provider"], apiKey?: str
 }
 
 /** Resolve the base URL candidate for a live model catalog request. */
-function resolveCatalogBaseUrlCandidate(provider: ProviderConfig["provider"], baseUrl?: string): string | undefined {
+function resolveCatalogBaseUrlCandidate(
+  provider: ProviderConfig["provider"],
+  baseUrl?: string,
+): string | undefined {
   if (baseUrl) return baseUrl;
   const runtime = getRuntimeAiProvider();
   if (runtime && runtime.provider === provider && runtime.baseUrl) return runtime.baseUrl;
@@ -64,7 +68,9 @@ function allowsEmptyApiKey(provider: string, normalizedBaseUrl?: string): boolea
     provider === "cloudflare" ||
     // Bedrock can authenticate through the default AWS chain (profile, IAM
     // role, ~/.aws/credentials) without an explicit key.
-    provider === "bedrock"
+    provider === "bedrock" ||
+    // Built-in GenAI runs a local ONNX Runtime engine; it has no API key.
+    provider === "genai"
   ) {
     return true;
   }
@@ -104,7 +110,11 @@ async function fetchSpecialProviderCatalog(
       await server.start();
       const models = await server.listModels();
       if (models.length > 0) return { models, source: "live" };
-      return { models: [], source: "fallback", error: "Codex returned an empty model catalog. Sign in, then Refresh." };
+      return {
+        models: [],
+        source: "fallback",
+        error: "Codex returned an empty model catalog. Sign in, then Refresh.",
+      };
     } catch (err: unknown) {
       return fallback(err);
     }
@@ -137,8 +147,7 @@ async function fetchSpecialProviderCatalog(
 }
 
 type CredentialResult =
-  | { ok: true; apiKey: string; baseUrl: string | undefined }
-  | { ok: false; error: string };
+  { ok: true; apiKey: string; baseUrl: string | undefined } | { ok: false; error: string };
 
 /**
  * Resolve the effective API key and base URL for a provider activation.
@@ -165,7 +174,11 @@ function resolveProviderCredentials(
       finalBaseUrl = finalBaseUrl || cloudflareAiBaseUrl(auth.accountId);
     }
     if (!finalKey || !finalBaseUrl) {
-      return { ok: false, error: "Cloudflare is not signed in. Use Sign in + Sync credentials, or set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID." };
+      return {
+        ok: false,
+        error:
+          "Cloudflare is not signed in. Use Sign in + Sync credentials, or set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.",
+      };
     }
   }
   return { ok: true, apiKey: finalKey, baseUrl: finalBaseUrl };
@@ -176,12 +189,14 @@ export function mountProviderRoutes(router: Router): void {
     return res.json({ venvReady: isGenaiVenvReady(), model: getModelStatus(DEFAULT_GENAI_MODEL) });
   });
 
-  router.post("/ai/genai/setup", authActionRateLimit, async (_req, res) => {
+  // Loopback-gated: these heavy endpoints trigger multi-GB disk/network work
+  // and must not be reachable when Studio is bound to a LAN address.
+  router.post("/ai/genai/setup", studioLocalOnly, heavyCommandRateLimit, async (_req, res) => {
     const result = await ensureGenaiVenv((line) => console.warn(line));
     return res.status(result.ok ? 200 : 500).json(result);
   });
 
-  router.post("/ai/genai/download", authActionRateLimit, async (_req, res) => {
+  router.post("/ai/genai/download", studioLocalOnly, heavyCommandRateLimit, async (_req, res) => {
     const result = await downloadModel(DEFAULT_GENAI_MODEL);
     return res.status(result.ok ? 200 : 500).json(result);
   });

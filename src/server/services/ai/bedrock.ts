@@ -5,6 +5,8 @@
  *  1. UI-entered: user pastes AWS access key + secret key + region in the settings panel.
  *     These are passed via ProviderConfig.apiKey as a packed string:
  *     `<accessKeyId>:<secretAccessKey>` (region comes from baseUrl field as the region string).
+ *     An optional third segment carries the STS session token for assumed-role /
+ *     temporary credentials: `<accessKeyId>:<secretAccessKey>:<sessionToken>`.
  *  2. Auto-detect: if no explicit keys are provided, falls back to the default AWS credential
  *     chain (env vars, ~/.aws/credentials, IAM role, etc.) via @aws-sdk/credential-providers.
  *
@@ -67,6 +69,30 @@ function hasHalfPackedCredentials(cfg: ProviderConfig): boolean {
 }
 
 /**
+ * Splits a packed `accessKeyId:secretAccessKey[:sessionToken]` string.
+ * AWS key material never contains ":", so segment boundaries are unambiguous.
+ */
+export function parsePackedCredentials(packed: string): {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+} {
+  const colonIdx = packed.indexOf(":");
+  const accessKeyId = packed.slice(0, colonIdx);
+  const rest = packed.slice(colonIdx + 1);
+  const secondColon = rest.indexOf(":");
+  if (secondColon === -1) {
+    return { accessKeyId, secretAccessKey: rest };
+  }
+  const sessionToken = rest.slice(secondColon + 1).trim();
+  return {
+    accessKeyId,
+    secretAccessKey: rest.slice(0, secondColon),
+    ...(sessionToken ? { sessionToken } : {}),
+  };
+}
+
+/**
  * Creates a BedrockRuntimeClient with appropriate credentials.
  *
  * When explicit credentials are packed in apiKey, uses them directly.
@@ -84,14 +110,15 @@ function createBedrockClient(cfg: ProviderConfig): BedrockRuntimeClient {
   const region = resolveRegion(cfg);
 
   if (hasExplicitCredentials(cfg)) {
-    const colonIdx = cfg.apiKey.indexOf(":");
-    const accessKeyId = cfg.apiKey.slice(0, colonIdx);
-    const secretAccessKey = cfg.apiKey.slice(colonIdx + 1);
+    // Temporary / assumed-role credentials carry a third packed segment;
+    // static keys omit it and no env token is mixed in.
+    const { accessKeyId, secretAccessKey, sessionToken } = parsePackedCredentials(cfg.apiKey);
     return new BedrockRuntimeClient({
       region,
       credentials: {
         accessKeyId,
         secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
       },
     });
   }
@@ -186,9 +213,13 @@ registerProvider({
   envVarNames: ["AWS_ACCESS_KEY_ID", "AWS_PROFILE"],
   buildConfig: (apiKey) => {
     const secretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim() ?? "";
+    // Assumed-role / temporary credentials require the session token, as the
+    // S3 client already does; pack it as the optional third segment.
+    const sessionToken = process.env.AWS_SESSION_TOKEN?.trim();
+    const packedKey = sessionToken ? `${apiKey}:${secretKey}:${sessionToken}` : `${apiKey}:${secretKey}`;
     return {
       provider: "bedrock",
-      apiKey: `${apiKey}:${secretKey}`,
+      apiKey: packedKey,
       model: "anthropic.claude-3-5-haiku-20241022-v1:0",
       baseUrl: process.env.AWS_REGION?.trim() || "us-east-1",
     };

@@ -64,6 +64,16 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     baseUrl: "https://api.x.ai/v1",
     category: "direct",
   },
+  {
+    id: "bedrock",
+    name: "AWS Bedrock",
+    models: ["anthropic.claude-3-5-haiku-20241022-v1:0"],
+    keyEnvVar: "AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY",
+    docsUrl: "aws.amazon.com/bedrock",
+    category: "direct",
+    description:
+      "Converse API. Paste accessKeyId:secretAccessKey (optionally :sessionToken), or leave blank for the default AWS credential chain.",
+  },
   // ── API Routers & Aggregators ────────────────────────────────────────
   {
     id: "openrouter",

@@ -64,8 +64,14 @@ export type SetupListener = (line: string) => void;
 async function findSystemPython(): Promise<string | null> {
   const candidates: Array<[string, string[]]> =
     process.platform === "win32"
-      ? [["py", ["-3", "--version"]], ["python", ["--version"]]]
-      : [["python3", ["--version"]], ["python", ["--version"]]];
+      ? [
+          ["py", ["-3", "--version"]],
+          ["python", ["--version"]],
+        ]
+      : [
+          ["python3", ["--version"]],
+          ["python", ["--version"]],
+        ];
 
   for (const [cmd, args] of candidates) {
     try {
@@ -93,9 +99,7 @@ async function findSystemPython(): Promise<string | null> {
  * @param onLine - Progress callback for UI streaming.
  * @returns Success/failure result.
  */
-export async function ensureGenaiVenv(
-  onLine: SetupListener,
-): Promise<{ ok: boolean; error?: string }> {
+export async function ensureGenaiVenv(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
   if (isGenaiVenvReady()) {
     // Quick check: is onnxruntime-genai importable?
     try {
@@ -187,6 +191,8 @@ export interface SidecarProcess {
   kill: () => void;
   /** Whether the process is still alive. */
   alive: () => boolean;
+  /** Resolves with the exit code once the child process has exited. */
+  exitPromise: Promise<number | null>;
 }
 
 let activeSidecar: SidecarProcess | null = null;
@@ -226,6 +232,11 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
     },
   });
 
+  // Lets shutdownSidecar await actual process exit instead of racing it.
+  const exitPromise = new Promise<number | null>((resolve) => {
+    child.once("exit", (code) => resolve(code));
+  });
+
   const responseHandlers: Array<(data: Record<string, unknown>) => void> = [];
   // Settlers for requests that are waiting on this process. Invoked when the
   // process dies or is replaced so callers reject instead of timing out.
@@ -236,7 +247,9 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
     for (const settle of settlers) {
       try {
         settle();
-      } catch { /* a failing settler must not block teardown */ }
+      } catch {
+        /* a failing settler must not block teardown */
+      }
     }
   };
   let buffer = "";
@@ -309,12 +322,15 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
       settlePending();
       try {
         sidecar.send({ command: "shutdown" });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       setTimeout(() => {
         if (child.exitCode === null) child.kill("SIGTERM");
       }, 2000);
     },
     alive: () => child.exitCode === null && !child.killed,
+    exitPromise,
   };
 
   activeSidecar = sidecar;
@@ -339,9 +355,18 @@ export function getActiveSidecar(modelPath?: string, ep?: string): SidecarProces
   return null;
 }
 
-/** Shutdown the active sidecar cleanly. */
-export function shutdownSidecar(): void {
-  activeSidecar?.kill();
+/**
+ * Shutdown the active sidecar cleanly. Waits (bounded) for the child to exit
+ * so server shutdown does not orphan the inference process with its loaded
+ * model still holding CPU/GPU memory.
+ */
+export async function shutdownSidecar(): Promise<void> {
+  const sidecar = activeSidecar;
   activeSidecar = null;
   activeSidecarKey = null;
+  if (!sidecar?.alive()) return;
+  sidecar.kill();
+  // kill() sends the shutdown command now and SIGTERM after 2s; cap the wait
+  // so a wedged sidecar can never hang server shutdown.
+  await Promise.race([sidecar.exitPromise, new Promise<void>((resolve) => setTimeout(resolve, 5000))]);
 }
