@@ -38,8 +38,7 @@ describe("providerToAccelerator – MIGraphX and DNNL mapping", () => {
 
 describe("GPU_PROVIDERS membership – indirect verification", () => {
   it("MIGraphXExecutionProvider is in GPU_PROVIDERS (device === gpu)", () => {
-    // GPU_PROVIDERS is not exported, but providerToAccelerator returns "gpu"
-    // only for providers in GPU_PROVIDERS
+    // providerToAccelerator returns device "gpu" only for GPU-class providers (GPU_PROVIDERS).
     expect(providerToAccelerator("MIGraphXExecutionProvider").device).toBe("gpu");
   });
 
