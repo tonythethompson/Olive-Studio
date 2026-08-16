@@ -107,11 +107,11 @@ Complete the olive-ai 0.13.0 verification gap (spec tasks 9.5, 11, 12):
 Combine the visible Audit and Chat tabs into one Assistant experience while keeping Settings and Execute Agent mode separate.
 
 - [ ] Pin a collapsible Pipeline Review in Assistant with score, findings, evidence, last-checked state, and conversation beneath it
-- [ ] Replace Audit-only `{ pass, value }` autofixes with a shared finding/action contract (`applyPatch`, `navigate`, `explain`, `documentation`)
-- [ ] Every reported deficiency must retain a useful next action even when no safe one-click patch exists; never show a negative finding beside "No actionable changes"
-- [ ] Give review and chat the same MCP knowledge and validated UI-patch schema, with bounded targeted retrieval for automatic review and broader retrieval for user questions
-- [ ] Applying an Assistant action re-runs the review; bind results to a workspace fingerprint so stale findings cannot overwrite newer state
-- [ ] Keep deterministic recipe validation authoritative and keep automatic review refreshes out of chat history
+- [x] Replace Audit-only `{ pass, value }` autofixes with a shared finding/action contract (`applyPatch`, `navigate`, `explain`, `documentation`)
+- [x] Every reported deficiency must retain a useful next action even when no safe one-click patch exists; never show a negative finding beside "No actionable changes"
+- [x] Give review and chat the same MCP knowledge and validated UI-patch schema, with bounded targeted retrieval for automatic review and broader retrieval for user questions
+- [x] Applying an Assistant action re-runs the review; bind results to a workspace fingerprint so stale findings cannot overwrite newer state
+- [x] Keep deterministic recipe validation authoritative and keep automatic review refreshes out of chat history
 
 ### Agent UI (Execute panel)
 
