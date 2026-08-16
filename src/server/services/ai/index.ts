@@ -21,6 +21,8 @@ import "./anthropic.ts";
 import "./devin.ts";
 import "./codex.ts";
 import "./cloudflare.ts";
+import "./bedrock.ts";
+import "./genai.ts";
 
 // Registry-based API
 import { getRuntimeAiProvider, readAiPreference, restoreProviderFromPreference } from "./state.ts";

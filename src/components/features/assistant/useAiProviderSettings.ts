@@ -39,6 +39,8 @@ function validateApiKeyProviderForm(input: {
   const allowEmptyKey =
     input.envUsable ||
     input.settingsProvider === "openai-compat" ||
+    // Bedrock can activate on the default AWS credential chain alone.
+    input.settingsProvider === "bedrock" ||
     isLocalAllowEmptyKey(input.resolvedBaseUrl);
   if (input.settingsProvider === "cloudflare") {
     // Env-only activation requires both manual fields empty. A partial paste is rejected.

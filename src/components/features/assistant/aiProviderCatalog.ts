@@ -13,6 +13,15 @@ export interface ProviderOption {
 }
 
 export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
+  {
+    id: "genai",
+    name: "Built-in ONNX GenAI",
+    models: ["qwen2.5-coder-1.5b-instruct-onnx"],
+    keyEnvVar: "Not required",
+    docsUrl: "onnxruntime.ai",
+    category: "custom",
+    description: "Local ONNX Runtime GenAI engine; set up the engine and download its model before use.",
+  },
   // ── Direct API Providers ─────────────────────────────────────────────
   {
     id: "gemini",

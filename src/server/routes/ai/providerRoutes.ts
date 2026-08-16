@@ -22,6 +22,8 @@ import type { ProviderConfig } from "../../types.ts";
 import { authActionRateLimit } from "../../middleware/rateLimit.ts";
 import { isParseBodyError, parseBody } from "../../middleware/bodyGuard.ts";
 import { fetchLiveModelCatalog } from "./modelCatalog.ts";
+import { ensureGenaiVenv, isGenaiVenvReady } from "../../services/genai/venv.ts";
+import { downloadModel, getModelStatus, DEFAULT_GENAI_MODEL } from "../../services/genai/modelDownload.ts";
 
 /** Local openai-compat endpoints may omit API keys for model listing. */
 function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): boolean {
@@ -33,13 +35,36 @@ function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): bool
   }
 }
 
+/** Resolve the API key for a live model catalog request: body > runtime > env. */
+function resolveCatalogApiKey(provider: ProviderConfig["provider"], apiKey?: string): string {
+  const explicit = typeof apiKey === "string" ? apiKey.trim() : "";
+  if (explicit) return explicit;
+  const runtime = getRuntimeAiProvider();
+  if (runtime && runtime.provider === provider && runtime.apiKey?.trim()) {
+    return runtime.apiKey.trim();
+  }
+  const plugin = getProvider(provider);
+  return (plugin ? readEnvApiKey(...plugin.envVarNames) : undefined) ?? "";
+}
+
+/** Resolve the base URL candidate for a live model catalog request. */
+function resolveCatalogBaseUrlCandidate(provider: ProviderConfig["provider"], baseUrl?: string): string | undefined {
+  if (baseUrl) return baseUrl;
+  const runtime = getRuntimeAiProvider();
+  if (runtime && runtime.provider === provider && runtime.baseUrl) return runtime.baseUrl;
+  return getProvider(provider)?.defaultBaseUrl;
+}
+
 /** Whether this provider may activate without an API key (local / OAuth / CF flows). */
 function allowsEmptyApiKey(provider: string, normalizedBaseUrl?: string): boolean {
   if (
     provider === "openai-compat" ||
     provider === "codex" ||
     provider === "devin" ||
-    provider === "cloudflare"
+    provider === "cloudflare" ||
+    // Bedrock can authenticate through the default AWS chain (profile, IAM
+    // role, ~/.aws/credentials) without an explicit key.
+    provider === "bedrock"
   ) {
     return true;
   }
@@ -147,6 +172,20 @@ function resolveProviderCredentials(
 }
 
 export function mountProviderRoutes(router: Router): void {
+  router.get("/ai/genai/status", (_req, res) => {
+    return res.json({ venvReady: isGenaiVenvReady(), model: getModelStatus(DEFAULT_GENAI_MODEL) });
+  });
+
+  router.post("/ai/genai/setup", authActionRateLimit, async (_req, res) => {
+    const result = await ensureGenaiVenv((line) => console.warn(line));
+    return res.status(result.ok ? 200 : 500).json(result);
+  });
+
+  router.post("/ai/genai/download", authActionRateLimit, async (_req, res) => {
+    const result = await downloadModel(DEFAULT_GENAI_MODEL);
+    return res.status(result.ok ? 200 : 500).json(result);
+  });
+
   router.get("/ai/provider", (_req, res) => {
     const envCredentials = envCredentialsPayload();
     const runtime = getRuntimeAiProvider();
@@ -269,24 +308,12 @@ export function mountProviderRoutes(router: Router): void {
       const specialCatalog = await fetchSpecialProviderCatalog(provider);
       if (specialCatalog) return res.json(specialCatalog);
 
-      const plugin = getProvider(provider);
-      const runtime = getRuntimeAiProvider();
-      const runtimeKey =
-        runtime && runtime.provider === provider && runtime.apiKey?.trim()
-          ? runtime.apiKey.trim()
-          : undefined;
-      const envKey = plugin ? readEnvApiKey(...plugin.envVarNames) : undefined;
-      const key =
-        (typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : "") || runtimeKey || envKey || "";
+      const key = resolveCatalogApiKey(provider, apiKey);
 
       let safeBaseUrl: string | undefined;
       try {
         // Prefer explicit body, then runtime saved base for openai-compat / local.
-        const candidate =
-          baseUrl ||
-          (runtime && runtime.provider === provider ? runtime.baseUrl : undefined) ||
-          plugin?.defaultBaseUrl;
-        safeBaseUrl = sanitizeProviderBaseUrl(provider, candidate);
+        safeBaseUrl = sanitizeProviderBaseUrl(provider, resolveCatalogBaseUrlCandidate(provider, baseUrl));
       } catch (err: unknown) {
         return res.status(400).json({
           models: [],

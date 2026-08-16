@@ -15,33 +15,37 @@ export interface KbStatusCache {
 
 export interface ProviderConfig {
   provider:
-    | "gemini"
-    | "openai"
-    | "anthropic"
-    | "mistral"
-    | "openai-compat"
-    | "xai"
-    | "openrouter"
-    | "groq"
-    | "together"
-    | "chatgpt-sub"
-    | "copilot"
-    | "devin"
-    | "kilocode"
-    /** OpenAI Codex via local app-server + SDK (ChatGPT Plus/Pro subscription). */
-    | "codex"
-    /** OpenCode Zen gateway (pay-per-use curated models). */
-    | "opencode"
-    /** OpenCode Go gateway ($10/mo open models plan). */
-    | "opencode-go"
-    /** Fireworks AI (OpenAI-compatible). */
-    | "fireworks"
-    /** NVIDIA NIM / build.nvidia.com (OpenAI-compatible). */
-    | "nvidia"
-    /** Hugging Face Inference Providers router (OpenAI-compatible). */
-    | "huggingface"
-    /** Cloudflare Workers AI via Wrangler OAuth or API token. */
-    | "cloudflare";
+  | "gemini"
+  | "openai"
+  | "anthropic"
+  | "mistral"
+  | "openai-compat"
+  | "xai"
+  | "openrouter"
+  | "groq"
+  | "together"
+  | "chatgpt-sub"
+  | "copilot"
+  | "devin"
+  | "kilocode"
+  /** OpenAI Codex via local app-server + SDK (ChatGPT Plus/Pro subscription). */
+  | "codex"
+  /** OpenCode Zen gateway (pay-per-use curated models). */
+  | "opencode"
+  /** OpenCode Go gateway ($10/mo open models plan). */
+  | "opencode-go"
+  /** Fireworks AI (OpenAI-compatible). */
+  | "fireworks"
+  /** NVIDIA NIM / build.nvidia.com (OpenAI-compatible). */
+  | "nvidia"
+  /** Hugging Face Inference Providers router (OpenAI-compatible). */
+  | "huggingface"
+  /** Cloudflare Workers AI via Wrangler OAuth or API token. */
+  | "cloudflare"
+  /** AWS Bedrock (Converse API — supports Claude, Llama, Mistral, etc.). */
+  | "bedrock"
+  /** Built-in ONNX Runtime GenAI local inference (no external engine needed). */
+  | "genai";
   apiKey: string;
   model: string;
   baseUrl?: string;
