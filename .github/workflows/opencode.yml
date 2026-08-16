@@ -87,13 +87,96 @@ jobs:
           echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
           echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
 
+      # Replicates anomalyco/opencode/github@v1.18.18 (composite action) inline so
+      # the run step can retry. The composite action cannot wrap itself: classic
+      # Actions has no step retry and the CLI commits/pushes from this checkout,
+      # so on a rejected push (remote advanced mid-run) the work would be lost.
+      - name: Get opencode version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          echo "version=${VERSION:-latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache opencode
+        id: cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+      - name: Install opencode
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: curl -fsSL https://opencode.ai/install | bash
+
       - name: Run opencode
-        uses: anomalyco/opencode/github@14b37df39168eaf6a6faf862ec4a7bbe9c825bbd # v1.18.18
+        id: run_opencode
+        shell: bash
         env:
           ALIBABA_TOKEN_PLAN_API_KEY: ${{ secrets.ALIBABA_TOKEN_PLAN_API_KEY }}
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          model: ${{ steps.probe.outputs.model }}
-          variant: ${{ steps.probe.outputs.variant }}
+          MODEL: ${{ steps.probe.outputs.model }}
+          VARIANT: ${{ steps.probe.outputs.variant }}
+        run: |
+          set -u
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.opencode/bin:$PATH"
+
+          run_opencode() {
+            opencode github run
+          }
+
+          if run_opencode; then
+            echo "::notice::opencode github run succeeded (attempt 1)"
+            exit 0
+          fi
+          echo "::warning::opencode github run failed on attempt 1"
+
+          BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+
+          # Salvage: the CLI committed locally before a rejected push (remote
+          # advanced mid-run). Rebase those commits onto the updated remote and
+          # push. This matters because review threads may already be resolved,
+          # so a plain re-run would find nothing to do and silently lose work.
+          if [[ -n "${BRANCH}" && "${BRANCH}" != "HEAD" ]]; then
+            echo "==> salvaging agent commits onto updated remote (branch: ${BRANCH})"
+            git config --local http.https://github.com/.extraheader \
+              "AUTHORIZATION: basic $(printf "x-access-token:${GH_TOKEN}" | base64 -w 0)" 2>/dev/null || true
+            git fetch --prune origin 2>/dev/null || true
+            if git rev-parse --verify "origin/${BRANCH}" >/dev/null 2>&1; then
+              if [[ "$(git rev-list --count "origin/${BRANCH}"..HEAD 2>/dev/null || echo 0)" -gt 0 ]]; then
+                if git rebase "origin/${BRANCH}"; then
+                  if git push 2>/dev/null; then
+                    echo "::notice::salvaged agent work: rebased onto origin/${BRANCH} and pushed"
+                    exit 0
+                  fi
+                  echo "::warning::salvage push failed; falling back to synced re-run"
+                fi
+                git rebase --abort 2>/dev/null || true
+              else
+                echo "::notice::no local-only commits; failure was not a rejected push"
+              fi
+            fi
+          fi
+
+          # Fallback: sync this checkout's branch to the remote (discarding the
+          # failed run's local state) and run a fresh session against the
+          # current base, so a subsequent push is a fast-forward.
+          echo "==> syncing branch to remote and retrying once"
+          if [[ -n "${BRANCH}" && "${BRANCH}" != "HEAD" ]]; then
+            git fetch --prune origin 2>/dev/null || true
+            if git rev-parse --verify "origin/${BRANCH}" >/dev/null 2>&1; then
+              git checkout -B "${BRANCH}" "origin/${BRANCH}" >/dev/null 2>&1 || true
+              git reset --hard "origin/${BRANCH}" >/dev/null 2>&1 || true
+            fi
+          fi
+
+          if run_opencode; then
+            echo "::notice::opencode github run succeeded on retry"
+            exit 0
+          fi
+          echo "::error::opencode github run failed on both attempts"
+          exit 1
