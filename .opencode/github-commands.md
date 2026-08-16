@@ -28,11 +28,44 @@ probe clears it on any fallback. Review runs send code snippets to an OpenAI-hos
 acceptable for public repos; keep in mind OpenAI may retain requests for evaluation
 purposes.
 
+## Using context7
+
+The `context7` MCP server (remote, wired via `.opencode/opencode.json`) is available to
+look up **current, version-accurate library/framework documentation** — handy because the
+agent's training data can go stale. Use its `resolve-library-id` and `query-docs` tools.
+
+**When to use it** (both commands):
+
+- **Authoring or changing API calls** — before writing code that calls a library, framework,
+  or SDK, look up the exact current API so you don't invent a wrong signature or import
+  (e.g. React 19 hooks, Express routes, Vite config).
+- **Resolving an API-relevant review finding** — when `/oc fix` addresses a comment about a
+  library usage, confirm the expected current behavior/API from docs rather than guessing.
+- **Copy-pasted code that may be outdated** — verify before trusting it.
+
+**When NOT to use it:**
+
+- For pure project-internal logic, the diff, or code you're already certain about — don't
+  spend tool calls (and context) re-confirming things you know.
+- For general web/non-library lookups — context7 is a documentation index, not a search
+  engine; prefer the model's own knowledge for non-API questions.
+
+**How to use it:**
+
+1. `resolve-library-id` (pass the library name from the message, e.g. "Express", "React").
+2. `query-docs` with the returned library ID and a focused, single-concept question.
+3. Use `use context7` in tool choice; keep queries narrow so results stay small and relevant.
+
 ## `/oc review`
+
+A review also runs **automatically when a pull request is first opened** (the workflow's
+`pull_request: [opened]` trigger), in addition to on-demand. It does NOT re-run on later
+commits to the same PR.
 
 When a user message is exactly `/oc review` or begins with `/oc review`, treat it as a
 request to review the current pull request. Extra text after the shortcut, e.g.
-`/oc review focus on security`, scopes the review to those concerns.
+`/oc review focus on security`, scopes the review to those concerns. The same posting
+behavior below applies whether the review is triggered by `/oc review` or by PR creation.
 
 ### Posting behavior
 
@@ -143,10 +176,25 @@ the current pull request.
 
 ### Behavior
 
-1. **Collect all review feedback** from the `<pull_request>` context:
-   - inline review comments (inside `<pull_request_reviews>` → comments)
-   - timeline comments (`<pull_request_comments>`)
-   - review bodies (`<pull_request_reviews>`)
+1. **Collect ALL review feedback** — do not rely on the `<pull_request>` context alone; it may
+   be partial, out of order, or missing threads you'd otherwise need to resolve. You MUST
+   actively enumerate and read every source of feedback on the PR before fixing anything:
+   - **List every thread** via the GraphQL query in step 3 below (with its `isResolved` state) so
+     you know the complete, canonical set of threads before deciding what to act on.
+   - **Skip threads already resolved.** A thread whose `isResolved` is true has already been
+     dealt with — do not re-read or re-judge its contents; doing so just blows up context. Record
+     it in the summary as already handled and move on. (Only revisit a resolved thread if its
+     resolution appears wrong, e.g. resolved without an actual fix.)
+   - **Read every inline review comment** on the open (unresolved) threads (`<pull_request_reviews>`
+     → comments), not just the first one in each thread.
+   - **Read every timeline / issue comment** (`<pull_request_comments>`); a real fix request can
+     live there even though it is not a resolvable thread.
+   - **Read every review body / overall PR review summary** (`<pull_request_reviews>`), including
+     comments on the diff that were never grouped into a thread.
+   - **Read the pull request body itself** for context.
+   Every comment that contains feedback — open inline threads, timeline, review-body — must be
+   judged. Do not skip an open comment only because it is not inline-resolvable; it still counts
+   as addressed. Resolved threads are the one exception and may be skipped to save context.
 2. **For each comment, judge whether it is valid and actionable** against the current code:
    - **Valid and fixable** → implement the fix by editing files in the working tree. The
      GitHub Action auto-commits and pushes any uncommitted changes to the PR branch; you do
