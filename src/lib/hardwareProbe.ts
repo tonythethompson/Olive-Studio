@@ -33,30 +33,36 @@ export interface GpuInfo {
 }
 
 /**
- * CDNA ISA identifiers for AMD Instinct datacenter GPUs (MIGraphX targets).
- * Consumer Vega (gfx900/gfx902/gfx904/gfx906/gfx90c) and RDNA
- * (gfx10xx/gfx11xx/gfx12xx) parts are deliberately excluded.
+ * ISA identifiers for AMD GPUs that MIGraphX can serve: datacenter CDNA
+ * (Instinct) plus consumer RDNA3 (RX 7xxx, ROCm 6.1+) and RDNA4 (RX 9xxx,
+ * ROCm 7.x). Legacy Vega (gfx900/gfx902/gfx904/gfx906/gfx90c) and RDNA1/2
+ * (gfx10xx) parts are deliberately excluded — no MIGraphX support exists.
  */
-const INSTINCT_ISA_FAMILIES = new Set([
+const MIGRAPHX_SUPPORTED_ISA_FAMILIES = new Set([
   "gfx908", // CDNA 1 (Instinct MI100)
   "gfx90a", // CDNA 2 (Instinct MI200)
   "gfx940", // CDNA 3 (Instinct MI300A)
   "gfx941", // CDNA 3 (Instinct MI300A/X variants)
   "gfx942", // CDNA 3 (Instinct MI300X / MI325X)
   "gfx950", // CDNA 4 (Instinct MI350X / MI355X)
+  "gfx1100", // RDNA 3 (Radeon RX 7900 XTX / XT)
+  "gfx1101", // RDNA 3 (Radeon RX 7800 / 7700 series)
+  "gfx1102", // RDNA 3 (Radeon RX 7600 series)
+  "gfx1200", // RDNA 4 (Radeon RX 9060 series)
+  "gfx1201", // RDNA 4 (Radeon RX 9070 XT / 9070)
 ]);
 
 /**
- * Whether a probed AMD GPU is an Instinct datacenter part that MIGraphX can
- * serve. The marketing name ("Instinct" / "MIxxxx") is authoritative; the CDNA
- * ISA list covers systems where only the ISA family is known. Anything else —
- * consumer Radeon RDNA, legacy Vega, or an unknown architecture — returns false
- * so MIGraphX is never advertised for hardware the installer cannot support.
+ * Whether a probed AMD GPU is a part that MIGraphX can serve. The marketing
+ * name ("Instinct" / "MIxxxx") is authoritative for datacenter cards; the
+ * CDNA + RDNA3/4 ISA list covers systems where only the ISA family is known.
+ * Anything else — RDNA1/2, legacy Vega, or an unknown architecture — returns
+ * false so MIGraphX is never advertised for hardware the wheel cannot support.
  */
-export function isInstinctGpu(gpu: Pick<GpuInfo, "name" | "isaFamily">): boolean {
+export function isMigraphxSupportedGpu(gpu: Pick<GpuInfo, "name" | "isaFamily">): boolean {
   if (/instinct/i.test(gpu.name)) return true;
   const isa = gpu.isaFamily?.toLowerCase();
-  return isa !== undefined && INSTINCT_ISA_FAMILIES.has(isa);
+  return isa !== undefined && MIGRAPHX_SUPPORTED_ISA_FAMILIES.has(isa);
 }
 
 /**
@@ -369,9 +375,9 @@ export function mergeDetectedProviders(input: {
   cudaLoadable?: boolean;
   /** True when an NVIDIA GPU meets the CUDA 12 toolkit floor (Maxwell+), independent of whether onnxruntime-gpu is installed yet. */
   cudaFamilyCapable?: boolean;
-  /** True when at least one probed AMD GPU is an Instinct (CDNA) datacenter part. Gates the MIGraphX soft-detect below. */
-  hasInstinctGpu?: boolean;
-  /** True when MIGraphXExecutionProvider is loadable (Instinct GPU + ORT reports it). Drives the install-needed indicator. */
+  /** True when at least one probed AMD GPU is a MIGraphX-supported part (CDNA / RDNA3 / RDNA4). Gates the MIGraphX soft-detect below. */
+  hasMigraphxSupportedGpu?: boolean;
+  /** True when MIGraphXExecutionProvider is loadable (supported GPU + ORT reports it). Drives the install-needed indicator. */
   migraphxLoadable?: boolean;
   /** Platform OS string for DirectML Windows detection. */
   os?: string;
@@ -390,7 +396,7 @@ export function mergeDetectedProviders(input: {
         continue;
       }
       if (provider === "MIGraphXExecutionProvider") {
-        // Gated below by hasInstinctGpu + migraphxLoadable; do not trust ORT listing alone.
+        // Gated below by hasMigraphxSupportedGpu + migraphxLoadable; do not trust ORT listing alone.
         continue;
       }
       if (provider === "TensorrtExecutionProvider" && !tensorRtOk) {
@@ -429,11 +435,12 @@ export function mergeDetectedProviders(input: {
   }
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
-    // MIGraphX targets AMD Instinct datacenter GPUs (CDNA) only. A consumer
-    // Radeon (RDNA) box with the ROCm stack must not be advertised as
-    // MIGraphX-capable — the installer cannot provide the EP on gfx10/gfx11/
-    // gfx12. The install-needed indicator shows when migraphxLoadable is false.
-    if (input.hasInstinctGpu) {
+    // MIGraphX serves CDNA (Instinct) plus consumer RDNA3/RDNA4 (RX 7xxx /
+    // RX 9xxx) GPUs with a supported ROCm stack. RDNA1/2 and legacy Vega
+    // boxes must not be advertised as MIGraphX-capable — the migraphx wheel
+    // cannot provide the EP on them. The install-needed indicator shows when
+    // migraphxLoadable is false.
+    if (input.hasMigraphxSupportedGpu) {
       detected.add("MIGraphXExecutionProvider");
     }
   }

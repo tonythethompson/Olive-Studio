@@ -783,7 +783,8 @@ function ProviderPluginInstalls({
             runtime is not installed in the project{" "}
             <code className="text-slate-500">.venv</code>. Select this provider to trigger automatic
             installation on first run, or install manually with{" "}
-            <code className="text-slate-500">pip install migraphx</code> in the ROCm venv.
+            <code className="text-slate-500">pip install migraphx</code> into this project{" "}
+            <code className="text-slate-500">.venv</code>.
           </p>
         )}
       </div>
@@ -967,7 +968,8 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
     Boolean(hardwareProbe) &&
     !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
   // MIGraphX install-needed is gated on the provider being detected at all
-  // (AMD Instinct hardware) — a consumer Radeon box never shows the CTA.
+  // (MIGraphX-supported hardware: CDNA / RDNA3 / RDNA4) — unsupported AMD GPUs
+  // never show the CTA.
   const migraphxNeedsInstall =
     isProviderDetectedLocally("MIGraphXExecutionProvider", hardwareProbe) &&
     hardwareProbe?.migraphx?.loadable !== true;

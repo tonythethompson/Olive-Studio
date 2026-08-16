@@ -71,7 +71,7 @@ export function isQuantMethodAllowed(
     return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
   }
   if (method === "hqq" || method === "rtn" || method === "kquant") {
-    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization support CPU, CUDA, CoreML, and MIGraphX (AMD Instinct).
+    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization support CPU, CUDA, CoreML, and MIGraphX (AMD Instinct / RDNA3+).
     return (
       provider === "CPUExecutionProvider" ||
       provider === "CUDAExecutionProvider" ||

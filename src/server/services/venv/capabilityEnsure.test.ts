@@ -168,7 +168,7 @@ describe("ensureProviderCapability MIGraphXExecutionProvider", () => {
     expect(ensureMigraphxMock).toHaveBeenCalledOnce();
   });
 
-  it("returns failure with Instinct/ROCm hint when MIGraphXExecutionProvider is absent from providers", async () => {
+  it("returns failure with supported-GPU/ROCm hint when MIGraphXExecutionProvider is absent from providers", async () => {
     getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
     probeFamilyStatusMock.mockResolvedValue({
       capabilities: { cpu: { usable: true } },
@@ -179,7 +179,7 @@ describe("ensureProviderCapability MIGraphXExecutionProvider", () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain("MIGraphXExecutionProvider is not registered");
-    expect(result.error).toContain("AMD Instinct");
+    expect(result.error).toContain("RDNA3/RDNA4");
     expect(result.family).toBe("default");
     expect(result.python).toBe("/fake/.venv/bin/python");
   });

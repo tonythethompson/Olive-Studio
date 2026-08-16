@@ -172,14 +172,14 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     id: "MIGraphXExecutionProvider",
     name: "AMD MIGraphX",
     shortName: "MIGraphX",
-    desc: "Graph-compiled inference on AMD Instinct datacenter GPUs via MIGraphX.",
+    desc: "Graph-compiled inference on AMD Instinct and supported Radeon GPUs via MIGraphX.",
     icon: Layers,
     tooltip: {
       requirements:
-        "AMD Instinct MI200 or newer (MI300X, MI325X, MI350X, MI355X) with ROCm 5.7+ stack.",
+        "AMD Instinct (MI100+) or Radeon RX 7xxx / RX 9xxx (RDNA3/RDNA4) — Linux x86_64 with ROCm 6.1+ (RDNA3) or ROCm 7.x (RDNA4).",
       quantMethods: "FP16 (recommended), INT8 static quantization.",
       recommendation:
-        "Use FP16 for maximum throughput on Instinct GPUs. INT8 provides additional compression with minimal accuracy loss for batch inference workloads.",
+        "Use FP16 for maximum throughput. INT8 provides additional compression with minimal accuracy loss for batch inference workloads.",
     },
   },
   {

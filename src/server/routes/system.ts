@@ -17,7 +17,7 @@ import { parseCudaVersionFromNvidiaSmi } from "../services/olive/cuda.ts";
 import {
   computeOpenVinoCompatibleHardware,
   computeQnnCompatibleHardware,
-  isInstinctGpu,
+  isMigraphxSupportedGpu,
   isNvidiaGpuTensorRtFamily,
   mergeDetectedProviders,
   pickRecommendedProvider,
@@ -917,10 +917,11 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     ),
   });
 
-  // MIGraphX targets AMD Instinct datacenter GPUs (CDNA). Consumer Radeon
-  // (RDNA gfx10/gfx11/gfx12) boxes with a ROCm stack must not be advertised as
-  // MIGraphX-capable — the migraphx wheel cannot provide the EP on them.
-  const hasInstinctGpu = Boolean(rocm?.gpus.some((gpu) => isInstinctGpu(gpu)));
+  // MIGraphX serves CDNA (Instinct) plus consumer RDNA3/RDNA4 (RX 7xxx /
+  // RX 9xxx) GPUs on a supported ROCm stack. RDNA1/2 and legacy Vega boxes
+  // must not be advertised as MIGraphX-capable — the migraphx wheel cannot
+  // provide the EP on them.
+  const hasMigraphxSupportedGpu = Boolean(rocm?.gpus.some((gpu) => isMigraphxSupportedGpu(gpu)));
   // Loadability reflects the default-family ORT runtime only — Execute Live
   // uses the default Olive runtime, so family-isolated ORT listings must not
   // authorize the install-needed state.
@@ -928,14 +929,16 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
   const dnnlAvailable = Boolean(state.defaultOrtProviders?.includes("DnnlExecutionProvider"));
 
   if (rocm?.gpus.length) {
-    if (hasInstinctGpu) {
+    if (hasMigraphxSupportedGpu) {
       notes.push(
         migraphxLoadable
           ? "MIGraphX execution provider ready."
-          : "AMD Instinct GPU detected — MIGraphX runtime not in .venv yet (Install in Hardware or on first MIGraphX run).",
+          : "MIGraphX-capable AMD GPU detected — MIGraphX runtime not in .venv yet (Install in Hardware or on first MIGraphX run).",
       );
     } else {
-      notes.push("AMD GPU detected (consumer / non-Instinct) — MIGraphX does not apply.");
+      notes.push(
+        "AMD GPU detected — not a MIGraphX target (requires Instinct CDNA, Radeon RDNA3/RDNA4 with a supported ROCm stack).",
+      );
     }
   }
   if (dnnlAvailable) {
@@ -950,7 +953,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     onnxRuntimeProviders: state.defaultOrtProviders,
     hasNvidiaGpu: Boolean(nvidia?.gpus.length),
     hasRocmGpu: Boolean(rocm?.gpus.length),
-    hasInstinctGpu,
+    hasMigraphxSupportedGpu,
     migraphxLoadable,
     hasOpenVino: Boolean(state.openvino?.available),
     hasOpenVinoCompatibleHardware,
@@ -974,7 +977,7 @@ async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwarePr
     platform,
     nvidia,
     rocm,
-    ...(rocm && hasInstinctGpu
+    ...(rocm && hasMigraphxSupportedGpu
       ? { migraphx: { loadable: migraphxLoadable } }
       : {}),
     ...(dnnlAvailable

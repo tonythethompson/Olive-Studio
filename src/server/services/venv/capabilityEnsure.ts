@@ -110,9 +110,9 @@ function resolveMissingCapabilitySlot(
       ok: false,
       error:
         "MIGraphXExecutionProvider is not registered by the installed ORT wheel. " +
-        "MIGraphX requires an AMD Instinct datacenter GPU (CDNA) with the ROCm stack — " +
-        "consumer Radeon (RDNA) GPUs are not supported. Reinstall the migraphx package in the " +
-        "default runtime and re-run the hardware probe.",
+        "MIGraphX requires Linux x86_64 with the ROCm stack and a supported AMD GPU — " +
+        "Instinct (CDNA) or Radeon RDNA3/RDNA4 (RX 7xxx / RX 9xxx); RDNA1/2 and Vega are not supported. " +
+        "Reinstall the migraphx package in the default runtime and re-run the hardware probe.",
       family,
       python,
     };

@@ -5,7 +5,7 @@ import {
   computeOpenVinoCompatibleHardware,
   computeQnnCompatibleHardware,
   getProviderAvailabilityBlock,
-  isInstinctGpu,
+  isMigraphxSupportedGpu,
   isNvidiaGpuTensorRtFamily,
   isProviderDetectedLocally,
   mergeDetectedProviders,
@@ -656,30 +656,30 @@ describe("mergeDetectedProviders QNN", () => {
   });
 });
 
-describe("mergeDetectedProviders — MIGraphX Instinct gating", () => {
-  it("soft-detects MIGraphX only on AMD Instinct datacenter GPUs", () => {
+describe("mergeDetectedProviders — MIGraphX supported-GPU gating", () => {
+  it("soft-detects MIGraphX on MIGraphX-supported AMD GPUs", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: true,
-      hasInstinctGpu: true,
+      hasMigraphxSupportedGpu: true,
       hasOpenVino: false,
     });
     expect(detected).toContain("ROCMExecutionProvider");
     expect(detected).toContain("MIGraphXExecutionProvider");
   });
 
-  it("excludes MIGraphX for consumer Radeon (RDNA) GPUs with a ROCm stack", () => {
+  it("excludes MIGraphX for unsupported AMD GPUs (RDNA1/2, Vega) with a ROCm stack", () => {
     const detected = mergeDetectedProviders({
       hasNvidiaGpu: false,
       hasRocmGpu: true,
-      hasInstinctGpu: false,
+      hasMigraphxSupportedGpu: false,
       hasOpenVino: false,
     });
     expect(detected).toContain("ROCMExecutionProvider");
     expect(detected).not.toContain("MIGraphXExecutionProvider");
   });
 
-  it("does not trust the ORT MIGraphX listing alone when no Instinct GPU is present", () => {
+  it("does not trust the ORT MIGraphX listing alone when no supported GPU is present", () => {
     const detected = mergeDetectedProviders({
       onnxRuntimeProviders: ["CPUExecutionProvider", "MIGraphXExecutionProvider"],
       hasNvidiaGpu: false,
@@ -690,27 +690,34 @@ describe("mergeDetectedProviders — MIGraphX Instinct gating", () => {
   });
 });
 
-describe("isInstinctGpu", () => {
+describe("isMigraphxSupportedGpu", () => {
   it("classifies Instinct GPUs by marketing name", () => {
-    expect(isInstinctGpu({ name: "AMD Instinct MI300X", isaFamily: "gfx942" })).toBe(true);
-    expect(isInstinctGpu({ name: "AMD Instinct MI250X", isaFamily: undefined })).toBe(true);
+    expect(isMigraphxSupportedGpu({ name: "AMD Instinct MI300X", isaFamily: "gfx942" })).toBe(true);
+    expect(isMigraphxSupportedGpu({ name: "AMD Instinct MI250X", isaFamily: undefined })).toBe(true);
   });
 
   it("classifies by known CDNA ISA families", () => {
     for (const isa of ["gfx908", "gfx90a", "gfx940", "gfx941", "gfx942", "gfx950"]) {
-      expect(isInstinctGpu({ name: "AMD GPU", isaFamily: isa })).toBe(true);
+      expect(isMigraphxSupportedGpu({ name: "AMD GPU", isaFamily: isa })).toBe(true);
     }
   });
 
-  it("excludes consumer Radeon RDNA and legacy Vega parts", () => {
-    expect(isInstinctGpu({ name: "AMD Radeon RX 7900 XTX", isaFamily: "gfx1100" })).toBe(false);
-    expect(isInstinctGpu({ name: "AMD Radeon RX 9070 XT", isaFamily: "gfx1201" })).toBe(false);
-    expect(isInstinctGpu({ name: "AMD Radeon RX 5700 XT", isaFamily: "gfx1010" })).toBe(false);
+  it("classifies consumer RDNA3 / RDNA4 GPUs as supported (ROCm 6.1+ / 7.x)", () => {
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 7900 XTX", isaFamily: "gfx1100" })).toBe(true);
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 7800 XT", isaFamily: "gfx1101" })).toBe(true);
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 7600", isaFamily: "gfx1102" })).toBe(true);
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 9060 XT", isaFamily: "gfx1200" })).toBe(true);
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 9070 XT", isaFamily: "gfx1201" })).toBe(true);
+  });
+
+  it("excludes RDNA1/2 and legacy Vega parts", () => {
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 5700 XT", isaFamily: "gfx1010" })).toBe(false);
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon RX 6800", isaFamily: "gfx1030" })).toBe(false);
     // Vega is pre-RDNA consumer/GCN — not a MIGraphX target.
-    expect(isInstinctGpu({ name: "AMD Radeon VII", isaFamily: "gfx906" })).toBe(false);
-    expect(isInstinctGpu({ name: "AMD Radeon RX 6800", isaFamily: "gfx90c" })).toBe(false);
-    // Unknown architecture is treated as non-Instinct (conservative).
-    expect(isInstinctGpu({ name: "AMD GPU", isaFamily: undefined })).toBe(false);
+    expect(isMigraphxSupportedGpu({ name: "AMD Radeon VII", isaFamily: "gfx906" })).toBe(false);
+    expect(isMigraphxSupportedGpu({ name: "AMD GPU", isaFamily: "gfx90c" })).toBe(false);
+    // Unknown architecture is treated as unsupported (conservative).
+    expect(isMigraphxSupportedGpu({ name: "AMD GPU", isaFamily: undefined })).toBe(false);
   });
 });
 
