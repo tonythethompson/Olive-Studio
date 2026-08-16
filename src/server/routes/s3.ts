@@ -22,6 +22,7 @@ import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { resolveS3Config, resolvePublicS3Config } from "../services/s3/client.ts";
 import { listUserModels, listPublicModels, pushModel, pullModel } from "../services/s3/operations.ts";
 import { resolveOliveOutputForDownload } from "../services/playground/oliveOutputScan.ts";
+import { containmentRoot } from "../services/shared/runtimePaths.ts";
 
 /**
  * Validates a pull destination directory against the project root.
@@ -168,9 +169,11 @@ export function mountS3Routes(router: Router): void {
     }
     const source = rawSource === "public" ? "public" as const : "private" as const;
 
-    // Default destination: ./models/optimized/<basename>
+    // Default destination: <containment root>/models/optimized/<basename>.
+    // In packaged apps the containment root is the per-user writable directory
+    // — the installed resource directory (cwd) is read-only.
     const basename = path.basename(key);
-    const cwd = process.cwd();
+    const cwd = containmentRoot();
     const destDir = rawDestDir?.trim() ? path.resolve(cwd, rawDestDir.trim()) : path.resolve(cwd, "models", "optimized");
     const destValidation = validatePullDestDir(cwd, destDir);
     if (!destValidation.ok) {

@@ -5,7 +5,9 @@
  * inference sidecar. Separate from the Olive venv families to avoid dependency
  * conflicts (GenAI has its own ORT build bundled).
  *
- * Venv location: .venvs/genai/ (relative to project root)
+ * Venv location: .venvs/genai/ under the project root in dev, or under the
+ * per-user writable root in packaged apps (the installed resource directory
+ * is read-only).
  */
 
 import { execFile, spawn } from "node:child_process";
@@ -13,18 +15,23 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { isPackagedApp, writableRoot } from "../shared/runtimePaths.ts";
 
 const execFileAsync = promisify(execFile);
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-const GENAI_VENV_DIR = path.join(process.cwd(), ".venvs", "genai");
+/** Resolved lazily so env-based packaged-app detection is always current. */
+function genaiVenvDir(): string {
+  const root = isPackagedApp() ? writableRoot() : process.cwd();
+  return path.join(root, ".venvs", "genai");
+}
 
 /** Python executable inside the GenAI venv. */
 export function genaiPythonPath(): string {
   return process.platform === "win32"
-    ? path.join(GENAI_VENV_DIR, "Scripts", "python.exe")
-    : path.join(GENAI_VENV_DIR, "bin", "python");
+    ? path.join(genaiVenvDir(), "Scripts", "python.exe")
+    : path.join(genaiVenvDir(), "bin", "python");
 }
 
 /** Whether the GenAI venv exists and has python. */
@@ -111,12 +118,13 @@ export async function ensureGenaiVenv(
   // Create venv
   onLine("[genai] Creating virtual environment...");
   try {
-    fs.mkdirSync(path.dirname(GENAI_VENV_DIR), { recursive: true });
+    const venvDir = genaiVenvDir();
+    fs.mkdirSync(path.dirname(venvDir), { recursive: true });
 
     const venvArgs =
       process.platform === "win32" && systemPython === "py"
-        ? ["-3", "-m", "venv", GENAI_VENV_DIR]
-        : ["-m", "venv", GENAI_VENV_DIR];
+        ? ["-3", "-m", "venv", venvDir]
+        : ["-m", "venv", venvDir];
 
     await execFileAsync(systemPython, venvArgs, { timeout: 60_000 });
   } catch (err: unknown) {

@@ -20,14 +20,22 @@ import { pipeline } from "node:stream/promises";
 
 import { resolvePublicS3Config } from "../s3/client.ts";
 import { pullModel } from "../s3/operations.ts";
+import { isPackagedApp, writableRoot } from "../shared/runtimePaths.ts";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 /** Default model to download for the built-in GenAI assistant. */
 export const DEFAULT_GENAI_MODEL = "qwen2.5-coder-1.5b-instruct-onnx";
 
-/** Local cache directory for GenAI models. */
-const GENAI_MODELS_DIR = path.join(process.cwd(), ".cache", "genai-models");
+/**
+ * Local cache directory for GenAI models. Resolved lazily: the project root
+ * in dev, the per-user writable root in packaged apps (the installed resource
+ * directory is read-only).
+ */
+function genaiModelsDir(): string {
+  const root = isPackagedApp() ? writableRoot() : process.cwd();
+  return path.join(root, ".cache", "genai-models");
+}
 
 /**
  * CDN base URL for model downloads. Falls back to direct S3 if not set.
@@ -103,7 +111,7 @@ export function getModelStatus(modelName: string = DEFAULT_GENAI_MODEL): ModelDo
     return { ready: false, localPath: "", filesPresent: 0, filesRequired: 0, localSizeBytes: 0 };
   }
 
-  const modelDir = path.join(GENAI_MODELS_DIR, manifest.name);
+  const modelDir = path.join(genaiModelsDir(), manifest.name);
   let filesPresent = 0;
   let localSizeBytes = 0;
 
@@ -191,7 +199,7 @@ async function runDownload(
     return { ok: false, error: `Unknown model: ${modelName}` };
   }
 
-  const modelDir = path.join(GENAI_MODELS_DIR, manifest.name);
+  const modelDir = path.join(genaiModelsDir(), manifest.name);
   fs.mkdirSync(modelDir, { recursive: true });
 
   const cdnUrl = getCdnBaseUrl();
