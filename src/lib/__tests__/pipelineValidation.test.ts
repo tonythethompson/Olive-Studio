@@ -843,10 +843,10 @@ describe("0.13.0 validation rules", () => {
       expect(result.isBlocked).toBe(false);
     });
 
-    it("does not block validation when QairtPipeline replaces conversion on QNN", () => {
+    it("does not block validation when QairtPipeline replaces conversion on QNN ABI", () => {
       const state = sanitizePipelineState(
         baseState({
-          ihvProvider: "QNNExecutionProvider",
+          ihvProvider: "QnnAbiExecutionProvider",
           passes: basePasses({ qairtPipeline: true, conversion: true, conversionFormat: "qnn" }),
         }),
       );
@@ -1114,13 +1114,47 @@ describe("commit-path auto-coercion parity", () => {
     expect(next.passes.trustRemoteCode).toBe(false);
   });
 
-  it("keeps QairtPipeline on QNN and QNN ABI providers", () => {
-    for (const provider of ["QNNExecutionProvider", "QnnAbiExecutionProvider"] as IHVProvider[]) {
-      const next = commitLight(baseState({ ihvProvider: provider }), {
-        passes: basePasses({ qairtPipeline: true }),
-      });
-      expect(next.passes.qairtPipeline).toBe(true);
-    }
+  it("keeps QairtPipeline on QNN ABI provider", () => {
+    const next = commitLight(baseState({ ihvProvider: "QnnAbiExecutionProvider" }), {
+      passes: basePasses({ qairtPipeline: true }),
+    });
+    expect(next.passes.qairtPipeline).toBe(true);
+  });
+
+  it("disables QairtPipeline on QNN plugin provider", () => {
+    const next = commitLight(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      passes: basePasses({ qairtPipeline: true }),
+    });
+    expect(next.passes.qairtPipeline).toBe(false);
+  });
+
+  it("enables QairtPipeline when selecting QNN ABI provider", () => {
+    const next = commitLight(baseState({ ihvProvider: "QnnAbiExecutionProvider" }), {
+      passes: basePasses({ qairtPipeline: false }),
+    });
+    expect(next.passes.qairtPipeline).toBe(true);
+  });
+
+  it("re-enables conversion when selecting QNN plugin provider", () => {
+    const next = commitLight(baseState({ ihvProvider: "QNNExecutionProvider" }), {
+      passes: basePasses({ conversion: false }),
+    });
+    expect(next.passes.conversion).toBe(true);
+  });
+
+  it("disables conversion and discrepancy check when selecting QNN ABI", () => {
+    const next = commitLight(baseState({ ihvProvider: "QnnAbiExecutionProvider" }), {
+      passes: basePasses({ conversion: true, onnxDiscrepancyCheck: true }),
+    });
+    expect(next.passes.conversion).toBe(false);
+    expect(next.passes.onnxDiscrepancyCheck).toBe(false);
+  });
+
+  it("disables quantization when selecting QNN ABI", () => {
+    const next = commitLight(baseState({ ihvProvider: "QnnAbiExecutionProvider" }), {
+      passes: basePasses({ quantization: true, quantMethod: "ptq" }),
+    });
+    expect(next.passes.quantization).toBe(false);
   });
 
   it("disables SimplifiedLayerNormToRMSNorm on non-QNN providers on commit", () => {
@@ -1244,5 +1278,448 @@ describe("CoreML validation rules", () => {
         expect.arrayContaining([expect.objectContaining({ passKey: "peftMethod", severity: "critical" })]),
       );
     });
+  });
+});
+
+import * as fc from "fast-check";
+
+/* Feature: ep-expansion-pack, Property 6: oneDNN Incompatible Pass Conflict Detection */
+
+/**
+ * Property 6: oneDNN Incompatible Pass Conflict Detection
+ *
+ * For any UIState where ihvProvider is "DnnlExecutionProvider" and any of
+ * {conversionFormat: "openvino", qairtPipeline: true, simplifiedLayerNormToRMSNorm: true,
+ * TensorRT-gated passes (conversionFormat: "tensorrt"), mobiusBuilder: true} is enabled,
+ * getProviderConflicts() SHALL return at least one HardwareConflict entry with severity: "critical".
+ *
+ * **Validates: Requirements 8.2**
+ */
+describe("Property 6: oneDNN Incompatible Pass Conflict Detection", () => {
+  /**
+   * Arbitrary that generates a passes object with at least one incompatible flag set
+   * for DnnlExecutionProvider. Each incompatible flag is independently toggled on/off,
+   * but at least one must be enabled.
+   */
+  const arbIncompatibleDnnlPasses = fc
+    .record({
+      openvinoConversion: fc.boolean(),
+      qairtPipeline: fc.boolean(),
+      simplifiedLayerNormToRMSNorm: fc.boolean(),
+      tensorrtConversion: fc.boolean(),
+      mobiusBuilder: fc.boolean(),
+    })
+    .filter(
+      (flags) =>
+        flags.openvinoConversion ||
+        flags.qairtPipeline ||
+        flags.simplifiedLayerNormToRMSNorm ||
+        flags.tensorrtConversion ||
+        flags.mobiusBuilder,
+    )
+    .map((flags) => {
+      const overrides: Partial<UIState["passes"]> = {};
+
+      if (flags.openvinoConversion) {
+        overrides.conversion = true;
+        overrides.conversionFormat = "openvino";
+      }
+      if (flags.tensorrtConversion) {
+        overrides.conversion = true;
+        overrides.conversionFormat = "tensorrt";
+      }
+      if (flags.qairtPipeline) {
+        overrides.qairtPipeline = true;
+      }
+      if (flags.simplifiedLayerNormToRMSNorm) {
+        overrides.simplifiedLayerNormToRMSNorm = true;
+      }
+      if (flags.mobiusBuilder) {
+        overrides.mobiusBuilder = true;
+      }
+
+      return basePasses(overrides);
+    });
+
+  it("detects at least one critical conflict for any incompatible pass combination", () => {
+    fc.assert(
+      fc.property(arbIncompatibleDnnlPasses, (passes) => {
+        const conflicts = getProviderConflicts("DnnlExecutionProvider", passes);
+        const criticalConflicts = conflicts.filter((c) => c.severity === "critical");
+        expect(criticalConflicts.length).toBeGreaterThanOrEqual(1);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("each critical conflict has a non-empty reason and autofix", () => {
+    fc.assert(
+      fc.property(arbIncompatibleDnnlPasses, (passes) => {
+        const conflicts = getProviderConflicts("DnnlExecutionProvider", passes);
+        const criticalConflicts = conflicts.filter((c) => c.severity === "critical");
+        for (const conflict of criticalConflicts) {
+          expect(conflict.reason).toBeTruthy();
+          expect(conflict.autofix).toBeInstanceOf(Function);
+          const fix = conflict.autofix();
+          expect(Object.keys(fix).length).toBeGreaterThanOrEqual(1);
+        }
+      }),
+      { numRuns: 100 },
+    );
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/* Feature: ep-expansion-pack, Property 5: MIGraphX Compatible Pass Allowance */
+
+/**
+ * Property 5: MIGraphX Compatible Pass Allowance
+ *
+ * For any UIState where ihvProvider is "MIGraphXExecutionProvider" and passes
+ * are limited to the compatible set {OnnxConversion with format "onnx",
+ * OnnxFloatToFloat16, OnnxStaticQuantization, OnnxModelOptimizer, AWQ, GPTQ,
+ * SpinQuant, QuaRot, HQQ}, getProviderConflicts() SHALL return zero
+ * HardwareConflict entries for those passes.
+ *
+ * **Validates: Requirements 4.3**
+ */
+describe("Property 5: MIGraphX Compatible Pass Allowance", () => {
+  // Compatible quantization methods for MIGraphX
+  const MIGRAPHX_COMPATIBLE_QUANT_METHODS = [
+    "ptq",
+    "awq",
+    "gptq",
+    "spinquant",
+    "quarot",
+    "hqq",
+  ] as const;
+
+  // Arbitrary: generates a random subset of compatible pass configurations for MIGraphX.
+  // None of these should produce conflicts.
+  const arbMigraphxCompatiblePasses = fc
+    .record({
+      conversion: fc.boolean(),
+      quantization: fc.boolean(),
+      quantMethod: fc.constantFrom(...MIGRAPHX_COMPATIBLE_QUANT_METHODS),
+      quantPrecision: fc.constantFrom("int4" as const, "int8" as const, "fp16" as const),
+      onnxTransforms: fc.boolean(),
+      pruning: fc.boolean(),
+      peft: fc.boolean(),
+      peftMethod: fc.constantFrom("lora" as const, "qlora" as const),
+    })
+    .map((cfg) => {
+      return basePasses({
+        // OnnxConversion with format "onnx" only (never openvino or tensorrt)
+        conversion: cfg.conversion,
+        conversionFormat: "onnx",
+        // Quantization with only MIGraphX-compatible methods
+        quantization: cfg.quantization,
+        quantMethod: cfg.quantMethod,
+        quantPrecision: cfg.quantPrecision,
+        // OnnxModelOptimizer
+        onnxTransforms: cfg.onnxTransforms,
+        // Pruning: only unstructured (structured would emit a warning)
+        pruning: cfg.pruning,
+        pruningType: "unstructured",
+        // PEFT: allowed on MIGraphX (GPU provider)
+        peft: cfg.peft,
+        peftMethod: cfg.peftMethod,
+        // Ensure incompatible flags are OFF
+        qairtPipeline: false,
+        simplifiedLayerNormToRMSNorm: false,
+        mobiusBuilder: false,
+      });
+    });
+
+  it("returns zero HardwareConflict entries for any subset of compatible passes", () => {
+    fc.assert(
+      fc.property(arbMigraphxCompatiblePasses, (passes) => {
+        const conflicts = getProviderConflicts("MIGraphXExecutionProvider", passes);
+        expect(conflicts).toHaveLength(0);
+      }),
+      { numRuns: 200 },
+    );
+  });
+});
+
+
+/* Feature: ep-expansion-pack, Property 7: oneDNN GPU Quantization Method Blocking */
+
+/**
+ * Property 7: oneDNN GPU Quantization Method Blocking
+ *
+ * For any PyTorch-native GPU quantization method in {awq, gptq, hqq, spinquant, quarot}
+ * combined with DnnlExecutionProvider, isQuantMethodAllowed(method, "DnnlExecutionProvider")
+ * SHALL return false.
+ *
+ * oneDNN targets Intel CPUs and does not support GPU-native quantization workflows.
+ * Only OnnxStaticQuantization (INT8) is valid for this provider.
+ *
+ * **Validates: Requirements 8.5**
+ */
+describe("Property 7: oneDNN GPU Quantization Method Blocking", () => {
+  const PYTORCH_GPU_QUANT_METHODS = ["awq", "gptq", "hqq", "spinquant", "quarot"] as const;
+
+  const arbBlockedQuantMethod = fc.constantFrom(...PYTORCH_GPU_QUANT_METHODS);
+
+  it("blocks all PyTorch-native GPU quant methods on DnnlExecutionProvider", () => {
+    fc.assert(
+      fc.property(arbBlockedQuantMethod, (method) => {
+        expect(isQuantMethodAllowed(method, "DnnlExecutionProvider")).toBe(false);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("each blocked method individually returns false", () => {
+    for (const method of PYTORCH_GPU_QUANT_METHODS) {
+      expect(isQuantMethodAllowed(method, "DnnlExecutionProvider")).toBe(false);
+    }
+  });
+});
+
+
+/* Feature: ep-expansion-pack, Property 8: QNN ABI Selection Coercion Invariant */
+
+/**
+ * Property 8: QNN ABI Selection Coercion Invariant
+ *
+ * For any random initial pass state, when commitUiStateUpdate() is applied with
+ * ihvProvider: "QnnAbiExecutionProvider", the resulting state SHALL have:
+ *   - qairtPipeline: true (auto-enabled, single-pass workflow)
+ *   - conversion: false (QairtPipeline replaces OnnxConversion)
+ *   - onnxDiscrepancyCheck: false (no ONNX graph to compare)
+ *
+ * This validates that the QNN ABI auto-coercion rules fire consistently
+ * regardless of the initial pass configuration.
+ *
+ * **Validates: Requirements 9.5**
+ */
+describe("Property 8: QNN ABI Selection Coercion Invariant", () => {
+  /**
+   * Arbitrary that generates random pass configurations covering all pass toggles.
+   * This intentionally enables conflicting pass combinations to prove that
+   * the coercion always resolves to the expected QNN ABI state invariants.
+   */
+  const arbRandomPasses = fc
+    .record({
+      conversion: fc.boolean(),
+      conversionFormat: fc.constantFrom("onnx" as const, "openvino" as const, "tensorrt" as const),
+      quantization: fc.boolean(),
+      quantMethod: fc.constantFrom(
+        "ptq" as const,
+        "awq" as const,
+        "gptq" as const,
+        "qat" as const,
+        "hqq" as const,
+        "rtn" as const,
+        "spinquant" as const,
+        "quarot" as const,
+      ),
+      quantPrecision: fc.constantFrom("int4" as const, "int8" as const, "fp16" as const),
+      pruning: fc.boolean(),
+      pruningType: fc.constantFrom("unstructured" as const, "structured" as const),
+      onnxTransforms: fc.boolean(),
+      peft: fc.boolean(),
+      peftMethod: fc.constantFrom("lora" as const, "qlora" as const),
+      mobiusBuilder: fc.boolean(),
+      qairtPipeline: fc.boolean(),
+      simplifiedLayerNormToRMSNorm: fc.boolean(),
+      onnxDiscrepancyCheck: fc.boolean(),
+      splitting: fc.boolean(),
+      trustRemoteCode: fc.boolean(),
+    })
+    .map((cfg) =>
+      basePasses({
+        conversion: cfg.conversion,
+        conversionFormat: cfg.conversionFormat,
+        quantization: cfg.quantization,
+        quantMethod: cfg.quantMethod,
+        quantPrecision: cfg.quantPrecision,
+        pruning: cfg.pruning,
+        pruningType: cfg.pruningType,
+        onnxTransforms: cfg.onnxTransforms,
+        peft: cfg.peft,
+        peftMethod: cfg.peftMethod,
+        mobiusBuilder: cfg.mobiusBuilder,
+        qairtPipeline: cfg.qairtPipeline,
+        simplifiedLayerNormToRMSNorm: cfg.simplifiedLayerNormToRMSNorm,
+        onnxDiscrepancyCheck: cfg.onnxDiscrepancyCheck,
+        splitting: cfg.splitting,
+        trustRemoteCode: cfg.trustRemoteCode,
+      }),
+    );
+
+  it("coerces qairtPipeline to true, conversion to false, and onnxDiscrepancyCheck to false after QNN ABI selection", () => {
+    fc.assert(
+      fc.property(arbRandomPasses, (passes) => {
+        const initial = baseState({ passes });
+        const committed = commitUiStateUpdate(initial, {
+          ihvProvider: "QnnAbiExecutionProvider",
+        });
+
+        // QNN ABI must always enable the QairtPipeline single-pass workflow
+        expect(committed.passes.qairtPipeline).toBe(true);
+        // QNN ABI replaces OnnxConversion — must be disabled
+        expect(committed.passes.conversion).toBe(false);
+        // No ONNX graph comparison available with QairtPipeline
+        expect(committed.passes.onnxDiscrepancyCheck).toBe(false);
+      }),
+      { numRuns: 150 },
+    );
+  });
+
+  it("coercion holds when starting from a state that already has QnnAbiExecutionProvider", () => {
+    fc.assert(
+      fc.property(arbRandomPasses, (passes) => {
+        // Simulate applying random passes to an already-selected QNN ABI state
+        const initial = baseState({
+          ihvProvider: "QnnAbiExecutionProvider",
+          passes,
+        });
+        const committed = commitUiStateUpdate(initial, {});
+
+        expect(committed.passes.qairtPipeline).toBe(true);
+        expect(committed.passes.conversion).toBe(false);
+        expect(committed.passes.onnxDiscrepancyCheck).toBe(false);
+      }),
+      { numRuns: 100 },
+    );
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/* Feature: ep-expansion-pack, Property 9: QNN Plugin Selection Inverse Coercion */
+
+/**
+ * Property 9: QNN Plugin Selection Inverse Coercion
+ *
+ * For any initial pass state where qairtPipeline is true, when
+ * commitUiStateUpdateShallow() is called with ihvProvider: "QNNExecutionProvider",
+ * the resulting state SHALL have qairtPipeline: false.
+ *
+ * This guarantees that selecting the multi-pass QNN plugin workflow always
+ * disables the single-pass QairtPipeline, regardless of what other passes
+ * are configured.
+ *
+ * **Validates: Requirements 9.6**
+ */
+describe("Property 9: QNN Plugin Selection Inverse Coercion", () => {
+  /**
+   * Arbitrary that generates random UIState pass configurations with
+   * qairtPipeline forced to true, simulating a state that was previously
+   * using QNN ABI or had qairtPipeline manually enabled.
+   */
+  const arbPassesWithQairtEnabled = fc
+    .record({
+      conversion: fc.boolean(),
+      conversionSourceFormat: fc.constantFrom("pytorch" as const, "tensorflow" as const, "jax" as const),
+      conversionFormat: fc.constantFrom("onnx" as const, "openvino" as const, "qnn" as const, "tensorrt" as const),
+      conversionOpset: fc.integer({ min: 11, max: 21 }),
+      conversionInputTargetTypes: fc.constantFrom("float32", "float16"),
+      quantization: fc.boolean(),
+      quantMethod: fc.constantFrom("ptq" as const, "awq" as const, "gptq" as const, "hqq" as const, "rtn" as const, "kquant" as const, "spinquant" as const, "quarot" as const, "qat" as const),
+      quantPrecision: fc.constantFrom("int4" as const, "int8" as const, "fp16" as const),
+      gptqBlockSize: fc.constantFrom(32, 64, 128),
+      gptqDescAct: fc.boolean(),
+      gptqGroupSize: fc.constantFrom(32, 64, 128),
+      awqGroupSize: fc.constantFrom(32, 64, 128),
+      awqDampPercent: fc.constantFrom(0.01, 0.05),
+      awqSym: fc.boolean(),
+      qatQuantPrecision: fc.constantFrom("int4" as const, "int8" as const),
+      qatCalibrateMethod: fc.constantFrom("minmax" as const, "percentile" as const, "entropy" as const),
+      qatCalibrateSteps: fc.integer({ min: 1, max: 50 }),
+      quantPreset: fc.constantFrom("", "default", "aggressive"),
+      pruning: fc.boolean(),
+      pruningSparsity: fc.double({ min: 0.1, max: 0.9 }),
+      pruningType: fc.constantFrom("structured" as const, "unstructured" as const),
+      pruningMethod: fc.constantFrom("magnitude" as const, "sparsegpt" as const, "wanda" as const),
+      pruningCriteria: fc.constantFrom("l1_norm" as const, "l2_norm" as const),
+      splitting: fc.boolean(),
+      onnxTransforms: fc.boolean(),
+      peft: fc.boolean(),
+      peftMethod: fc.constantFrom("lora" as const, "qlora" as const),
+      diffusionLora: fc.boolean(),
+      trustRemoteCode: fc.boolean(),
+      mobiusBuilder: fc.boolean(),
+      quantizeEmbeddingInt8: fc.boolean(),
+      shareEmbeddingLmHead: fc.boolean(),
+      simplifiedLayerNormToRMSNorm: fc.boolean(),
+      onnxDiscrepancyCheck: fc.boolean(),
+    })
+    .map((fields) => ({
+      ...fields,
+      // Force qairtPipeline to true — the precondition for this property
+      qairtPipeline: true,
+    }));
+
+  it("disables qairtPipeline when QNNExecutionProvider is selected", () => {
+    fc.assert(
+      fc.property(arbPassesWithQairtEnabled, (passes) => {
+        const prev: UIState = {
+          modelSource: "huggingface",
+          localFiles: [],
+          azureModelPath: "",
+          hfModelId: "",
+          hfDataset: "",
+          ihvProvider: "QnnAbiExecutionProvider", // starting from QNN ABI (realistic scenario)
+          openvinoTargetDevice: "CPU",
+          memoryOffload: "gpu_only",
+          cudaVersion: "auto",
+          cacheDir: "",
+          azureStr: "",
+          distributedCaching: false,
+          activeJobId: null,
+          passes,
+        };
+
+        // Simulate selecting QNNExecutionProvider (multi-pass plugin workflow)
+        const result = commitLight(prev, { ihvProvider: "QNNExecutionProvider" });
+
+        // qairtPipeline MUST be disabled for the multi-pass plugin workflow
+        expect(result.passes.qairtPipeline).toBe(false);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("disables qairtPipeline regardless of other pass states", () => {
+    // Complementary check: even with all passes enabled, qairtPipeline is coerced off
+    const allPassesOn = basePasses({
+      qairtPipeline: true,
+      conversion: true,
+      quantization: true,
+      pruning: true,
+      splitting: true,
+      onnxTransforms: true,
+      peft: true,
+      mobiusBuilder: true,
+      simplifiedLayerNormToRMSNorm: true,
+      onnxDiscrepancyCheck: true,
+    });
+
+    const prev: UIState = {
+      modelSource: "huggingface",
+      localFiles: [],
+      azureModelPath: "",
+      hfModelId: "",
+      hfDataset: "",
+      ihvProvider: "QnnAbiExecutionProvider",
+      openvinoTargetDevice: "CPU",
+      memoryOffload: "gpu_only",
+      cudaVersion: "auto",
+      cacheDir: "",
+      azureStr: "",
+      distributedCaching: false,
+      activeJobId: null,
+      passes: allPassesOn,
+    };
+
+    const result = commitLight(prev, { ihvProvider: "QNNExecutionProvider" });
+    expect(result.passes.qairtPipeline).toBe(false);
   });
 });

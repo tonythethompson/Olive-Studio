@@ -44,6 +44,73 @@ const execFileAsync = promisify(execFile);
 
 const ORT_PROBE_TIMEOUT_MS = 30_000;
 
+// ─── CPU feature detection ─────────────────────────────────────────────────
+
+const CPU_FEATURES_PROBE_SCRIPT = [
+  "import json, sys, platform",
+  "result = {}",
+  "try:",
+  "    if sys.platform == 'linux':",
+  "        with open('/proc/cpuinfo', 'r') as f:",
+  "            flags_line = ''",
+  "            for line in f:",
+  "                if line.startswith('flags'):",
+  "                    flags_line = line.lower()",
+  "                    break",
+  "            result['avx2'] = 'avx2' in flags_line",
+  "            result['avx512'] = 'avx512f' in flags_line",
+  "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+  "    elif sys.platform == 'win32':",
+  "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+  "            try:",
+  "                import ctypes",
+  "                k32 = ctypes.windll.kernel32",
+  "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+  "                try:",
+  "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+  "                except Exception:",
+  "                    pass",
+  "            except Exception:",
+  "                pass",
+  "    elif sys.platform == 'darwin':",
+  "        import subprocess",
+  "        try:",
+  "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+  "                               capture_output=True, text=True, timeout=5)",
+  "            features = r.stdout.lower()",
+  "            result['avx2'] = 'avx2' in features",
+  "            result['avx512'] = 'avx512f' in features",
+  "            result['amx'] = False",
+  "        except Exception:",
+  "            pass",
+  "except Exception:",
+  "    pass",
+  "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+].join("\n");
+
+/**
+ * Probes CPU instruction set features via a lightweight Python script.
+ * Returns undefined on any failure — absence never blocks provider selection.
+ */
+async function probeCpuFeatures(
+  python: string | undefined,
+): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+  if (!python) return undefined;
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+      timeout: 10_000,
+    });
+    const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+    const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+    if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+    if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+    if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── GPU probes ────────────────────────────────────────────────────────────
 
 async function probeNvidiaGpus(): Promise<HardwareProbeResult["nvidia"] | undefined> {
@@ -422,9 +489,9 @@ function buildQnnNotes(
     } else if (input.qnn?.npuDevice) {
       notes.push(
         `QNN runtime installed with NPU EpDevice${input.qnn.pluginVersion ? ` (${input.qnn.pluginVersion})` : ""}. “QNN NPU ready” waits on the Snapdragon release gate` +
-          (input.qnn.htpSmoke?.status === "passed"
-            ? " (HTP diagnostic already cached)."
-            : " + Test QNN NPU."),
+        (input.qnn.htpSmoke?.status === "passed"
+          ? " (HTP diagnostic already cached)."
+          : " + Test QNN NPU."),
       );
     } else {
       notes.push(
@@ -656,20 +723,190 @@ async function probeVenvCapabilities(
   }
 
   if (!state.tensorRtRtx?.loadable && (isCuda || (!cudaPythonExists && isDefault))) {
-    const rtx = await opts.probeTensorRtRtxLoadable(python, familyEnv);
-    if (
-      markTensorRtVenvLoadable({
-        isCuda,
-        isDefault,
-        cudaPythonExists,
-        loadable: rtx.loadable,
-      })
-    ) {
-      state.tensorRtRtxVenvLoadable = true;
-    }
-    if (rtx.loadable || !state.tensorRtRtx) {
-      state.tensorRtRtx = rtx;
-    }
+    if (systemPython) pythonCandidates.push(systemPython);
+
+    // ─── CPU feature detection (AVX2, AVX-512, AMX) ──────────────────────────
+    // Used by IHV panel to gate oneDNN (requires AVX2 minimum).
+    // Runs a quick Python probe. Falls through silently on failure.
+    const cpuFeaturesProbe = await (async (py: string | undefined): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> => {
+      if (!py) return undefined;
+      try {
+        const script = [
+          "import json, sys, platform",
+          "result = {}",
+          "try:",
+          "    if sys.platform == 'linux':",
+          "        with open('/proc/cpuinfo', 'r') as f:",
+          "            flags_line = ''",
+          "            for line in f:",
+          "                if line.startswith('flags'):",
+          "                    flags_line = line.lower()",
+          "                    break",
+          "            result['avx2'] = 'avx2' in flags_line",
+          "            result['avx512'] = 'avx512f' in flags_line",
+          "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+          "    elif sys.platform == 'win32':",
+          "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+          "            try:",
+          "                import ctypes",
+          "                k32 = ctypes.windll.kernel32",
+          "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+          "                try:",
+          "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+          "                except Exception:",
+          "                    pass",
+          "            except Exception:",
+          "                pass",
+          "    elif sys.platform == 'darwin':",
+          "        import subprocess",
+          "        try:",
+          "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+          "                               capture_output=True, text=True, timeout=5)",
+          "            features = r.stdout.lower()",
+          "            result['avx2'] = 'avx2' in features",
+          "            result['avx512'] = 'avx512f' in features",
+          "            result['amx'] = False",
+          "        except Exception:",
+          "            pass",
+          "except Exception:",
+          "    pass",
+          "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+        ].join("\\n");
+        const { stdout } = await execFileAsync(py, ["-c", script], { timeout: 10_000 });
+        const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+        const res: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+        if (typeof parsed.avx2 === "boolean") res.avx2 = parsed.avx2;
+        if (typeof parsed.avx512 === "boolean") res.avx512 = parsed.avx512;
+        if (typeof parsed.amx === "boolean") res.amx = parsed.amx;
+        return Object.keys(res).length > 0 ? res : undefined;
+      } catch {
+        return undefined;
+      }
+    })(pythonCandidates[0] ?? systemPython);
+    if (cpuFeaturesProbe) {
+      platform.cpuFeatures = cpuFeaturesProbe;
+    } const script = [
+      "import json, sys, platform",
+      "result = {}",
+      "try:",
+      "    if sys.platform == 'linux':",
+      "        with open('/proc/cpuinfo', 'r') as f:",
+      "            flags_line = ''",
+      "            for line in f:",
+      "                if line.startswith('flags'):",
+      "                    flags_line = line.lower()",
+      "                    break",
+      "            result['avx2'] = 'avx2' in flags_line",
+      "            result['avx512'] = 'avx512f' in flags_line",
+      "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+      "    elif sys.platform == 'win32':",
+      "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+      "            try:",
+      "                import ctypes",
+      "                k32 = ctypes.windll.kernel32",
+      "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+      "                try:",
+      "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+      "                except Exception:",
+      "                    pass",
+      "            except Exception:",
+      "                pass",
+      "    elif sys.platform == 'darwin':",
+      "        import subprocess",
+      "        try:",
+      "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+      "                               capture_output=True, text=True, timeout=5)",
+      "            features = r.stdout.lower()",
+      "            result['avx2'] = 'avx2' in features",
+      "            result['avx512'] = 'avx512f' in features",
+      "            result['amx'] = False",
+      "        except Exception:",
+      "            pass",
+      "except Exception:",
+      "    pass",
+      "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+    ].join("\n");
+    const { stdout } = await execFileAsync(py, ["-c", script], { timeout: 10_000 });
+    const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+    const res: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+    if (typeof parsed.avx2 === "boolean") res.avx2 = parsed.avx2;
+    if (typeof parsed.avx512 === "boolean") res.avx512 = parsed.avx512;
+    if (typeof parsed.amx === "boolean") res.amx = parsed.amx;
+    return Object.keys(res).length > 0 ? res : undefined;
+  } catch {
+    return undefined;
+  }
+}) (pythonCandidates[0] ?? systemPython);
+if (cpuFeaturesProbe) {
+  platform.cpuFeatures = cpuFeaturesProbe;
+} state.tensorRtRtxVenvLoadable = true;
+  }
+if (rtx.loadable || !state.tensorRtRtx) {
+  state.tensorRtRtx = rtx;
+}
+}
+}
+
+// ─── CPU feature detection ─────────────────────────────────────────────────
+
+const CPU_FEATURES_PROBE_SCRIPT = [
+  "import json, sys, platform",
+  "result = {}",
+  "try:",
+  "    if sys.platform == 'linux':",
+  "        with open('/proc/cpuinfo', 'r') as f:",
+  "            flags_line = ''",
+  "            for line in f:",
+  "                if line.startswith('flags'):",
+  "                    flags_line = line.lower()",
+  "                    break",
+  "            result['avx2'] = 'avx2' in flags_line",
+  "            result['avx512'] = 'avx512f' in flags_line",
+  "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+  "    elif sys.platform == 'win32':",
+  "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+  "            try:",
+  "                import ctypes",
+  "                k32 = ctypes.windll.kernel32",
+  "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+  "                try:",
+  "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+  "                except Exception:",
+  "                    pass",
+  "            except Exception:",
+  "                pass",
+  "    elif sys.platform == 'darwin':",
+  "        import subprocess",
+  "        try:",
+  "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+  "                               capture_output=True, text=True, timeout=5)",
+  "            features = r.stdout.lower()",
+  "            result['avx2'] = 'avx2' in features",
+  "            result['avx512'] = 'avx512f' in features",
+  "            result['amx'] = False",
+  "        except Exception:",
+  "            pass",
+  "except Exception:",
+  "    pass",
+  "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+].join("\n");
+
+async function probeCpuFeatures(
+  python: string | undefined,
+): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+  if (!python) return undefined;
+  try {
+    const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+      timeout: 10_000,
+    });
+    const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+    const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+    if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+    if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+    if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -680,218 +917,610 @@ async function probeVenvCapabilities(
  * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
  */
 async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
-  const notes: string[] = [];
-  const cpus = os.cpus();
-  const platform = {
-    os: `${process.platform} ${os.release()}`,
-    arch: os.arch(),
-    cpuModel: cpus[0]?.model?.trim() || "Unknown CPU",
-    cpuCores: cpus.length,
-    systemRamGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
-  };
+ * - macOS: uses sysctl
+    * Outputs JSON: { "avx2": bool, "avx512": bool, "amx": bool }
+ */
+  const CPU_FEATURES_PROBE_SCRIPT = [
+    "import json, sys, platform",
+    "result = {}",
+    "try:",
+    "    if sys.platform == 'linux':",
+    "        with open('/proc/cpuinfo', 'r') as f:",
+    "            flags_line = ''",
+    "            for line in f:",
+    "                if line.startswith('flags'):",
+    "                    flags_line = line.lower()",
+    "                    break",
+    "            result['avx2'] = 'avx2' in flags_line",
+    "            result['avx512'] = 'avx512f' in flags_line",
+    "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+    "    elif sys.platform == 'win32':",
+    "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+    "            try:",
+    "                import ctypes",
+    "                k32 = ctypes.windll.kernel32",
+    "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+    "                try:",
+    "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+    "                except Exception:",
+    "                    pass",
+    "            except Exception:",
+    "                pass",
+    "    elif sys.platform == 'darwin':",
+    "        import subprocess",
+    "        try:",
+    "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+    "                               capture_output=True, text=True, timeout=5)",
+    "            features = r.stdout.lower()",
+    "            result['avx2'] = 'avx2' in features",
+    "            result['avx512'] = 'avx512f' in features",
+    "            result['amx'] = False",
+    "        except Exception:",
+    "            pass",
+    "except Exception:",
+    "    pass",
+    "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+  ].join("\n");
 
-  const { nvidia, rocm, intelGpuNames } = await probeGpuHardware();
-
-  const state: VenvProbeState = {
-    openvino: undefined,
-    openvinoVenvAvailable: false,
-    qnn: undefined,
-    qnnVenvLoadable: false,
-    defaultOrtProviders: undefined,
-    cudaOrtProviders: undefined,
-    openvinoOrtProviders: undefined,
-    qnnOrtProviders: undefined,
-    systemOrtProviders: undefined,
-    tensorrt: undefined,
-    tensorRtRtx: undefined,
-    cuda: undefined,
-    tensorRtVenvLoadable: false,
-    tensorRtRtxVenvLoadable: false,
-    cudaVenvLoadable: false,
-  };
-
-  const defaultPython = getVenvPython("default");
-  const cudaPython = getVenvPython("cuda");
-  const openvinoPython = getVenvPython("openvino");
-  const qnnPython = getVenvPython("qnn");
-  const cudaPythonExists = fs.existsSync(cudaPython);
-  const openvinoPythonExists = fs.existsSync(openvinoPython);
-  const qnnPythonExists = fs.existsSync(qnnPython);
-  const pythonCandidates: string[] = [];
-  if (fs.existsSync(defaultPython)) pythonCandidates.push(defaultPython);
-  if (cudaPythonExists) pythonCandidates.push(cudaPython);
-  if (openvinoPythonExists) pythonCandidates.push(openvinoPython);
-  if (qnnPythonExists) pythonCandidates.push(qnnPython);
-  const systemPython = await findSystemPython();
-  if (systemPython) pythonCandidates.push(systemPython);
-
-  for (const python of pythonCandidates) {
-    const isDefault = python === defaultPython;
-    const isCuda = python === cudaPython;
-    const isOpenvino = python === openvinoPython;
-    const isQnn = python === qnnPython;
-    await probeVenvCapabilities(
-      python,
-      { isDefault, isCuda, isOpenvino, isQnn },
-      opts,
-      state,
-      cudaPythonExists,
-    );
+  /**
+   * Probes CPU instruction set features via a lightweight Python script.
+   * Returns undefined on any failure — absence never blocks provider selection.
+   */
+  async function probeCpuFeatures(
+    python: string | undefined,
+  ): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+    if (!python) return undefined;
+    try {
+      const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+        timeout: 10_000,
+      });
+      const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+      const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+      if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+      if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+      if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+      return Object.keys(result).length > 0 ? result : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
-  const diag = buildProbeDiagnostics({
-    defaultOrtProviders: state.defaultOrtProviders,
-    cudaOrtProviders: state.cudaOrtProviders,
-    openvinoOrtProviders: state.openvinoOrtProviders,
-    qnnOrtProviders: state.qnnOrtProviders,
-    systemOrtProviders: state.systemOrtProviders,
-    tensorRtRtxVenvLoadable: state.tensorRtRtxVenvLoadable,
-    tensorRtRtx: state.tensorRtRtx,
-    tensorRtVenvLoadable: state.tensorRtVenvLoadable,
-    tensorrt: state.tensorrt,
-    cudaVenvLoadable: state.cudaVenvLoadable,
-    cuda: state.cuda,
-    nvidia,
-    rocm,
-    openvinoVenvAvailable: state.openvinoVenvAvailable,
-    openvino: state.openvino,
-    qnnVenvLoadable: state.qnnVenvLoadable,
-    qnn: state.qnn,
-    platformArch: platform.arch,
-    platformOs: process.platform,
-  });
-  notes.push(...diag.notes);
-  const { onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, cudaFamilyCapable, qnnHostMode } = diag;
+  /**
+   * Probes the host system for hardware capabilities and available inference runtimes.
+  /**
+   * Python script to detect CPU instruction set features (AVX2, AVX-512, AMX).
+   * Uses platform-native methods:
+   *  - Linux: reads /proc/cpuinfo flags
+   *  - Windows: uses kernel32.IsProcessorFeaturePresent via ctypes
+   *  - macOS: uses sysctl
+   * Outputs JSON: {"avx2": bool, "avx512": bool, "amx": bool}
+   */
+  const CPU_FEATURES_PROBE_SCRIPT = [
+    "import json, sys, platform",
+    "result = {}",
+    "try:",
+    "    if sys.platform == 'linux':",
+    "        with open('/proc/cpuinfo', 'r') as f:",
+    "            flags_line = ''",
+    "            for line in f:",
+    "                if line.startswith('flags'):",
+    "                    flags_line = line.lower()",
+    "                    break",
+    "            result['avx2'] = 'avx2' in flags_line",
+    "            result['avx512'] = 'avx512f' in flags_line",
+    "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+    "    elif sys.platform == 'win32':",
+    "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+    "            try:",
+    "                import ctypes",
+    "                k32 = ctypes.windll.kernel32",
+    "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+    "                try:",
+    "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+    "                except Exception:",
+    "                    pass",
+    "            except Exception:",
+    "                pass",
+    "    elif sys.platform == 'darwin':",
+    "        import subprocess",
+    "        try:",
+    "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+    "                               capture_output=True, text=True, timeout=5)",
+    "            features = r.stdout.lower()",
+    "            result['avx2'] = 'avx2' in features",
+    "            result['avx512'] = 'avx512f' in features",
+    "            result['amx'] = False",
+    "        except Exception:",
+    "            pass",
+    "except Exception:",
+    "    pass",
+    "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+  ].join("\n");
 
-  const hasOpenVinoCompatibleHardware = computeOpenVinoCompatibleHardware({
-    cpuModel: platform.cpuModel,
-    intelGpuNames,
-    openvinoDevices: state.openvino?.devices,
-  });
-
-  const hasQnnCompatibleHardware = computeQnnCompatibleHardware({
-    os: platform.os,
-    arch: platform.arch,
-    qnnLoadable: state.qnnVenvLoadable,
-    ortReportsQnn: Boolean(
-      onnxRuntimeProviders?.includes("QNNExecutionProvider") ||
-      state.qnnOrtProviders?.includes("QNNExecutionProvider"),
-    ),
-  });
-
-  // Execute Live uses the default Olive runtime for platform-local EPs. Do not
-  // let providers from system/CUDA/OpenVINO/QNN runtimes authorize that path.
-  const detectedProviders = mergeDetectedProviders({
-    onnxRuntimeProviders: state.defaultOrtProviders,
-    hasNvidiaGpu: Boolean(nvidia?.gpus.length),
-    hasRocmGpu: Boolean(rocm?.gpus.length),
-    hasOpenVino: Boolean(state.openvino?.available),
-    hasOpenVinoCompatibleHardware,
-    // hasDirectMl must reflect default-family ORT reporting DmlExecutionProvider
-    // so Execute Live / install CTAs stay accurate for the Olive default runtime.
-    hasDirectMl: resolveDirectMlEpDetected({
-      defaultProviders: state.defaultOrtProviders,
-    }),
-    hasQnnCompatibleHardware,
-    qnnLoadable: state.qnnVenvLoadable,
-    tensorRtLoadable: state.tensorRtVenvLoadable,
-    tensorRtRtxLoadable: state.tensorRtRtxVenvLoadable,
-    nvidiaTensorRtFamilyCapable,
-    cudaLoadable: state.cudaVenvLoadable,
-    cudaFamilyCapable,
-    os: platform.os,
-  });
-
-  return {
-    probedAt: new Date().toISOString(),
-    platform,
-    nvidia,
-    rocm,
-    openvino: state.openvino
-      ? { ...state.openvino, available: state.openvinoVenvAvailable, loadable: state.openvinoVenvAvailable }
-      : undefined,
-    qnn: state.qnn
-      ? {
-          ...state.qnn,
-          available: state.qnnVenvLoadable,
-          loadable: state.qnnVenvLoadable,
-          hostMode: state.qnn.hostMode ?? qnnHostMode,
-        }
-      : qnnHostMode !== "out-of-scope"
-        ? {
-            available: false,
-            loadable: false,
-            preparation: false,
-            npuDevice: false,
-            potentialInference: false,
-            verifiedInference: false,
-            hostMode: qnnHostMode,
-            detail:
-              qnnHostMode === "preparation"
-                ? "QNN runtime not installed (.venvs/qnn) — Windows x64 preparation / plugin AOT only"
-                : "QNN runtime not installed (.venvs/qnn)",
-          }
-        : {
-            available: false,
-            loadable: false,
-            preparation: false,
-            npuDevice: false,
-            potentialInference: false,
-            verifiedInference: false,
-            hostMode: qnnHostMode,
-            detail: "QNN plugin install/UX is Windows-first in this release",
-          },
-    // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
-    tensorrt: state.tensorrt ? { ...state.tensorrt, loadable: state.tensorRtVenvLoadable } : state.tensorrt,
-    tensorRtRtx: state.tensorRtRtx
-      ? { ...state.tensorRtRtx, loadable: state.tensorRtRtxVenvLoadable }
-      : state.tensorRtRtx,
-    cuda: state.cuda ? { ...state.cuda, loadable: state.cudaVenvLoadable } : state.cuda,
-    onnxRuntimeProviders,
-    detectedProviders,
-    recommendedProvider: pickRecommendedProvider(detectedProviders, {
-      tensorRtRtxLoadable: state.tensorRtRtxVenvLoadable,
-      tensorRtLoadable: state.tensorRtVenvLoadable,
-      openvinoLoadable: state.openvinoVenvAvailable,
-      qnnLoadable: state.qnnVenvLoadable,
-    }),
-    notes,
-  };
-}
-
-// ─── Cache ─────────────────────────────────────────────────────────────────
-
-let hardwareProbeCache: { at: number; result: HardwareProbeResult } | null = null;
-const HARDWARE_PROBE_CACHE_MS = 30_000;
-
-function enrichProbeWithSystemRam(result: HardwareProbeResult): HardwareProbeResult {
-  const systemRamGb = Math.round((os.totalmem() / 1024 ** 3) * 10) / 10;
-  return {
-    ...result,
-    platform: {
-      ...result.platform,
-      systemRamGb: result.platform.systemRamGb ?? systemRamGb,
-    },
-  };
-}
-
-// ─── Mount ─────────────────────────────────────────────────────────────────
-
-export function mountSystemRoutes(router: Router, opts: SystemProbeOptions): void {
-  router.get("/system/hardware-probe", async (req, res) => {
+  /**
+   * Probes CPU instruction set features via a lightweight Python script.
+   * Returns undefined on any failure — absence never blocks provider selection.
+   */
+  async function probeCpuFeatures(
+    python: string | undefined,
+  ): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+    if (!python) return undefined;
     try {
-      const refresh = req.query.refresh === "1" || req.query.refresh === "true";
-      const now = Date.now();
-      if (!refresh && hardwareProbeCache && now - hardwareProbeCache.at < HARDWARE_PROBE_CACHE_MS) {
-        return res.json(enrichProbeWithSystemRam(hardwareProbeCache.result));
+      const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+        timeout: 10_000,
+      });
+      const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+      const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+      if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+      if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+      if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+      return Object.keys(result).length > 0 ? result : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Probes the host system for hardware capabilities and available inference runtimes.
+   *
+   * @param opts - Probe functions used to determine runtime availability and loadability
+   * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
+   */
+  async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
+    const notes: string[] = [];
+    const cpus = os.cpus(); bool, "avx512": bool, "amx": bool
+  }
+ */
+  const CPU_FEATURES_PROBE_SCRIPT = [
+    "import json, sys, platform",
+    "result = {}",
+    "try:",
+    "    if sys.platform == 'linux':",
+    "        with open('/proc/cpuinfo', 'r') as f:",
+    "            flags_line = ''",
+    "            for line in f:",
+    "                if line.startswith('flags'):",
+    "                    flags_line = line.lower()",
+    "                    break",
+    "            result['avx2'] = 'avx2' in flags_line",
+    "            result['avx512'] = 'avx512f' in flags_line",
+    "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+    "    elif sys.platform == 'win32':",
+    "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+    "            try:",
+    "                import ctypes",
+    "                k32 = ctypes.windll.kernel32",
+    "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+    "                try:",
+    "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+    "                except Exception:",
+    "                    pass",
+    "            except Exception:",
+    "                pass",
+    "    elif sys.platform == 'darwin':",
+    "        import subprocess",
+    "        try:",
+    "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+    "                               capture_output=True, text=True, timeout=5)",
+    "            features = r.stdout.lower()",
+    "            result['avx2'] = 'avx2' in features",
+    "            result['avx512'] = 'avx512f' in features",
+    "            result['amx'] = False",
+    "        except Exception:",
+    "            pass",
+    "except Exception:",
+    "    pass",
+    "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+  ].join("\n");
+
+  /**
+   * Probes CPU instruction set features via a lightweight Python script.
+   * Returns undefined on any failure — absence never blocks provider selection.
+   */
+  async function probeCpuFeatures(
+    python: string | undefined,
+  ): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+    if (!python) return undefined;
+    try {
+      const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+        timeout: 10_000,
+      });
+      const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+      const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+      if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+      if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+      if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+      return Object.keys(result).length > 0 ? result : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Probes the host system for hardware capabilities and available inference runtimes.
+  /**
+   * Python script to detect CPU instruction set features (AVX2, AVX-512, AMX).
+   * Uses platform-native methods:
+   *  - Linux: reads /proc/cpuinfo flags
+   *  - Windows: uses kernel32.IsProcessorFeaturePresent via ctypes
+   *  - macOS: uses sysctl
+   * Outputs JSON: {"avx2": bool, "avx512": bool, "amx": bool}
+   */
+  const CPU_FEATURES_PROBE_SCRIPT = [
+    "import json, sys, platform",
+    "result = {}",
+    "try:",
+    "    if sys.platform == 'linux':",
+    "        with open('/proc/cpuinfo', 'r') as f:",
+    "            flags_line = ''",
+    "            for line in f:",
+    "                if line.startswith('flags'):",
+    "                    flags_line = line.lower()",
+    "                    break",
+    "            result['avx2'] = 'avx2' in flags_line",
+    "            result['avx512'] = 'avx512f' in flags_line",
+    "            result['amx'] = 'amx_tile' in flags_line or 'amx_int8' in flags_line",
+    "    elif sys.platform == 'win32':",
+    "        if platform.machine() in ('AMD64', 'x86_64', 'x86'):",
+    "            try:",
+    "                import ctypes",
+    "                k32 = ctypes.windll.kernel32",
+    "                result['avx2'] = bool(k32.IsProcessorFeaturePresent(40))",
+    "                try:",
+    "                    result['avx512'] = bool(k32.IsProcessorFeaturePresent(41))",
+    "                except Exception:",
+    "                    pass",
+    "            except Exception:",
+    "                pass",
+    "    elif sys.platform == 'darwin':",
+    "        import subprocess",
+    "        try:",
+    "            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],",
+    "                               capture_output=True, text=True, timeout=5)",
+    "            features = r.stdout.lower()",
+    "            result['avx2'] = 'avx2' in features",
+    "            result['avx512'] = 'avx512f' in features",
+    "            result['amx'] = False",
+    "        except Exception:",
+    "            pass",
+    "except Exception:",
+    "    pass",
+    "print(json.dumps({k: v for k, v in result.items() if v is not None}))",
+  ].join("\n");
+
+  /**
+   * Probes CPU instruction set features via a lightweight Python script.
+   * Returns undefined on any failure — absence never blocks provider selection.
+   */
+  async function probeCpuFeatures(
+    python: string | undefined,
+  ): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+    if (!python) return undefined;
+    try {
+      const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+        timeout: 10_000,
+      });
+      const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+      const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+      if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+      if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+      if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+      return Object.keys(result).length > 0 ? result : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Probes the host system for hardware capabilities and available inference runtimes.
+   *
+   * @param opts - Probe functions used to determine runtime availability and loadability
+   * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
+   */
+  async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
+ * Outputs JSON: { "avx2": bool, "avx512": bool, "amx": bool }
+ */
+    const CPU_FEATURES_PROBE_SCRIPT = `
+import json, platform, os, sys
+result = {"avx2": None, "avx512": None, "amx": None}
+try:
+    if sys.platform == "linux":
+        with open("/proc/cpuinfo", "r") as f:
+            flags_line = ""
+            for line in f:
+                if line.startswith("flags"):
+                    flags_line = line.lower()
+                    break
+            result["avx2"] = "avx2" in flags_line
+            result["avx512"] = "avx512f" in flags_line
+            result["amx"] = "amx_tile" in flags_line or "amx_int8" in flags_line
+    elif sys.platform == "win32":
+        import subprocess
+        try:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Caption"],
+                capture_output=True, text=True, timeout=5
+            )
+            # On Windows, direct /proc/cpuinfo is unavailable. Use ORT's ability to load
+            # DnnlExecutionProvider as the authoritative AVX2 signal. Fallback: try
+            # importing numpy which reports CPU features on newer builds.
+        except Exception:
+            pass
+        # Attempt cpuid via ctypes (x86/x64 only)
+        if platform.machine() in ("AMD64", "x86_64", "x86"):
+            try:
+                import ctypes, ctypes.wintypes
+                # EAX=7, ECX=0: EBX bit 5 = AVX2, bit 16 = AVX-512F
+                # We use the __cpuid intrinsic via kernel32.IsProcessorFeaturePresent
+                # PF_AVX2_INSTRUCTIONS_AVAILABLE = 40 (Windows 10+)
+                k32 = ctypes.windll.kernel32
+                result["avx2"] = bool(k32.IsProcessorFeaturePresent(40))
+                # PF_AVX512F_INSTRUCTIONS_AVAILABLE = 41 (may not exist on older Windows)
+                try:
+                    result["avx512"] = bool(k32.IsProcessorFeaturePresent(41))
+                except Exception:
+                    pass
+            except Exception:
+                pass
+    elif sys.platform == "darwin":
+        import subprocess
+        try:
+            r = subprocess.run(["sysctl", "-n", "machdep.cpu.features", "machdep.cpu.leaf7_features"],
+                               capture_output=True, text=True, timeout=5)
+            features = r.stdout.lower()
+            result["avx2"] = "avx2" in features
+            result["avx512"] = "avx512f" in features
+            result["amx"] = False  # Apple Silicon uses different extensions
+        except Exception:
+            pass
+except Exception:
+    pass
+print(json.dumps({k: v for k, v in result.items() if v is not None}))
+`.trim();
+
+    /**
+     * Probes CPU instruction set features via a lightweight Python script.
+     * Returns undefined on any failure — absence never blocks provider selection.
+     */
+    async function probeCpuFeatures(
+      python: string | undefined,
+    ): Promise<{ avx2?: boolean; avx512?: boolean; amx?: boolean } | undefined> {
+      if (!python) return undefined;
+      try {
+        const { stdout } = await execFileAsync(python, ["-c", CPU_FEATURES_PROBE_SCRIPT], {
+          timeout: 10_000,
+        });
+        const parsed = JSON.parse(stdout.trim()) as Record<string, boolean>;
+        const result: { avx2?: boolean; avx512?: boolean; amx?: boolean } = {};
+        if (typeof parsed.avx2 === "boolean") result.avx2 = parsed.avx2;
+        if (typeof parsed.avx512 === "boolean") result.avx512 = parsed.avx512;
+        if (typeof parsed.amx === "boolean") result.amx = parsed.amx;
+        return Object.keys(result).length > 0 ? result : undefined;
+      } catch {
+        return undefined;
       }
-      const result = enrichProbeWithSystemRam(await probeSystemHardware(opts));
-      hardwareProbeCache = { at: now, result };
-      return res.json(result);
-    } catch (err) {
-      return res.status(500).json({
-        error: err instanceof Error ? err.message : "Hardware probe failed.",
+    }
+
+    /**
+     * Probes the host system for hardware capabilities and available inference runtimes.
+     *
+     * @param opts - Probe functions used to determine runtime availability and loadability
+     * @returns A timestamped report containing platform details, detected hardware, runtime capabilities, provider recommendations, and diagnostic notes
+     */
+    async function probeSystemHardware(opts: SystemProbeOptions): Promise<HardwareProbeResult> {
+      const notes: string[] = [];
+      const cpus = os.cpus();
+      const platform = {
+        os: `${process.platform} ${os.release()}`,
+        arch: os.arch(),
+        cpuModel: cpus[0]?.model?.trim() || "Unknown CPU",
+        cpuCores: cpus.length,
+        systemRamGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
+      };
+
+      const { nvidia, rocm, intelGpuNames } = await probeGpuHardware();
+
+      const state: VenvProbeState = {
+        openvino: undefined,
+        openvinoVenvAvailable: false,
+        qnn: undefined,
+        qnnVenvLoadable: false,
+        defaultOrtProviders: undefined,
+        cudaOrtProviders: undefined,
+        openvinoOrtProviders: undefined,
+        qnnOrtProviders: undefined,
+        systemOrtProviders: undefined,
+        tensorrt: undefined,
+        tensorRtRtx: undefined,
+        cuda: undefined,
+        tensorRtVenvLoadable: false,
+        tensorRtRtxVenvLoadable: false,
+        cudaVenvLoadable: false,
+      };
+
+      const defaultPython = getVenvPython("default");
+      const cudaPython = getVenvPython("cuda");
+      const openvinoPython = getVenvPython("openvino");
+      const qnnPython = getVenvPython("qnn");
+      const cudaPythonExists = fs.existsSync(cudaPython);
+      const openvinoPythonExists = fs.existsSync(openvinoPython);
+      const qnnPythonExists = fs.existsSync(qnnPython);
+      const pythonCandidates: string[] = [];
+      if (fs.existsSync(defaultPython)) pythonCandidates.push(defaultPython);
+      if (cudaPythonExists) pythonCandidates.push(cudaPython);
+      if (openvinoPythonExists) pythonCandidates.push(openvinoPython);
+      if (qnnPythonExists) pythonCandidates.push(qnnPython);
+      const systemPython = await findSystemPython();
+      if (systemPython) pythonCandidates.push(systemPython);
+
+      for (const python of pythonCandidates) {
+        const isDefault = python === defaultPython;
+        const isCuda = python === cudaPython;
+        const isOpenvino = python === openvinoPython;
+        const isQnn = python === qnnPython;
+        await probeVenvCapabilities(
+          python,
+          { isDefault, isCuda, isOpenvino, isQnn },
+          opts,
+          state,
+          cudaPythonExists,
+        );
+      }
+
+      const diag = buildProbeDiagnostics({
+        defaultOrtProviders: state.defaultOrtProviders,
+        cudaOrtProviders: state.cudaOrtProviders,
+        openvinoOrtProviders: state.openvinoOrtProviders,
+        qnnOrtProviders: state.qnnOrtProviders,
+        systemOrtProviders: state.systemOrtProviders,
+        tensorRtRtxVenvLoadable: state.tensorRtRtxVenvLoadable,
+        tensorRtRtx: state.tensorRtRtx,
+        tensorRtVenvLoadable: state.tensorRtVenvLoadable,
+        tensorrt: state.tensorrt,
+        cudaVenvLoadable: state.cudaVenvLoadable,
+        cuda: state.cuda,
+        nvidia,
+        rocm,
+        openvinoVenvAvailable: state.openvinoVenvAvailable,
+        openvino: state.openvino,
+        qnnVenvLoadable: state.qnnVenvLoadable,
+        qnn: state.qnn,
+        platformArch: platform.arch,
+        platformOs: process.platform,
+      });
+      notes.push(...diag.notes);
+      const { onnxRuntimeProviders, nvidiaTensorRtFamilyCapable, cudaFamilyCapable, qnnHostMode } = diag;
+
+      const hasOpenVinoCompatibleHardware = computeOpenVinoCompatibleHardware({
+        cpuModel: platform.cpuModel,
+        intelGpuNames,
+        openvinoDevices: state.openvino?.devices,
+      });
+
+      const hasQnnCompatibleHardware = computeQnnCompatibleHardware({
+        os: platform.os,
+        arch: platform.arch,
+        qnnLoadable: state.qnnVenvLoadable,
+        ortReportsQnn: Boolean(
+          onnxRuntimeProviders?.includes("QNNExecutionProvider") ||
+          state.qnnOrtProviders?.includes("QNNExecutionProvider"),
+        ),
+      });
+
+      // Execute Live uses the default Olive runtime for platform-local EPs. Do not
+      // let providers from system/CUDA/OpenVINO/QNN runtimes authorize that path.
+      const detectedProviders = mergeDetectedProviders({
+        onnxRuntimeProviders: state.defaultOrtProviders,
+        hasNvidiaGpu: Boolean(nvidia?.gpus.length),
+        hasRocmGpu: Boolean(rocm?.gpus.length),
+        hasOpenVino: Boolean(state.openvino?.available),
+        hasOpenVinoCompatibleHardware,
+        // hasDirectMl must reflect default-family ORT reporting DmlExecutionProvider
+        // so Execute Live / install CTAs stay accurate for the Olive default runtime.
+        hasDirectMl: resolveDirectMlEpDetected({
+          defaultProviders: state.defaultOrtProviders,
+        }),
+        hasQnnCompatibleHardware,
+        qnnLoadable: state.qnnVenvLoadable,
+        tensorRtLoadable: state.tensorRtVenvLoadable,
+        tensorRtRtxLoadable: state.tensorRtRtxVenvLoadable,
+        nvidiaTensorRtFamilyCapable,
+        cudaLoadable: state.cudaVenvLoadable,
+        cudaFamilyCapable,
+        os: platform.os,
+      });
+
+      return {
+        probedAt: new Date().toISOString(),
+        platform,
+        nvidia,
+        rocm,
+        openvino: state.openvino
+          ? { ...state.openvino, available: state.openvinoVenvAvailable, loadable: state.openvinoVenvAvailable }
+          : undefined,
+        qnn: state.qnn
+          ? {
+            ...state.qnn,
+            available: state.qnnVenvLoadable,
+            loadable: state.qnnVenvLoadable,
+            hostMode: state.qnn.hostMode ?? qnnHostMode,
+          }
+          : qnnHostMode !== "out-of-scope"
+            ? {
+              available: false,
+              loadable: false,
+              preparation: false,
+              npuDevice: false,
+              potentialInference: false,
+              verifiedInference: false,
+              hostMode: qnnHostMode,
+              detail:
+                qnnHostMode === "preparation"
+                  ? "QNN runtime not installed (.venvs/qnn) — Windows x64 preparation / plugin AOT only"
+                  : "QNN runtime not installed (.venvs/qnn)",
+            }
+            : {
+              available: false,
+              loadable: false,
+              preparation: false,
+              npuDevice: false,
+              potentialInference: false,
+              verifiedInference: false,
+              hostMode: qnnHostMode,
+              detail: "QNN plugin install/UX is Windows-first in this release",
+            },
+        // UI consumers (IHV panel) read `.loadable`; keep it aligned with .venv readiness.
+        tensorrt: state.tensorrt ? { ...state.tensorrt, loadable: state.tensorRtVenvLoadable } : state.tensorrt,
+        tensorRtRtx: state.tensorRtRtx
+          ? { ...state.tensorRtRtx, loadable: state.tensorRtRtxVenvLoadable }
+          : state.tensorRtRtx,
+        cuda: state.cuda ? { ...state.cuda, loadable: state.cudaVenvLoadable } : state.cuda,
+        onnxRuntimeProviders,
+        detectedProviders,
+        recommendedProvider: pickRecommendedProvider(detectedProviders, {
+          tensorRtRtxLoadable: state.tensorRtRtxVenvLoadable,
+          tensorRtLoadable: state.tensorRtVenvLoadable,
+          openvinoLoadable: state.openvinoVenvAvailable,
+          qnnLoadable: state.qnnVenvLoadable,
+        }),
+        notes,
+      };
+    }
+
+    // ─── Cache ─────────────────────────────────────────────────────────────────
+
+    let hardwareProbeCache: { at: number; result: HardwareProbeResult } | null = null;
+    const HARDWARE_PROBE_CACHE_MS = 30_000;
+
+    function enrichProbeWithSystemRam(result: HardwareProbeResult): HardwareProbeResult {
+      const systemRamGb = Math.round((os.totalmem() / 1024 ** 3) * 10) / 10;
+      return {
+        ...result,
+        platform: {
+          ...result.platform,
+          systemRamGb: result.platform.systemRamGb ?? systemRamGb,
+        },
+      };
+    }
+
+    // ─── Mount ─────────────────────────────────────────────────────────────────
+
+    export function mountSystemRoutes(router: Router, opts: SystemProbeOptions): void {
+      router.get("/system/hardware-probe", async (req, res) => {
+        try {
+          const refresh = req.query.refresh === "1" || req.query.refresh === "true";
+          const now = Date.now();
+          if (!refresh && hardwareProbeCache && now - hardwareProbeCache.at < HARDWARE_PROBE_CACHE_MS) {
+            return res.json(enrichProbeWithSystemRam(hardwareProbeCache.result));
+          }
+          const result = enrichProbeWithSystemRam(await probeSystemHardware(opts));
+          hardwareProbeCache = { at: now, result };
+          return res.json(result);
+        } catch (err) {
+          return res.status(500).json({
+            error: err instanceof Error ? err.message : "Hardware probe failed.",
+          });
+        }
       });
     }
-  });
-}

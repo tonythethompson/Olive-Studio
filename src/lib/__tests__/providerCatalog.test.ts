@@ -213,3 +213,91 @@ describe("TensorRT SM floor lockstep (catalog chip ↔ hardware probe)", () => {
     expect(trt.desc).toMatch(/\b\d+\.\d+\b/);
   });
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// Property-based tests — Provider Catalog Schema Invariant
+// ─────────────────────────────────────────────────────────────────────────
+
+import * as fc from "fast-check";
+
+/* Feature: ep-expansion-pack, Property 1: Provider Catalog Entry Schema Invariant */
+
+/**
+ * **Validates: Requirements 1.2, 5.2, 9.1**
+ *
+ * For any entry in PROVIDER_CATALOG:
+ * - shortName ≤ 8 chars
+ * - desc ≤ 120 chars
+ * - tooltip.requirements is non-empty string
+ * - tooltip.quantMethods is non-empty string
+ * - tooltip.recommendation is non-empty string
+ */
+describe("Property 1: Provider Catalog Entry Schema Invariant", () => {
+  // Create an arbitrary that samples from the actual PROVIDER_CATALOG entries
+  const catalogEntryArb = fc.constantFrom(...PROVIDER_CATALOG);
+
+  it("shortName is at most 8 characters for every catalog entry", () => {
+    fc.assert(
+      fc.property(catalogEntryArb, (entry) => {
+        expect(entry.shortName.length).toBeLessThanOrEqual(8);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("desc is at most 120 characters for every catalog entry", () => {
+    fc.assert(
+      fc.property(catalogEntryArb, (entry) => {
+        expect(entry.desc.length).toBeLessThanOrEqual(120);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("tooltip.requirements is a non-empty string for every catalog entry", () => {
+    fc.assert(
+      fc.property(catalogEntryArb, (entry) => {
+        expect(typeof entry.tooltip.requirements).toBe("string");
+        expect(entry.tooltip.requirements.length).toBeGreaterThan(0);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("tooltip.quantMethods is a non-empty string for every catalog entry", () => {
+    fc.assert(
+      fc.property(catalogEntryArb, (entry) => {
+        expect(typeof entry.tooltip.quantMethods).toBe("string");
+        expect(entry.tooltip.quantMethods.length).toBeGreaterThan(0);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("tooltip.recommendation is a non-empty string for every catalog entry", () => {
+    fc.assert(
+      fc.property(catalogEntryArb, (entry) => {
+        expect(typeof entry.tooltip.recommendation).toBe("string");
+        expect(entry.tooltip.recommendation.length).toBeGreaterThan(0);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("all schema constraints hold simultaneously for every catalog entry", () => {
+    fc.assert(
+      fc.property(catalogEntryArb, (entry) => {
+        // shortName ≤ 8
+        expect(entry.shortName.length).toBeLessThanOrEqual(8);
+        // desc ≤ 120
+        expect(entry.desc.length).toBeLessThanOrEqual(120);
+        // tooltip fields non-empty
+        expect(entry.tooltip.requirements.length).toBeGreaterThan(0);
+        expect(entry.tooltip.quantMethods.length).toBeGreaterThan(0);
+        expect(entry.tooltip.recommendation.length).toBeGreaterThan(0);
+      }),
+      { numRuns: 200 },
+    );
+  });
+});

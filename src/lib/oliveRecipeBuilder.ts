@@ -7,7 +7,7 @@ import {
 import { isMultiLoraEnabled } from "@/lib/featureFlags";
 import { validateAdapters, type AdapterEntry } from "@/lib/multiLoraValidation";
 
-const GPU_PROVIDERS: IHVProvider[] = [
+export const GPU_PROVIDERS: IHVProvider[] = [
   "CUDAExecutionProvider",
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
@@ -16,7 +16,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "WebGpuExecutionProvider",
   "DmlExecutionProvider",
 ];
-const NPU_PROVIDERS: IHVProvider[] = [
+export const NPU_PROVIDERS: IHVProvider[] = [
   "QNNExecutionProvider",
   "QnnAbiExecutionProvider",
   "CoreMLExecutionProvider",

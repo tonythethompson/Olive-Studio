@@ -9,6 +9,7 @@ import { ensureTensorRt } from "../olive/tensorrt.ts";
 import { ensureTensorRtRtx } from "../olive/tensorrt-rtx.ts";
 import { ensureQnn } from "../olive/qnn.ts";
 import { ensureCoremltools } from "../olive/coreml.ts";
+import { ensureMigraphx } from "../olive/migraphx.ts";
 import { isQnnIhvProvider } from "../../../lib/qnnReadiness.ts";
 import { ensureVenvFamily } from "./familyEnsure.ts";
 import { isExportTargetProvider, isPlatformLocalProvider } from "../../../lib/providerRuntimeKind.ts";
@@ -119,6 +120,24 @@ export async function ensureProviderCapability(
     if (provider === "ROCMExecutionProvider") {
       return { ok: true, family, python: getVenvPython(family) };
     }
+
+    // oneDNN: bundled in the default ORT wheel — no separate install needed.
+    // Verify EP availability via the probed ORT providers list (already fetched
+    // within the ORT probe timeout). If absent, the wheel lacks DNNL support.
+    if (provider === "DnnlExecutionProvider") {
+      const python = getVenvPython(family);
+      if (status.ortProviders.includes("DnnlExecutionProvider")) {
+        return { ok: true, family, python };
+      }
+      return {
+        ok: false,
+        error:
+          "DnnlExecutionProvider is not registered by the installed ORT wheel. " +
+          "Reinstall onnxruntime with oneDNN/DNNL support enabled (e.g. the official onnxruntime wheel built with --use_dnnl).",
+        family,
+        python,
+      };
+    }
     return {
       ok: false,
       error: `Provider ${provider} has no capability slot in ${humanFamilyLabel(family)} (status mismatch)`,
@@ -188,9 +207,11 @@ async function installCapabilityPackages(
         return result.ok ? { ok: true } : { ok: false, error: result.error };
       }
 
-      // MIGraphX: placeholder — full install logic in task 8.1
-      case "MIGraphXExecutionProvider":
-        return { ok: false, error: "MIGraphX capability install not yet implemented (requires Linux + ROCm + migraphx package)." };
+      // MIGraphX: Linux x64 only — ROCm + migraphx package
+      case "MIGraphXExecutionProvider": {
+        const result = await ensureMigraphx(onLine);
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      }
 
       // oneDNN: bundled in default ORT wheel — no additional install needed
       case "DnnlExecutionProvider":

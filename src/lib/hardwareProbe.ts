@@ -23,6 +23,13 @@ export interface GpuInfo {
   vramMb?: number;
   driver?: string;
   computeCapability?: string;
+  /**
+   * GPU ISA family identifier from ROCm/HSA (e.g. "gfx1100", "gfx942", "gfx1201").
+   * Used to distinguish consumer RDNA (gfx10xx/gfx11xx/gfx12xx) from datacenter
+   * CDNA (gfx9xx) architectures for ROCm validation differentiation.
+   * Absent when the probe doesn't report architecture info.
+   */
+  isaFamily?: string;
 }
 
 /**
@@ -113,6 +120,17 @@ export interface HardwareProbeResult {
     cpuModel: string;
     cpuCores: number;
     systemRamGb?: number;
+    /**
+     * CPU instruction set features detected at probe time.
+     * Used by IHV panel to gate providers that require specific ISA extensions
+     * (e.g., oneDNN requires AVX2 minimum).
+     * Absent when the probe could not determine CPU features.
+     */
+    cpuFeatures?: {
+      avx2?: boolean;
+      avx512?: boolean;
+      amx?: boolean;
+    };
   };
   nvidia?: {
     gpus: GpuInfo[];
@@ -159,6 +177,26 @@ export interface HardwareProbeResult {
   cuda?: {
     loadable: boolean;
     detail?: string;
+  };
+  /**
+   * MIGraphX EP availability on AMD Instinct datacenter GPUs.
+   * Only populated when the `rocm` probe path detects at least one AMD GPU.
+   * `loadable` is true when ORT reports MIGraphXExecutionProvider in
+   * `get_available_providers()`.
+   */
+  migraphx?: {
+    loadable: boolean;
+    version?: string;
+  };
+  /**
+   * Intel oneDNN (DNNL) EP availability.
+   * Populated when ORT reports DnnlExecutionProvider in available providers.
+   * No hardware gating beyond ORT availability — DNNL is bundled in the
+   * default ORT wheel.
+   */
+  dnnl?: {
+    available: boolean;
+    provider: string;
   };
   /** Providers reported by onnxruntime.get_available_providers() when probed. */
   onnxRuntimeProviders?: string[];
@@ -268,6 +306,16 @@ export function computeDirectMlNeedsInstall(probe: HardwareProbeResult | null | 
 }
 
 /**
+ * Whether the hardware probe indicates AVX2 is absent on the host CPU.
+ * Returns `true` when the probe explicitly reports `avx2: false`.
+ * Returns `false` (permissive) when the probe is missing, still loading,
+ * or doesn't include CPU feature data — absence of information never blocks.
+ */
+export function isDnnlUnavailableDueToAvx2(probe: HardwareProbeResult | null | undefined): boolean {
+  return probe?.platform?.cpuFeatures?.avx2 === false;
+}
+
+/**
  * Combines ONNX Runtime providers and hardware probe results into the locally detected provider list.
  *
  * @param input - Provider and hardware detection results, including runtime loadability for TensorRT variants
@@ -291,6 +339,8 @@ export function mergeDetectedProviders(input: {
   cudaLoadable?: boolean;
   /** True when an NVIDIA GPU meets the CUDA 12 toolkit floor (Maxwell+), independent of whether onnxruntime-gpu is installed yet. */
   cudaFamilyCapable?: boolean;
+  /** True when MIGraphXExecutionProvider is loadable (ROCm GPU + ORT reports it). */
+  migraphxLoadable?: boolean;
   /** Platform OS string for DirectML Windows detection. */
   os?: string;
 }): IHVProvider[] {
@@ -305,6 +355,10 @@ export function mergeDetectedProviders(input: {
     for (const provider of mapOrtProvidersToIhv(input.onnxRuntimeProviders)) {
       if (provider === "QNNExecutionProvider") {
         // Host-boundary soft-detect below owns QNN; do not trust ORT listing alone.
+        continue;
+      }
+      if (provider === "MIGraphXExecutionProvider") {
+        // Gated below by migraphxLoadable + hasRocmGpu; do not trust ORT listing alone.
         continue;
       }
       if (provider === "TensorrtExecutionProvider" && !tensorRtOk) {
@@ -343,6 +397,10 @@ export function mergeDetectedProviders(input: {
   }
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
+    // Always soft-detect MIGraphX when AMD GPU hardware is present — same pattern
+    // as CUDA/TensorRT: "compatible GPU, installer available" not "not on this system".
+    // The install-needed indicator shows when migraphxLoadable is false.
+    detected.add("MIGraphXExecutionProvider");
   }
   if (input.hasOpenVino || input.hasOpenVinoCompatibleHardware) {
     detected.add("OpenVINOExecutionProvider");
@@ -374,6 +432,8 @@ export function pickRecommendedProvider(
   },
 ): IHVProvider {
   // Prefer installed acceleration stacks; otherwise CUDA is the safe NVIDIA default.
+  // Intel ordering: OpenVINO > DNNL > CPU (requirement 7.4).
+  // AMD ordering: ROCm > MIGraphX.
   const priority: IHVProvider[] = [
     ...(opts?.tensorRtRtxLoadable ? (["NvTensorRTRTXExecutionProvider"] as const) : []),
     ...(opts?.tensorRtLoadable ? (["TensorrtExecutionProvider"] as const) : []),
@@ -382,8 +442,11 @@ export function pickRecommendedProvider(
     "NvTensorRTRTXExecutionProvider",
     "TensorrtExecutionProvider",
     "ROCMExecutionProvider",
+    "MIGraphXExecutionProvider",
     "DmlExecutionProvider",
     ...(opts?.openvinoLoadable ? (["OpenVINOExecutionProvider"] as const) : []),
+    "OpenVINOExecutionProvider",
+    "DnnlExecutionProvider",
     "CoreMLExecutionProvider",
     "WebGpuExecutionProvider",
     "CPUExecutionProvider",
@@ -506,6 +569,9 @@ function undetectedProviderReason(provider: IHVProvider, probe?: HardwareProbeRe
     case "MIGraphXExecutionProvider":
       return "AMD MIGraphX was not detected (requires Linux with AMD Instinct GPU + ROCm 5.7+ and the migraphx package in .venv). Install via Hardware panel or ensure ROCm stack is configured.";
     case "DnnlExecutionProvider":
+      if (probe?.platform?.cpuFeatures?.avx2 === false) {
+        return "Intel oneDNN (DNNL) is unavailable on this CPU — AVX2 is the minimum required instruction set. oneDNN requires Intel or AMD CPUs with AVX2 support (Haswell / Excavator or newer).";
+      }
       return "Intel oneDNN (DNNL) was not detected (requires an ORT build with DNNL support). The default onnxruntime wheel may not include DNNL — reinstall an ORT build with oneDNN enabled.";
     case "CPUExecutionProvider":
       return "";

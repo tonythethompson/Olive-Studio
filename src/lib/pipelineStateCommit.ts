@@ -24,6 +24,7 @@ const GPU_PROVIDERS: IHVProvider[] = [
   "NvTensorRTRTXExecutionProvider",
   "TensorrtExecutionProvider",
   "ROCMExecutionProvider",
+  "MIGraphXExecutionProvider",
   "WebGpuExecutionProvider",
 ];
 
@@ -70,11 +71,12 @@ export function isQuantMethodAllowed(
     return provider !== "QNNExecutionProvider" && provider !== "QnnAbiExecutionProvider";
   }
   if (method === "hqq" || method === "rtn" || method === "kquant") {
-    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization support CPU, CUDA, and CoreML (Apple CPU/ANE path).
+    // OnnxHqqQuantization, OnnxBlockWiseRtnQuantization, and KQuant/OnnxKquantQuantization support CPU, CUDA, CoreML, and MIGraphX (AMD Instinct).
     return (
       provider === "CPUExecutionProvider" ||
       provider === "CUDAExecutionProvider" ||
-      provider === "CoreMLExecutionProvider"
+      provider === "CoreMLExecutionProvider" ||
+      provider === "MIGraphXExecutionProvider"
     );
   }
   if (method === "spinquant" || method === "quarot") {
@@ -88,6 +90,13 @@ export function isConversionFormatAllowed(
   provider: IHVProvider,
 ): boolean {
   if (format === "openvino") return provider === "OpenVINOExecutionProvider";
+  if (format === "tensorrt") {
+    return (
+      provider === "TensorrtExecutionProvider" ||
+      provider === "NvTensorRTRTXExecutionProvider" ||
+      provider === "CUDAExecutionProvider"
+    );
+  }
   return true;
 }
 
@@ -194,6 +203,53 @@ export const AUTO_COERCE_RULES: CrossPassCoercion[] = [
       passes.mobiusBuilder && (provider === "QNNExecutionProvider" || provider === "QnnAbiExecutionProvider"),
     fix: { mobiusBuilder: false },
   },
+  {
+    // oneDNN only supports INT8 static quantization — block PyTorch-native GPU methods
+    id: "dnnl-gpu-quant-method-blocked",
+    applies: (passes, provider) =>
+      provider === "DnnlExecutionProvider" &&
+      passes.quantization &&
+      (["awq", "gptq", "hqq", "spinquant", "quarot"] as const).includes(
+        passes.quantMethod as "awq" | "gptq" | "hqq" | "spinquant" | "quarot",
+      ),
+    fix: { quantMethod: "ptq" },
+  },
+  {
+    // QNN ABI selection → auto-enable QairtPipeline single-pass workflow
+    id: "qnn-abi-enable-qairt",
+    applies: (passes, provider) => provider === "QnnAbiExecutionProvider" && !passes.qairtPipeline,
+    fix: { qairtPipeline: true },
+  },
+  {
+    // QNN ABI selection → disable OnnxConversion (QairtPipeline replaces it)
+    id: "qnn-abi-disable-conversion",
+    applies: (passes, provider) => provider === "QnnAbiExecutionProvider" && passes.conversion,
+    fix: { conversion: false },
+  },
+  {
+    // QNN ABI selection → disable OnnxDiscrepancyCheck (no ONNX graph to compare)
+    id: "qnn-abi-disable-discrepancy",
+    applies: (passes, provider) => provider === "QnnAbiExecutionProvider" && passes.onnxDiscrepancyCheck,
+    fix: { onnxDiscrepancyCheck: false },
+  },
+  {
+    // QNN ABI selection → disable external quantization (QairtPipeline has built-in quant)
+    id: "qnn-abi-disable-quant",
+    applies: (passes, provider) => provider === "QnnAbiExecutionProvider" && passes.quantization,
+    fix: { quantization: false },
+  },
+  {
+    // QNN plugin selection → disable QairtPipeline (use multi-pass workflow instead)
+    id: "qnn-plugin-disable-qairt",
+    applies: (passes, provider) => provider === "QNNExecutionProvider" && passes.qairtPipeline,
+    fix: { qairtPipeline: false },
+  },
+  {
+    // QNN plugin selection → re-enable OnnxConversion for multi-pass workflow
+    id: "qnn-plugin-enable-conversion",
+    applies: (passes, provider) => provider === "QNNExecutionProvider" && !passes.conversion,
+    fix: { conversion: true },
+  },
 ];
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -261,8 +317,8 @@ export function mergeUiState(state: UIState, patch: UiStatePatch): UIState {
 export function sanitizePipelineStateShallow(state: UIState): UIState {
   const openvinoTargetDevice =
     state.openvinoTargetDevice === "CPU" ||
-    state.openvinoTargetDevice === "GPU" ||
-    state.openvinoTargetDevice === "NPU"
+      state.openvinoTargetDevice === "GPU" ||
+      state.openvinoTargetDevice === "NPU"
       ? state.openvinoTargetDevice
       : "CPU";
 

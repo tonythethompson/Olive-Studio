@@ -5,6 +5,8 @@ import {
   providerToAccelerator,
   buildOliveRecipe,
   resolveHfTask,
+  GPU_PROVIDERS,
+  NPU_PROVIDERS,
 } from "@/lib/oliveRecipeBuilder";
 import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
@@ -1561,5 +1563,76 @@ describe("buildOliveRecipe 0.13 pass builders", () => {
       }),
     );
     expect((traversal.passes as Record<string, unknown>).onnx_discrepancy_check).toBeUndefined();
+  });
+});
+
+// ─── Property-Based Tests ─────────────────────────────────────────────────────
+import * as fc from "fast-check";
+
+/* Feature: ep-expansion-pack, Property 3: GPU Provider Accelerator Mapping */
+
+/**
+ * Validates: Requirements 4.1, 8.1, 16.3
+ *
+ * Property 3a: For any provider in GPU_PROVIDERS, providerToAccelerator()
+ * returns an object with device: "gpu".
+ *
+ * Property 3b: For any provider NOT in GPU_PROVIDERS and NOT in NPU_PROVIDERS
+ * (excluding OpenVINOExecutionProvider which has its own branch),
+ * providerToAccelerator() returns an object with device: "cpu".
+ */
+
+/** All known IHV providers from the type union. */
+const KNOWN_IHV_PROVIDERS: IHVProvider[] = [
+  "CPUExecutionProvider",
+  "CUDAExecutionProvider",
+  "TensorrtExecutionProvider",
+  "NvTensorRTRTXExecutionProvider",
+  "DmlExecutionProvider",
+  "OpenVINOExecutionProvider",
+  "QNNExecutionProvider",
+  "QnnAbiExecutionProvider",
+  "ROCMExecutionProvider",
+  "MIGraphXExecutionProvider",
+  "DnnlExecutionProvider",
+  "WebGpuExecutionProvider",
+  "CoreMLExecutionProvider",
+  "NNAPIExecutionProvider",
+  "VitisAIExecutionProvider",
+  "SNPEExecutionProvider",
+  "TensorflowLiteExecutionProvider",
+  "XnnpackExecutionProvider",
+  "WasmExecutionProvider",
+];
+
+/** CPU providers: those not in GPU_PROVIDERS, not in NPU_PROVIDERS, and not OpenVINO (special-cased). */
+const CPU_PROVIDERS = KNOWN_IHV_PROVIDERS.filter(
+  (p) =>
+    !GPU_PROVIDERS.includes(p) &&
+    !NPU_PROVIDERS.includes(p) &&
+    p !== "OpenVINOExecutionProvider",
+);
+
+describe("Property 3: GPU Provider Accelerator Mapping", () => {
+  it("GPU providers always map to device: 'gpu'", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...GPU_PROVIDERS), (provider) => {
+        const result = providerToAccelerator(provider);
+        expect(result.device).toBe("gpu");
+        expect(result.execution_providers).toEqual([provider]);
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("CPU providers (not GPU, not NPU) always map to device: 'cpu'", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...CPU_PROVIDERS), (provider) => {
+        const result = providerToAccelerator(provider);
+        expect(result.device).toBe("cpu");
+        expect(result.execution_providers).toEqual([provider]);
+      }),
+      { numRuns: 100 },
+    );
   });
 });

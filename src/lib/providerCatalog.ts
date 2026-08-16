@@ -19,6 +19,10 @@ export interface ProviderCatalogEntry {
   icon: LucideIcon;
   /** Detailed tooltip information for the provider card */
   tooltip: ProviderTooltipInfo;
+  /** Optional group heading for visually grouping related providers (e.g. "Qualcomm Snapdragon"). */
+  group?: string;
+  /** Optional workflow subtitle displayed beneath the provider name to differentiate variants. */
+  workflowSubtitle?: string;
 }
 
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
@@ -58,7 +62,7 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     // providerCatalog.test.ts guard test enforces this.
     name: "NVIDIA TensorRT RTX",
     shortName: "TRT RTX",
-    desc: "JIT TensorRT engines via tensorrt-rtx — no full SDK. Runs on NVIDIA GPUs with compute capability ≥ 7.5 (Turing / GeForce RTX 20xx or newer; primary target Ampere/Ada/Blackwell consumer RTX).",
+    desc: "JIT TensorRT engines via tensorrt-rtx for NVIDIA GPUs ≥ SM 7.5 (Turing+). No full SDK needed.",
     icon: Layers,
     tooltip: {
       requirements:
@@ -80,7 +84,7 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     // surfaces.
     name: "NVIDIA TensorRT",
     shortName: "TensorRT",
-    desc: "Full TensorRT 10.x SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs ≥ compute capability 7.5 (Turing / GeForce RTX 20xx or newer; also Quadro, Datacenter, H100/B100).",
+    desc: "Full TensorRT 10.x SDK (nvinfer_10) for maximum throughput on NVIDIA GPUs ≥ SM 7.5 (Turing+).",
     icon: Layers,
     tooltip: {
       requirements:
@@ -125,6 +129,8 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     shortName: "QNN",
     desc: "Hexagon NPU acceleration on Snapdragon edge and mobile devices.",
     icon: CpuIcon,
+    group: "Qualcomm Snapdragon",
+    workflowSubtitle: "Multi-pass plugin workflow (OnnxConversion → quantization → QNN compilation)",
     tooltip: {
       requirements:
         "Qualcomm Snapdragon 8 Gen 2/3 or newer with Hexagon NPU. Snapdragon Dev Kit or Android device.",
@@ -139,6 +145,8 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     shortName: "QNN ABI",
     desc: "Single-pass QairtPipeline direct compilation for Snapdragon NPU context binaries.",
     icon: CpuIcon,
+    group: "Qualcomm Snapdragon",
+    workflowSubtitle: "Single-pass QairtPipeline (direct model-to-context-binary)",
     tooltip: {
       requirements:
         "Snapdragon 8 Gen 2/3 or newer SoC. Windows ARM64 (on-device NPU) or Windows x64 (ahead-of-time preparation).",

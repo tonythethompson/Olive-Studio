@@ -1,5 +1,42 @@
 {
-  "pbtResults": {},
+  "pbtResults": {
+    "2.4 Write property test for catalog schema invariant": {
+      "status": "passed",
+      "lastRunTimestamp": 1786801135436
+    },
+    "9.7 Write property test for hardware profile schema completeness": {
+      "status": "passed",
+      "lastRunTimestamp": 1786801887813
+    },
+    "4.5 Write property tests for MIGraphX conflict detection": {
+      "status": "passed",
+      "lastRunTimestamp": 1786802314394
+    },
+    "4.7 Write property tests for oneDNN conflict detection": {
+      "status": "passed",
+      "lastRunTimestamp": 1786802368592
+    },
+    "4.6 Write property tests for MIGraphX compatible pass allowance": {
+      "status": "passed",
+      "lastRunTimestamp": 1786802437462
+    },
+    "4.8 Write property test for oneDNN GPU quant method blocking": {
+      "status": "passed",
+      "lastRunTimestamp": 1786802796013
+    },
+    "5.3 Write property test for QNN ABI coercion invariant": {
+      "status": "passed",
+      "lastRunTimestamp": 1786803246042
+    },
+    "5.4 Write property test for QNN plugin inverse coercion": {
+      "status": "passed",
+      "lastRunTimestamp": 1786803281897
+    },
+    "12.3 Write property test for GPU provider accelerator mapping": {
+      "status": "passed",
+      "lastRunTimestamp": 1786804979154
+    }
+  },
   "executionHistory": {
     "1.1 Add `MIGraphXExecutionProvider` and `DnnlExecutionProvider` to IHVProvider union in `src/types.ts`": [
       {
@@ -251,6 +288,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799416923
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800521905
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801710941
       }
     ],
     "3. Checkpoint - Verify type system compiles": [
@@ -263,6 +310,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417032
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805008478
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805055232
       }
     ],
     "4.1 Add MIGraphX conflict rules to `getProviderConflicts()` in `src/lib/pipelineValidation.ts`": [
@@ -275,6 +332,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417122
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800522576
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801712897
       }
     ],
     "4.2 Add oneDNN conflict rules to `getProviderConflicts()` in `src/lib/pipelineValidation.ts`": [
@@ -287,6 +354,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417230
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800523393
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801712966
       }
     ],
     "4.3 Add MIGraphX and oneDNN to `PASS_VALIDATIONS` in `src/components/features/ihv/hardwarePassCompatibility.ts`": [
@@ -299,6 +376,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417314
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800524414
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801713699
       }
     ],
     "4.4 Add ROCm consumer/datacenter validation differentiation": [
@@ -311,6 +398,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417412
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800525400
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801714515
       }
     ],
     "4.5 Write property tests for MIGraphX conflict detection": [
@@ -323,6 +420,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417509
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802136398
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802643493
       }
     ],
     "4.6 Write property tests for MIGraphX compatible pass allowance": [
@@ -335,6 +442,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417628
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802137088
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802643588
       }
     ],
     "4.7 Write property tests for oneDNN conflict detection": [
@@ -347,6 +464,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417736
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802137884
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802644345
       }
     ],
     "4.8 Write property test for oneDNN GPU quant method blocking": [
@@ -359,6 +486,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417839
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802650905
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803062310
       }
     ],
     "5.1 Add QNN ABI selection coercion rules to `AUTO_COERCE_RULES` in `src/lib/pipelineStateCommit.ts`": [
@@ -371,6 +508,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799417935
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802138825
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802645334
       }
     ],
     "5.2 Add oneDNN quant method auto-coercion in `src/lib/pipelineStateCommit.ts`": [
@@ -383,6 +530,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418021
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802139694
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802646317
       }
     ],
     "5.3 Write property test for QNN ABI coercion invariant": [
@@ -395,6 +552,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418143
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803076172
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804379905
       }
     ],
     "5.4 Write property test for QNN plugin inverse coercion": [
@@ -407,6 +574,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418241
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803076920
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804377260
       }
     ],
     "6. Checkpoint - Verify validation logic": [
@@ -419,6 +596,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418327
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805059605
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805122979
       }
     ],
     "7.1 Extend `HardwareProbeResult` interface with `migraphx` and `dnnl` sections": [
@@ -431,6 +618,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418415
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801719272
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802127040
       }
     ],
     "7.2 Implement MIGraphX detection logic in the hardware probe": [
@@ -443,6 +640,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418516
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802651651
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803063779
       }
     ],
     "7.3 Implement oneDNN detection logic in the hardware probe": [
@@ -455,6 +662,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418599
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802654455
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803071701
       }
     ],
     "8.1 Add MIGraphX capability install logic in `src/server/services/venv/capabilityEnsure.ts`": [
@@ -467,6 +684,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418682
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801720173
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802128090
       }
     ],
     "8.2 Add DnnlExecutionProvider capability ensure logic in `src/server/services/venv/capabilityEnsure.ts`": [
@@ -479,6 +706,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799418768
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801720981
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802129120
       }
     ],
     "9.1 Add AMD Instinct hardware profiles to `olive-mcp-server/olive_mcp_server/knowledge_base/hardware_profiles.json`": [
@@ -518,6 +755,11 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786800176196
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800509066
       }
     ],
     "9.3 Add AMD Radeon RX Consumer / ROCm generic profile to `hardware_profiles.json`": [
@@ -535,6 +777,11 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786800177113
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800509941
       }
     ],
     "9.4 Add Intel Core (oneDNN) hardware profile to `hardware_profiles.json`": [
@@ -552,6 +799,11 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786800177875
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800512006
       }
     ],
     "9.5 Add \"AMD Radeon RX Consumer\" recipe template to MCP integration_recipes knowledge base": [
@@ -569,6 +821,11 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786800178685
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800512154
       }
     ],
     "9.6 Add `_speedup_unverified: true` marker to all new hardware profiles": [
@@ -581,6 +838,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419330
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801722765
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802130122
       }
     ],
     "9.7 Write property test for hardware profile schema completeness": [
@@ -593,6 +860,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419430
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801722825
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802131181
       }
     ],
     "9.8 Add EP selection guidance knowledge entry to MCP knowledge base": [
@@ -610,6 +887,11 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786800179522
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786800512624
       }
     ],
     "10. Checkpoint - Verify knowledge base and server": [
@@ -622,6 +904,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419605
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805127295
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805177944
       }
     ],
     "11.1 Add \"Qualcomm Snapdragon\" grouped section to the IHV provider card grid": [
@@ -634,6 +926,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419687
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803077751
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804378393
       }
     ],
     "11.2 Add IHV panel logic for MIGraphX install-needed indicator": [
@@ -646,6 +948,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419758
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803078561
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804376548
       }
     ],
     "11.3 Add IHV panel logic for oneDNN unavailable state": [
@@ -658,6 +970,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419862
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803079381
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804379188
       }
     ],
     "11.4 Add inline notification for QNN ABI pass coercion": [
@@ -670,6 +992,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799419952
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804384748
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804721554
       }
     ],
     "11.5 Ensure tooltip visibility behavior for QNN ABI card": [
@@ -682,6 +1014,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799420033
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804385530
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804720816
       }
     ],
     "12.1 Write unit tests for provider runtime kind and venv family": [
@@ -694,6 +1036,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799420111
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804726577
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804998040
       }
     ],
     "12.2 Write unit tests for GPU classification and accelerator mapping": [
@@ -706,6 +1058,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799420197
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804727366
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804998814
       }
     ],
     "12.3 Write property test for GPU provider accelerator mapping": [
@@ -718,6 +1080,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799420333
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804728074
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804999661
       }
     ],
     "13. Final checkpoint - Verify all tests and compilation": [
@@ -730,6 +1102,16 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786799420418
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805182225
+      },
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786805280615
       }
     ],
     "1. Type union and exhaustive switch foundation": [
@@ -737,6 +1119,62 @@
         "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
         "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
         "timestamp": 1786800164510
+      }
+    ],
+    "2. Provider catalog entries": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786801711025
+      }
+    ],
+    "8. Server-side capability ensure": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802129199
+      }
+    ],
+    "9. MCP Knowledge Base additions": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786802131257
+      }
+    ],
+    "4. Validation rules for MIGraphX and oneDNN": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803062391
+      }
+    ],
+    "7. Hardware probe detection extensions": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786803071789
+      }
+    ],
+    "5. QNN ABI auto-coercion and unified UX": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804379971
+      }
+    ],
+    "11. IHV Panel UI changes": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804721677
+      }
+    ],
+    "12. Unit tests for classification and recipe builder": [
+      {
+        "executionId": "2fa4b343-fc07-4356-82e3-b88e5aceea88",
+        "chatSessionId": "sess_e38ee2fe-85f8-44c6-96e2-c762cdb44a64",
+        "timestamp": 1786804999737
       }
     ]
   }

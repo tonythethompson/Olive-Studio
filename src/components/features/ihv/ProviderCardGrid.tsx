@@ -17,6 +17,48 @@ export interface ProviderCardGridProps {
   providerCardProps: Omit<HardwareProviderCardProps, "provider">;
 }
 
+/**
+ * Splits a list of providers into ungrouped entries and grouped sections (by `group` field).
+ * Preserves original order: grouped entries appear in the position of the first member seen.
+ */
+function partitionByGroup(providers: ProviderCatalogEntry[]): {
+  ungrouped: ProviderCatalogEntry[];
+  groups: { heading: string; entries: ProviderCatalogEntry[] }[];
+  /** Interleaved render order: `{ type: "entry", entry }` or `{ type: "group", heading, entries }` */
+  renderOrder: (
+    | { type: "entry"; entry: ProviderCatalogEntry }
+    | { type: "group"; heading: string; entries: ProviderCatalogEntry[] }
+  )[];
+} {
+  const ungrouped: ProviderCatalogEntry[] = [];
+  const groupMap = new Map<string, ProviderCatalogEntry[]>();
+  const renderOrder: (
+    | { type: "entry"; entry: ProviderCatalogEntry }
+    | { type: "group"; heading: string; entries: ProviderCatalogEntry[] }
+  )[] = [];
+  const groupInserted = new Set<string>();
+
+  for (const p of providers) {
+    if (p.group) {
+      if (!groupMap.has(p.group)) {
+        groupMap.set(p.group, []);
+      }
+      groupMap.get(p.group)!.push(p);
+      // Insert the group placeholder at the position of the first member
+      if (!groupInserted.has(p.group)) {
+        groupInserted.add(p.group);
+        renderOrder.push({ type: "group", heading: p.group, entries: groupMap.get(p.group)! });
+      }
+    } else {
+      ungrouped.push(p);
+      renderOrder.push({ type: "entry", entry: p });
+    }
+  }
+
+  const groups = [...groupMap.entries()].map(([heading, entries]) => ({ heading, entries }));
+  return { ungrouped, groups, renderOrder };
+}
+
 export function ProviderCardGrid({
   probeLoading,
   localAccelerators,
@@ -61,6 +103,10 @@ export function ProviderCardGrid({
     return { detectedLocal: detected, undetectedLocal: undetected };
   }, [localAccelerators, providerCardProps.hardwareProbe, probeLoading]);
 
+  // Partition detected locals into grouped sections (e.g. "Qualcomm Snapdragon") and ungrouped cards.
+  const detectedRenderOrder = useMemo(() => partitionByGroup(detectedLocal).renderOrder, [detectedLocal]);
+  const undetectedRenderOrder = useMemo(() => partitionByGroup(undetectedLocal).renderOrder, [undetectedLocal]);
+
   const selectedIsUndetectedLocal = undetectedLocal.some(
     (p) => p.id === providerCardProps.state.ihvProvider,
   );
@@ -88,9 +134,22 @@ export function ProviderCardGrid({
             Local accelerators
           </p>
           <div className="grid gap-4 min-w-0 w-full" data-tour="hardware-providers">
-            {detectedLocal.map((p) => (
-              <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
-            ))}
+            {detectedRenderOrder.map((item) =>
+              item.type === "entry" ? (
+                <HardwareProviderCard key={item.entry.id} provider={item.entry} {...providerCardProps} />
+              ) : (
+                <div key={`group-${item.heading}`} className="space-y-3">
+                  <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500 border-b border-slate-800/60 pb-1.5">
+                    {item.heading}
+                  </p>
+                  <div className="grid gap-4 min-w-0 w-full">
+                    {item.entries.map((p) => (
+                      <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
+                    ))}
+                  </div>
+                </div>
+              ),
+            )}
           </div>
           {undetectedLocal.length > 0 && (
             <>
@@ -112,9 +171,22 @@ export function ProviderCardGrid({
               </button>
               {showUndetectedLocal && (
                 <div className="grid gap-4 min-w-0 w-full">
-                  {undetectedLocal.map((p) => (
-                    <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
-                  ))}
+                  {undetectedRenderOrder.map((item) =>
+                    item.type === "entry" ? (
+                      <HardwareProviderCard key={item.entry.id} provider={item.entry} {...providerCardProps} />
+                    ) : (
+                      <div key={`group-${item.heading}`} className="space-y-3">
+                        <p className="text-[11px] font-mono uppercase tracking-wider text-slate-500 border-b border-slate-800/60 pb-1.5">
+                          {item.heading}
+                        </p>
+                        <div className="grid gap-4 min-w-0 w-full">
+                          {item.entries.map((p) => (
+                            <HardwareProviderCard key={p.id} provider={p} {...providerCardProps} />
+                          ))}
+                        </div>
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
             </>

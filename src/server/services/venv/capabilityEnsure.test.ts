@@ -80,3 +80,58 @@ describe("ensureProviderCapability CoreML host gating", () => {
     expect(ensureCoremltoolsMock).toHaveBeenCalledWith(onLine);
   });
 });
+
+describe("ensureProviderCapability DnnlExecutionProvider", () => {
+  beforeEach(() => {
+    ensureVenvFamilyMock.mockReset();
+    ensureVenvFamilyMock.mockResolvedValue({ ok: true });
+    getDualRuntimeStatusMock.mockReset();
+    probeFamilyStatusMock.mockReset();
+  });
+
+  it("succeeds when ORT reports DnnlExecutionProvider in available providers", async () => {
+    getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
+    probeFamilyStatusMock.mockResolvedValue({
+      capabilities: { cpu: { usable: true } },
+      ortProviders: ["CPUExecutionProvider", "DnnlExecutionProvider"],
+    });
+
+    const result = await ensureProviderCapability("DnnlExecutionProvider", () => undefined);
+
+    expect(result).toEqual({
+      ok: true,
+      family: "default",
+      python: "/fake/.venv/bin/python",
+    });
+  });
+
+  it("returns failure with ORT wheel suggestion when DnnlExecutionProvider is absent from providers", async () => {
+    getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
+    probeFamilyStatusMock.mockResolvedValue({
+      capabilities: { cpu: { usable: true } },
+      ortProviders: ["CPUExecutionProvider"],
+    });
+
+    const result = await ensureProviderCapability("DnnlExecutionProvider", () => undefined);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("DnnlExecutionProvider is not registered");
+    expect(result.error).toContain("oneDNN/DNNL support");
+    expect(result.family).toBe("default");
+    expect(result.python).toBe("/fake/.venv/bin/python");
+  });
+
+  it("does not attempt package installation for DnnlExecutionProvider", async () => {
+    getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
+    probeFamilyStatusMock.mockResolvedValue({
+      capabilities: { cpu: { usable: true } },
+      ortProviders: ["CPUExecutionProvider", "DnnlExecutionProvider"],
+    });
+
+    // If installCapabilityPackages tried to install something, it would invoke
+    // one of the ensure* mocks. None should be called for DNNL.
+    ensureCoremltoolsMock.mockReset();
+    await ensureProviderCapability("DnnlExecutionProvider", () => undefined);
+    expect(ensureCoremltoolsMock).not.toHaveBeenCalled();
+  });
+});
