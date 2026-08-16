@@ -1,6 +1,12 @@
 import type { ProviderConfig } from "../../types.ts";
 import { isValidCloudflareAccountId } from "../../../lib/cloudflare/credentials.ts";
 
+/**
+ * AWS region shape: 2-letter geo prefix, one or more word segments, trailing
+ * digit. Accepts multi-segment regions like us-gov-west-1 and eu-isoe-west-1.
+ */
+export const AWS_REGION_PATTERN = /^[a-z]{2}(-[a-z]+)+-\d+$/;
+
 /** Allowed base URL prefixes per provider (SSRF protection). */
 export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig["provider"], string[]>> = {
   openai: ["https://api.openai.com/v1"],
@@ -19,6 +25,9 @@ export const ALLOWED_BASE_URL_PREFIX_BY_PROVIDER: Partial<Record<ProviderConfig[
   huggingface: ["https://router.huggingface.co/v1"],
   // Account id is path segment: …/accounts/{32hex}/ai/v1
   cloudflare: ["https://api.cloudflare.com/client/v4/accounts"],
+  // Bedrock uses the AWS SDK (not a direct HTTP base URL). The baseUrl field
+  // stores only the AWS region string (e.g. "us-east-1"), not a URL.
+  // No URL prefix validation needed — the SDK constructs endpoints internally.
 };
 
 /** Strip trailing `/` without a regex (avoids ReDoS on long slash runs). */
@@ -78,6 +87,10 @@ export function isPrivateOrLocalHostname(hostname: string): boolean {
 export function sanitizeProviderBaseUrl(provider: string, rawBaseUrl?: string): string | undefined {
   const trimmed = rawBaseUrl?.trim();
   if (!trimmed) return undefined;
+  if (provider === "bedrock") {
+    if (!AWS_REGION_PATTERN.test(trimmed)) throw new Error("Invalid AWS Bedrock region");
+    return trimmed;
+  }
   let parsed: URL;
   try {
     parsed = new URL(trimmed);

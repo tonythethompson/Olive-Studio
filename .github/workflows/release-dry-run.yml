@@ -174,15 +174,33 @@ jobs:
             -OutFile "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_$version.msix"
 
       # ─── Upload artifacts ─────────────────────────────────────────────
+      - name: Validate Linux artifacts
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/deb" -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$(find "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/appimage" -maxdepth 1 -name '*.AppImage' -print -quit)"
+
       - name: Upload Linux artifacts
         if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           retention-days: 7
+          if-no-files-found: error
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/deb/*.deb
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/appimage/*.AppImage
+
+      - name: Validate Windows artifacts
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $root = "src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
+          if (-not (Get-ChildItem "$root/nsis/*.exe" -ErrorAction SilentlyContinue)) { throw "Missing NSIS installer" }
+          if (-not (Get-ChildItem "$root/msi/*.msi" -ErrorAction SilentlyContinue)) { throw "Missing MSI installer" }
+          if (-not (Get-ChildItem "$root/msix/*.msix" -ErrorAction SilentlyContinue)) { throw "Missing MSIX package" }
 
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows-latest'
@@ -190,10 +208,19 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           retention-days: 7
+          if-no-files-found: error
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/nsis/*.exe
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/*.msix
+
+      - name: Validate macOS artifacts
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$(find "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/macos" -maxdepth 1 -name '*.app.tar.gz' -print -quit)"
 
       - name: Upload macOS artifacts
         if: matrix.platform == 'macos-latest'
@@ -201,6 +228,7 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           retention-days: 7
+          if-no-files-found: error
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/dmg/*.dmg
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/macos/*.app.tar.gz
