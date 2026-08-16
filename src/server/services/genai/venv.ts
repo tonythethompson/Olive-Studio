@@ -427,14 +427,18 @@ export async function shutdownSidecar(): Promise<void> {
   sidecar.kill();
   // kill() sends the shutdown command now and SIGTERM after 2s; cap the wait
   // so a wedged sidecar can never hang server shutdown.
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
   const timeoutPromise = new Promise<void>((resolve) => {
-    setTimeout(() => {
+    timer = setTimeout(() => {
       timedOut = true;
       resolve();
     }, 5000);
   });
   await Promise.race([sidecar.exitPromise.then(() => { timedOut = false; }), timeoutPromise]);
+  // The race has settled either way — drop the timer so a fast exit does not
+  // keep the event loop alive for the remaining wait cap.
+  clearTimeout(timer);
   // A sidecar that ignores the graceful shutdown (command + SIGTERM) would
   // keep its loaded model in memory after Studio exits — escalate to SIGKILL.
   if (timedOut) {
