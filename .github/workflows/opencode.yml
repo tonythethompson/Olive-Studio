@@ -15,6 +15,7 @@ jobs:
       contains(github.event.comment.body, ' /opencode') ||
       startsWith(github.event.comment.body, '/opencode'))
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       id-token: write
       contents: write
@@ -26,9 +27,29 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Probe primary model availability
+        id: probe
+        shell: bash
+        env:
+          ALIBABA_TOKEN_PLAN_API_KEY: ${{ secrets.ALIBABA_TOKEN_PLAN_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        run: |
+          MODEL="alibaba-token-plan/qwen3.8-max"
+          if ! curl -sf --max-time 15 \
+            -X POST "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
+            -H "Authorization: Bearer ${ALIBABA_TOKEN_PLAN_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"model":"qwen3.8-max","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
+            >/dev/null 2>&1; then
+            echo "::warning::Primary model (alibaba-token-plan) unavailable - falling back to DashScope"
+            MODEL="alibaba/qwen3.8-max"
+          fi
+          echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+
       - name: Run opencode
         uses: anomalyco/opencode/github@14b37df39168eaf6a6faf862ec4a7bbe9c825bbd # v1.18.18
         env:
           ALIBABA_TOKEN_PLAN_API_KEY: ${{ secrets.ALIBABA_TOKEN_PLAN_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         with:
-          model: alibaba-token-plan/qwen3.8-max
+          model: ${{ steps.probe.outputs.model }}
