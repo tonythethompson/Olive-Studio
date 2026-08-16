@@ -168,6 +168,13 @@ export interface SidecarProcess {
   send: (request: Record<string, unknown>) => void;
   /** Register a handler for NDJSON responses. */
   onResponse: (handler: (data: Record<string, unknown>) => void) => () => void;
+  /**
+   * Register a settler that rejects an in-flight request if the process dies
+   * or is replaced before responding. Returns an unregister function.
+   */
+  onTerminate: (settle: () => void) => () => void;
+  /** Settle all in-flight requests immediately (replacement/shutdown). */
+  settlePending: () => void;
   /** Kill the sidecar process. */
   kill: () => void;
   /** Whether the process is still alive. */
@@ -190,8 +197,10 @@ let activeSidecarKey: string | null = null;
 export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProcess {
   const key = `${modelPath}\u0000${ep}`;
   if (activeSidecar?.alive() && activeSidecarKey === key) return activeSidecar;
-  // Stale sidecar for a different model/EP — stop it before spawning a new one.
+  // Stale sidecar for a different model/EP — settle its in-flight requests
+  // (they would otherwise wait for their timeout) before replacing it.
   if (activeSidecar?.alive()) {
+    activeSidecar.settlePending();
     activeSidecar.kill();
   }
   activeSidecar = null;
@@ -210,6 +219,18 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   });
 
   const responseHandlers: Array<(data: Record<string, unknown>) => void> = [];
+  // Settlers for requests that are waiting on this process. Invoked when the
+  // process dies or is replaced so callers reject instead of timing out.
+  const pendingSettlers = new Set<() => void>();
+  const settlePending = (): void => {
+    const settlers = [...pendingSettlers];
+    pendingSettlers.clear();
+    for (const settle of settlers) {
+      try {
+        settle();
+      } catch { /* a failing settler must not block teardown */ }
+    }
+  };
   let buffer = "";
 
   child.stdout?.on("data", (chunk: Buffer) => {
@@ -238,6 +259,7 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   // that would crash the whole server.
   child.on("error", (err) => {
     console.warn("[genai-sidecar] spawn error:", err.message);
+    settlePending();
     if (activeSidecar === sidecar) {
       activeSidecar = null;
       activeSidecarKey = null;
@@ -245,6 +267,7 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   });
 
   child.on("exit", (code) => {
+    settlePending();
     if (activeSidecar === sidecar) {
       activeSidecar = null;
       activeSidecarKey = null;
@@ -267,7 +290,15 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
         if (index >= 0) responseHandlers.splice(index, 1);
       };
     },
+    onTerminate: (settle) => {
+      pendingSettlers.add(settle);
+      return () => {
+        pendingSettlers.delete(settle);
+      };
+    },
+    settlePending,
     kill: () => {
+      settlePending();
       try {
         sidecar.send({ command: "shutdown" });
       } catch { /* ignore */ }
