@@ -33,6 +33,7 @@ jobs:
         env:
           ALIBABA_TOKEN_PLAN_API_KEY: ${{ secrets.ALIBABA_TOKEN_PLAN_API_KEY }}
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
           MODEL="alibaba-token-plan/qwen3.8-max"
           if ! curl -sf --max-time 15 \
@@ -43,6 +44,15 @@ jobs:
             >/dev/null 2>&1; then
             echo "::warning::Primary model (alibaba-token-plan) unavailable - falling back to DashScope"
             MODEL="alibaba/qwen3.8-max"
+            if ! curl -sf --max-time 15 \
+              -X POST "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions" \
+              -H "Authorization: Bearer ${DASHSCOPE_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"model":"qwen3.8-max","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
+              >/dev/null 2>&1; then
+              echo "::warning::DashScope unavailable - falling back to OpenCode Zen (big-pickle)"
+              MODEL="opencode/big-pickle"
+            fi
           fi
           echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
 
@@ -51,5 +61,6 @@ jobs:
         env:
           ALIBABA_TOKEN_PLAN_API_KEY: ${{ secrets.ALIBABA_TOKEN_PLAN_API_KEY }}
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
           model: ${{ steps.probe.outputs.model }}
