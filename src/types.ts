@@ -218,8 +218,8 @@ export interface UIState {
  * MCP diagnostic response from `troubleshoot_olive_error`.
  *
  * Display fields (`title`, `root_cause`, `workaround`, …) are unchanged for
- * existing cards/history. Feedback (thumbs up/down) is keyed only by
- * {@link McpDiagnostic.matched_entry} — never by log text.
+ * existing cards/history. Feedback (thumbs up/down) is keyed only by the
+ * {@link McpDiagnostic} `matched_entry` field — never by log text.
  */
 export interface McpDiagnostic {
   /**
@@ -296,7 +296,7 @@ export const MCP_TROUBLESHOOT_FEEDBACK_REASON_CODES: readonly McpTroubleshootFee
  * Never includes logs, tracebacks, or free-form diagnostic text.
  */
 export interface McpTroubleshootFeedbackArgs {
-  /** Must be a non-empty {@link McpDiagnostic.matched_entry} known to the KB. */
+  /** Must be a non-empty `matched_entry` (see {@link McpDiagnostic}) known to the KB. */
   matched_entry: string;
   rating: McpTroubleshootFeedbackRating;
   /** Optional allowlisted reason code — not free-form user prose. */

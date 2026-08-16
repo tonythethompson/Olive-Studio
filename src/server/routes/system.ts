@@ -196,7 +196,7 @@ async function probeRocmIsaFamilies(): Promise<string[]> {
     const { stdout } = await execFileAsync("rocminfo", [], { timeout: ORT_PROBE_TIMEOUT_MS });
     const names = stdout
       .split("\n")
-      .map((line) => line.match(/^\s*Name:\s*(gfx\d[\w]*)\s*$/i)?.[1])
+      .map((line) => line.match(/^\s*Name:\s*(gfx\d\w*)\s*$/i)?.[1])
       .filter((name): name is string => Boolean(name));
     if (names.length > 0) return names;
   } catch {
