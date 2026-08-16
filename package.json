@@ -24,8 +24,8 @@
     "postinstall": "node scripts/postinstall-mcp-setup.mjs",
     "dev": "tsx server.ts",
     "generate:recipes": "node scripts/generate-olive-recipes-catalog.mjs",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs",
-    "build:desktop": "vite build && esbuild server.ts --bundle --platform=node --format=esm --ignore-annotations --banner:js=\"import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);\" --outfile=dist/server.mjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs && node scripts/copy-genai-sidecar.mjs",
+    "build:desktop": "vite build && esbuild server.ts --bundle --platform=node --format=esm --ignore-annotations --banner:js=\"import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);\" --outfile=dist/server.mjs && node scripts/copy-genai-sidecar.mjs",
     "start": "node dist/server.mjs",
     "clean": "rm -rf dist server.js dist/server.cjs dist/server.mjs",
     "test": "vitest run",
@@ -54,6 +54,10 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1110.0",
+    "@aws-sdk/client-s3": "^3.1110.0",
+    "@aws-sdk/credential-providers": "^3.1110.0",
+    "@aws-sdk/lib-storage": "^3.1110.0",
     "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/client": "^2.0.0",
     "@radix-ui/react-accordion": "^1.2.20",

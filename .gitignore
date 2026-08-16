@@ -35,6 +35,9 @@ start-server.bat
 /~/.cache/
 /.agents/skills/studio
 
+# Runtime caches (GenAI model cache, S3 pull staging)
+/.cache/
+
 # Local agent/tool state
 /.ocx/
 /.opencode/
