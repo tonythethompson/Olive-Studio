@@ -80,7 +80,15 @@ jobs:
             echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "::warning::Nemotron 3 Ultra free unavailable - trying free fallback (nemotron-3.5-lightning-free)"
+          echo "::warning::Nemotron 3 Ultra free unavailable - trying free fallback (mistral-medium-3.5)"
+          MODEL="mistral-medium-3.5"
+          VARIANT=""
+          if probe_zen mistral-medium-3.5; then
+            echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+            echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::warning::Mistral Medium 3.5 unavailable - trying free fallback (nemotron-3.5-lightning-free)"
           MODEL="opencode/nemotron-3.5-lightning-free"
           VARIANT=""
           if probe_zen nemotron-3.5-lightning-free; then
