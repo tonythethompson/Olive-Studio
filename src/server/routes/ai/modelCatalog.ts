@@ -31,6 +31,16 @@ export async function fetchLiveModelCatalog(provider: string, apiKey: string, ba
         error: "Bedrock models are region-scoped; use the default model ID or one enabled for your account.",
       };
     }
+    if (provider === "genai") {
+      // The built-in engine serves a single locally downloaded model; it has
+      // no remote catalog endpoint. Return the static default list instead of
+      // attempting an OpenAI-style fetch.
+      return {
+        models: [],
+        source: "fallback" as const,
+        error: "Built-in GenAI runs one locally downloaded model; the default is preconfigured in Settings.",
+      };
+    }
 
     const base = stripTrailingSlashes(baseUrl || defaultBaseUrl(provider));
     const headers: Record<string, string> = {

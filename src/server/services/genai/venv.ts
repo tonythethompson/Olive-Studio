@@ -93,13 +93,37 @@ async function findSystemPython(): Promise<string | null> {
 }
 
 /**
+ * In-flight setup operation shared by concurrent callers so two requests can
+ * never create/install the same venv at the same time (remounts, multiple
+ * panels, or direct loopback calls all serialize on this promise).
+ */
+let activeVenvSetup: Promise<{ ok: boolean; error?: string }> | null = null;
+/** Progress listeners for every caller waiting on the shared setup operation. */
+const setupListeners = new Set<SetupListener>();
+
+/**
  * Ensures the GenAI venv is set up with onnxruntime-genai installed.
- * Idempotent — skips if already ready.
+ * Idempotent — skips if already ready. Concurrent callers await the same
+ * in-flight setup and receive its progress lines and result.
  *
  * @param onLine - Progress callback for UI streaming.
  * @returns Success/failure result.
  */
-export async function ensureGenaiVenv(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
+export function ensureGenaiVenv(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
+  setupListeners.add(onLine);
+  if (!activeVenvSetup) {
+    const operation = runGenaiVenvSetup((line) => {
+      for (const listener of setupListeners) listener(line);
+    });
+    activeVenvSetup = operation.finally(() => {
+      activeVenvSetup = null;
+      setupListeners.clear();
+    });
+  }
+  return activeVenvSetup;
+}
+
+async function runGenaiVenvSetup(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
   if (isGenaiVenvReady()) {
     // Quick check: is onnxruntime-genai importable?
     try {
@@ -187,8 +211,10 @@ export interface SidecarProcess {
   onTerminate: (settle: () => void) => () => void;
   /** Settle all in-flight requests immediately (replacement/shutdown). */
   settlePending: () => void;
-  /** Kill the sidecar process. */
+  /** Kill the sidecar process (graceful shutdown command, then SIGTERM). */
   kill: () => void;
+  /** Force-kill the sidecar (SIGKILL) after a graceful shutdown timeout. */
+  killHard: () => void;
   /** Whether the process is still alive. */
   alive: () => boolean;
   /** Resolves with the exit code once the child process has exited. */
@@ -232,10 +258,25 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
     },
   });
 
-  // Lets shutdownSidecar await actual process exit instead of racing it.
+  // Lets shutdownSidecar await actual process exit instead of racing it. A
+  // failed spawn emits 'error' (never 'exit'), so both events settle the same
+  // idempotent resolver — otherwise shutdown would wait out its full timeout.
+  let resolveExit: (code: number | null) => void = () => {};
+  let exitSettled = false;
   const exitPromise = new Promise<number | null>((resolve) => {
-    child.once("exit", (code) => resolve(code));
+    resolveExit = (code) => {
+      if (exitSettled) return;
+      exitSettled = true;
+      resolve(code);
+    };
   });
+  child.once("exit", (code) => resolveExit(code));
+  child.once("error", () => resolveExit(null));
+
+  // A failed spawn ('error' event) leaves exitCode/killed untouched, so the
+  // sidecar must be marked dead explicitly or shutdown would try to talk to a
+  // process that was never started.
+  let spawnFailed = false;
 
   const responseHandlers: Array<(data: Record<string, unknown>) => void> = [];
   // Settlers for requests that are waiting on this process. Invoked when the
@@ -280,6 +321,7 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   // that would crash the whole server.
   child.on("error", (err) => {
     console.warn("[genai-sidecar] spawn error:", err.message);
+    spawnFailed = true;
     settlePending();
     if (activeSidecar === sidecar) {
       activeSidecar = null;
@@ -329,7 +371,16 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
         if (child.exitCode === null) child.kill("SIGTERM");
       }, 2000);
     },
-    alive: () => child.exitCode === null && !child.killed,
+    killHard: () => {
+      if (child.exitCode !== null || child.killed) return;
+      try {
+        // Windows maps SIGKILL to TerminateProcess; POSIX sends SIGKILL.
+        child.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    },
+    alive: () => !spawnFailed && child.exitCode === null && !child.killed,
     exitPromise,
   };
 
@@ -368,5 +419,22 @@ export async function shutdownSidecar(): Promise<void> {
   sidecar.kill();
   // kill() sends the shutdown command now and SIGTERM after 2s; cap the wait
   // so a wedged sidecar can never hang server shutdown.
-  await Promise.race([sidecar.exitPromise, new Promise<void>((resolve) => setTimeout(resolve, 5000))]);
+  let timedOut = false;
+  await Promise.race([
+    sidecar.exitPromise.then(() => {
+      timedOut = false;
+    }),
+    new Promise<void>((resolve) =>
+      setTimeout(() => {
+        timedOut = true;
+        resolve();
+      }, 5000),
+    ),
+  ]);
+  // A sidecar that ignores the graceful shutdown (command + SIGTERM) would
+  // keep its loaded model in memory after Studio exits — escalate to SIGKILL.
+  if (timedOut) {
+    console.warn("[genai-sidecar] shutdown timed out; sending SIGKILL.");
+    sidecar.killHard();
+  }
 }

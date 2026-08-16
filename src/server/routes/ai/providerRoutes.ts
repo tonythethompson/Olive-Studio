@@ -36,6 +36,17 @@ function isLocalOpenaiCompat(provider: string, normalizedBaseUrl?: string): bool
   }
 }
 
+/**
+ * Whether a provider may list models without an API key. Bedrock authenticates
+ * through the default AWS credential chain and GenAI is a local engine — both
+ * have keyless catalog paths, so the key-missing fallback must not preempt
+ * their provider-specific catalog responses.
+ */
+function canListModelsWithoutKey(provider: string, normalizedBaseUrl?: string): boolean {
+  if (provider === "bedrock" || provider === "genai") return true;
+  return isLocalOpenaiCompat(provider, normalizedBaseUrl);
+}
+
 /** Resolve the API key for a live model catalog request: body > runtime > env. */
 function resolveCatalogApiKey(provider: ProviderConfig["provider"], apiKey?: string): string {
   const explicit = typeof apiKey === "string" ? apiKey.trim() : "";
@@ -283,6 +294,19 @@ export function mountProviderRoutes(router: Router): void {
     const plugin = getProvider(provider);
     const creds = resolveProviderCredentials(provider, apiKey, normalizedBaseUrl);
     if (!creds.ok) return res.status(400).json({ error: creds.error });
+    // The built-in GenAI engine cannot serve requests before its Python venv
+    // and model are installed, so refuse to "activate" a broken runtime.
+    if (provider === "genai") {
+      if (!isGenaiVenvReady()) {
+        return res.status(400).json({ error: "Install the GenAI engine first, then activate the provider." });
+      }
+      const modelId = model || DEFAULT_GENAI_MODEL;
+      if (!getModelStatus(modelId).ready) {
+        return res
+          .status(400)
+          .json({ error: `Download the GenAI model (${modelId}) first, then activate the provider.` });
+      }
+    }
     setRuntimeAiProvider({
       provider,
       apiKey: creds.apiKey,
@@ -337,7 +361,7 @@ export function mountProviderRoutes(router: Router): void {
         });
       }
 
-      const allowEmptyKey = isLocalOpenaiCompat(provider, safeBaseUrl);
+      const allowEmptyKey = canListModelsWithoutKey(provider, safeBaseUrl);
       if (!key && !allowEmptyKey) {
         return res.json({
           models: [],

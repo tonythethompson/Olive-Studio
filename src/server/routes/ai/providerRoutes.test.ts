@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import express, { type Express } from "express";
 import type { Server } from "node:http";
 
@@ -26,8 +26,7 @@ vi.mock("../../services/genai/modelDownload.ts", () => ({
 
 // In-memory provider state so activation tests never write the studio config.
 const state = vi.hoisted(() => {
-  let runtime: { provider: string; apiKey: string; model: string; baseUrl?: string } | null =
-    null;
+  let runtime: { provider: string; apiKey: string; model: string; baseUrl?: string } | null = null;
   return {
     get: () => runtime,
     set: (cfg: typeof runtime) => {
@@ -50,7 +49,8 @@ vi.mock("../../services/ai/env.ts", () => ({
 }));
 
 import { mountProviderRoutes } from "./providerRoutes.ts";
-import { downloadModel } from "../../services/genai/modelDownload.ts";
+import { downloadModel, getModelStatus } from "../../services/genai/modelDownload.ts";
+import { isGenaiVenvReady } from "../../services/genai/venv.ts";
 
 let server: Server;
 let baseUrl: string;
@@ -68,6 +68,17 @@ beforeAll(async () => {
   const addr = server.address();
   const port = typeof addr === "object" && addr ? addr.port : 0;
   baseUrl = `http://127.0.0.1:${port}`;
+});
+
+beforeEach(() => {
+  vi.mocked(isGenaiVenvReady).mockReturnValue(true);
+  vi.mocked(getModelStatus).mockReturnValue({
+    ready: true,
+    localPath: "",
+    filesPresent: 6,
+    filesRequired: 6,
+    localSizeBytes: 0,
+  });
 });
 
 afterAll(async () => {
@@ -93,6 +104,75 @@ describe("POST /api/ai/provider keyless activation", () => {
       body: JSON.stringify({ provider: "gemini", model: "gemini-2.5-flash" }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("rejects genai activation before the engine is installed", async () => {
+    vi.mocked(isGenaiVenvReady).mockReturnValue(false);
+    const res = await fetch(`${baseUrl}/api/ai/provider`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "genai", model: "qwen2.5-coder-1.5b-instruct-onnx" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("Install the GenAI engine") });
+  });
+
+  it("rejects genai activation before the model is downloaded", async () => {
+    vi.mocked(getModelStatus).mockReturnValue({
+      ready: false,
+      localPath: "",
+      filesPresent: 2,
+      filesRequired: 6,
+      localSizeBytes: 0,
+    });
+    const res = await fetch(`${baseUrl}/api/ai/provider`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "genai", model: "qwen2.5-coder-1.5b-instruct-onnx" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("Download the GenAI model") });
+  });
+});
+
+describe("POST /api/ai/models keyless catalog", () => {
+  it("returns the region-scoped Bedrock fallback for keyless requests", async () => {
+    const res = await fetch(`${baseUrl}/api/ai/models`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "bedrock", baseUrl: "us-west-2" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { models: unknown[]; source: string; error: string };
+    expect(body.models).toEqual([]);
+    expect(body.source).toBe("fallback");
+    expect(body.error).toContain("region-scoped");
+  });
+
+  it("returns the GenAI fallback for keyless requests instead of an API-key error", async () => {
+    const res = await fetch(`${baseUrl}/api/ai/models`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "genai" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { models: unknown[]; source: string; error: string };
+    expect(body.models).toEqual([]);
+    expect(body.source).toBe("fallback");
+    expect(body.error).toContain("locally downloaded model");
+  });
+
+  it("still returns the API-key fallback for key-required providers", async () => {
+    const res = await fetch(`${baseUrl}/api/ai/models`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "gemini" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { models: unknown[]; source: string; error: string };
+    expect(body.models).toEqual([]);
+    expect(body.source).toBe("fallback");
+    expect(body.error).toContain("No API key available");
   });
 });
 

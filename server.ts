@@ -8,6 +8,7 @@ import { ANY_DOT_VENV_DIR } from "./src/server/shared/anyDotVenvDir.ts";
 import { loadStudioEnv } from "./src/server/loadStudioEnv.ts";
 import { shutdownMcpClient } from "./src/server/services/mcp/client.ts";
 import { shutdownSidecar } from "./src/server/services/genai/venv.ts";
+import { createSingleFlightShutdown } from "./src/server/gracefulShutdown.ts";
 import { mountSystemRoutes, type SystemProbeOptions } from "./src/server/routes/system.ts";
 import { mountGithubRoutes } from "./src/server/routes/github.ts";
 import { mountAiRoutes } from "./src/server/routes/ai/index.ts";
@@ -302,13 +303,13 @@ async function startServer() {
   });
 }
 
-/** Stop child processes (GenAI inference sidecar) and the MCP client, then exit. */
-async function gracefulShutdown(signal: string): Promise<void> {
-  // eslint-disable-next-line no-console -- intentional shutdown logging
-  console.log(`\n[${signal}] Shutting down.`);
-  await Promise.allSettled([shutdownSidecar(), shutdownMcpClient()]);
-  process.exit(0);
-}
+/**
+ * Single-flight shutdown runner. A repeated SIGINT/SIGTERM while cleanup is
+ * running returns the in-flight promise instead of starting a second cleanup
+ * (which could exit before the first sidecar/MCP shutdown completes); only the
+ * shared flow calls process.exit.
+ */
+const gracefulShutdown = createSingleFlightShutdown([shutdownSidecar, shutdownMcpClient]);
 
 process.on("SIGINT", () => {
   void gracefulShutdown("SIGINT");

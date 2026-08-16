@@ -26,6 +26,18 @@ describe("parsePackedCredentials", () => {
       secretAccessKey: "secret",
     });
   });
+
+  it("throws on a single-segment string instead of silently corrupting", () => {
+    expect(() => parsePackedCredentials("AKIAONLYONE")).toThrow(/accessKeyId:secretAccessKey/);
+  });
+
+  it("throws when the secret segment is empty", () => {
+    expect(() => parsePackedCredentials("AKIAEXAMPLE:  ")).toThrow(/missing a secret access key/);
+  });
+
+  it("throws when the access key id segment is empty", () => {
+    expect(() => parsePackedCredentials(":secret")).toThrow(/missing an access key id/);
+  });
 });
 
 describe("bedrock buildConfig", () => {
@@ -72,5 +84,25 @@ describe("bedrock buildConfig", () => {
       secretAccessKey: "tempSecret",
       sessionToken: "tempToken",
     });
+  });
+
+  it("never mixes an env session token into a long-term (AKIA) key", () => {
+    process.env.AWS_SECRET_ACCESS_KEY = "staticSecret";
+    process.env.AWS_SESSION_TOKEN = "staleToken";
+    const cfg = getProvider("bedrock")!.buildConfig("AKIAEXAMPLE");
+    expect(cfg.apiKey).toBe("AKIAEXAMPLE:staticSecret");
+  });
+
+  it("does not pack a profile name from AWS_PROFILE detection into a credential", () => {
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    const cfg = getProvider("bedrock")!.buildConfig("my-production-profile");
+    expect(cfg.apiKey).toBe("");
+  });
+
+  it("does not pack when the secret key is missing", () => {
+    process.env.AWS_SESSION_TOKEN = "tempToken";
+    const cfg = getProvider("bedrock")!.buildConfig("ASIAEXAMPLE");
+    // No secret key available → fall back to the default credential chain.
+    expect(cfg.apiKey).toBe("");
   });
 });
