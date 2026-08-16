@@ -108,6 +108,14 @@ describe("parseAiReviewReply", () => {
     expect(parsed.findings).toEqual([]);
   });
 
+  it("returns structured=false for parseable JSON with an invalid top-level shape", () => {
+    for (const raw of ["[1, 2, 3]", "42", '"ok"', JSON.stringify({ suggestions: [] }), JSON.stringify({ ok: true })]) {
+      const parsed = parseAiReviewReply(raw);
+      expect(parsed.structured).toBe(false);
+      expect(parsed.findings).toEqual([]);
+    }
+  });
+
   it("converts topicKey-only documentation actions to explain", () => {
     const json = JSON.stringify({
       score: 60,
@@ -159,8 +167,8 @@ describe("parseAiReviewReply", () => {
     expect(parsed.findings[0]!.actions[0]!.kind).toBe("documentation");
   });
 
-  it("caps the number of findings at 3", () => {
-    const findings = Array.from({ length: 6 }, (_, i) => ({
+  it("parses up to 10 findings; filterFindings owns the final cap of 3", () => {
+    const findings = Array.from({ length: 12 }, (_, i) => ({
       id: `f-${i}`,
       title: `Finding ${i}`,
       description: "Desc.",
@@ -169,7 +177,37 @@ describe("parseAiReviewReply", () => {
       actions: [{ kind: "explain", label: "Learn", payload: { body: "x" } }],
     }));
     const parsed = parseAiReviewReply(JSON.stringify({ score: 50, level: "Inefficient", summary: "Many", findings }));
-    expect(parsed.findings).toHaveLength(3);
+    expect(parsed.findings).toHaveLength(10);
+  });
+
+  it("lets a relevant finding at index 4 survive parse plus filtering", () => {
+    const noise = (i: number) => ({
+      id: `noise-${i}`,
+      title: `Noise ${i}`,
+      description: "Add TensorRTExecutionProvider for classic TRT engine builds.",
+      severity: "info",
+      evidence: "Classic TRT.",
+      actions: [{ kind: "explain", label: "Learn", payload: { body: "Add TensorRTExecutionProvider." } }],
+    });
+    const relevant = {
+      id: "relevant-4",
+      title: "Enable AWQ",
+      description: "AWQ int4 fits consumer RTX.",
+      severity: "warning",
+      evidence: "EP is NvTensorRT-RTX.",
+      actions: [{ kind: "explain", label: "Learn", payload: { body: "AWQ int4." } }],
+    };
+    const findings = [noise(0), noise(1), noise(2), noise(3), relevant, noise(5)];
+    const parsed = parseAiReviewReply(JSON.stringify({ score: 50, level: "Inefficient", summary: "Mixed", findings }));
+    expect(parsed.findings).toHaveLength(6);
+
+    const ctx = {
+      model: { displayName: "meta-llama/Llama-2-7b", huggingFaceId: "meta-llama/Llama-2-7b", hfTask: "" },
+      hardware: { executionProvider: "NvTensorRTRTXExecutionProvider" },
+    } as unknown as AuditFilterContext;
+    const filtered = filterFindings(parsed.findings, ctx);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.id).toBe("relevant-4");
   });
 });
 
@@ -202,6 +240,27 @@ describe("filterFindings", () => {
     const filtered = filterFindings(findings, ctx);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]!.id).toBe("good");
+  });
+
+  it("drops classic-TRT advice hidden in an explain body under a neutral title", () => {
+    const findings: Finding[] = [
+      {
+        id: "sneaky",
+        title: "Improve throughput",
+        description: "A general performance suggestion.",
+        severity: "warning",
+        evidence: "Benchmarks.",
+        actions: [
+          {
+            kind: "explain",
+            label: "Learn more",
+            payload: { body: "Add TensorRTExecutionProvider after CUDAExecutionProvider for classic TensorRT engines." },
+          },
+        ],
+      },
+    ];
+
+    expect(filterFindings(findings, ctx)).toHaveLength(0);
   });
 
   it("drops ASR advice for non-ASR models", () => {

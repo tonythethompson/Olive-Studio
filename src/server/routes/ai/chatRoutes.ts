@@ -152,8 +152,7 @@ export function mountChatRoutes(router: Router): void {
       if (!parsed.structured) {
         reply = await callAI(
           `${system}\nRetry with valid JSON only. Example with ONE finding (0 is also fine; do not pad to 3): ` +
-            '{"score":60,"level":"Suboptimal","summary":"The pipeline can better match TensorRT RTX with AWQ int4 quantization.",' +
-            '"findings":[{"id":"review-1","title":"Enable AWQ int4 quantization","description":"AWQ int4 reduces weight memory so the model fits consumer TensorRT RTX VRAM more efficiently.","severity":"warning","evidence":"Selected NvTensorRT-RTX with AWQ int4 is the recommended path for Llama-class models.","actions":[{"kind":"applyPatch","label":"Apply AWQ int4","payload":{"passes":{"quantization":true,"quantMethod":"awq","quantPrecision":"int4"}}}]}]}',
+            '{"score":70,"level":"Suboptimal","summary":"The pipeline can be tightened by aligning the conversion settings with the active provider.","findings":[{"id":"review-1","title":"Raise the conversion opset","description":"A newer opset unlocks more graph optimizations for the selected provider.","severity":"warning","evidence":"Selected conversion opset is below the recommended range.","actions":[{"kind":"applyPatch","label":"Apply opset update","payload":{"passes":{"conversion":true,"conversionOpset":17}}}]}]}',
           [{ role: "user", content: ctxSummary }],
           true,
         );
@@ -165,7 +164,9 @@ export function mountChatRoutes(router: Router): void {
       let summary = parsed.summary;
       if (dropped > 0) {
         const note = `Removed ${dropped} off-topic finding${dropped === 1 ? "" : "s"} that did not match this model/EP.`;
-        summary = `${summary.replace(/\s+$/, "")} ${note}`.slice(0, 1200);
+        // Reserve room for the note so it is never truncated away.
+        const base = summary.replace(/\s+$/, "").slice(0, Math.max(0, 1200 - note.length - 1));
+        summary = `${base} ${note}`.slice(0, 1200);
       }
 
       return res.json({

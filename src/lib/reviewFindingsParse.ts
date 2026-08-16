@@ -136,7 +136,9 @@ function parseFinding(raw: unknown, index: number): Finding | null {
 function parseFindings(raw: unknown): Finding[] {
   if (!Array.isArray(raw)) return [];
   const out: Finding[] = [];
-  for (let i = 0; i < raw.length && out.length < 3; i++) {
+  // Parse up to 10 candidates so relevance filtering has room to pick the
+  // best ones; filterFindings owns the final cap of 3 shown to the user.
+  for (let i = 0; i < raw.length && out.length < 10; i++) {
     const finding = parseFinding(raw[i], i);
     if (finding) out.push(finding);
   }
@@ -253,7 +255,7 @@ Rules:
 - findings count (hard): 0 to 3. Prefer fewer. Only include a finding if it is concrete, applyable, and would materially improve THIS workspace.
 - Never invent filler to reach 3. If the pipeline is already solid, return findings:[].
 - Every finding MUST have 1-10 actions. If no safe applyPatch can be produced, include an explain action or a documentation action with a valid URL; never return an empty actions array.
-- applyPatch payloads must be valid Olive Studio UIState patches. Use only these top-level keys: ihvProvider, cudaVersion, memoryOffload, modelSource, hfModelId, hfDataset, cacheDir. Use only these passes keys: quantization, quantMethod, quantPrecision, conversion, conversionFormat, conversionOpset, conversionInputTargetTypes, pruning, pruningType, pruningMethod, pruningSparsity, peft, peftMethod, splitting, onnxTransforms, gptqBlockSize, gptqGroupSize, gptqDescAct, awqGroupSize, awqDampPercent, awqSym, qatQuantPrecision, qatCalibrateMethod, qatCalibrateSteps, quantPreset.
+- applyPatch payloads must be valid Olive Studio UIState patches. Use only these top-level keys: ihvProvider, cudaVersion, memoryOffload, modelSource, hfModelId, hfDataset, cacheDir. Use only these passes keys: quantization, quantMethod, quantPrecision, conversion, conversionFormat, conversionSourceFormat, conversionOpset, conversionInputTargetTypes, pruning, pruningType, pruningMethod, pruningCriteria, pruningSparsity, peft, peftMethod, diffusionLora, splitting, onnxTransforms, gptqBlockSize, gptqGroupSize, gptqDescAct, awqGroupSize, awqDampPercent, awqSym, qatQuantPrecision, qatCalibrateMethod, qatCalibrateSteps, quantPreset.
 - Do not put nested Olive JSON paths like passes.conversion.config.input_model_dtype or systems.local_system.config.accelerators in an applyPatch payload.
 - Relevance rules: Only suggest changes for the Model and execution provider in the workspace. Never mention speech recognition / ASR / Whisper unless the model is an ASR model.
 - If execution provider is NvTensorRTRTXExecutionProvider, do NOT suggest TensorRTExecutionProvider, TensorRTPass, tensor_rt, TRT engine build/caching, or adding TensorRT after CUDA. That EP already is the consumer RTX path.

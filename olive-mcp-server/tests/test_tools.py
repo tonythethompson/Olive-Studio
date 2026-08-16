@@ -216,6 +216,15 @@ def test_get_pass_chain_onnx_source_no_conversion_required():
     assert len(result["errors"]) == 0
 
 
+def test_get_pass_chain_missing_source_format_warns():
+    # Absent source_format must still be reported when no compatible
+    # conversion pass precedes the quantization pass.
+    result = get_pass_chain(["OnnxQuantization"])
+    assert result["valid"] is True
+    assert len(result["errors"]) == 0
+    assert any("no source_format was provided" in w for w in result["warnings"])
+
+
 def test_get_integration_recipe_list():
     result = get_integration_recipe()
     assert "recipes" in result

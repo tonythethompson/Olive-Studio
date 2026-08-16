@@ -8,11 +8,10 @@
  */
 import type { AiWorkspaceContext } from "../../../lib/aiWorkspaceContext.ts";
 import { resolvePassName } from "../../../lib/olivePassNameResolver.ts";
-import type { UIState } from "../../../types.ts";
 import { callOliveMcpTools, type McpToolRequest } from "../mcp/client.ts";
 
 export type RetrievalMeta = {
-  /** Effective retrieval mode used by the Olive MCP server. */
+  /** Retrieval mode requested from the Olive MCP server. */
   mode: "auto" | "keyword" | "semantic";
   /** Effective retrieval mode after server resolution / fallback. */
   effective?: string;
@@ -185,7 +184,9 @@ const CANONICAL_HARDWARE: Record<string, string> = {
  * @returns The canonical hardware name, or the original target when no mapping exists
  */
 function toCanonicalHardware(target: string): string {
-  const key = lower(target).replace(/\s+/g, "-");
+  // Accept both short provider names ("Dml") and full EP ids
+  // ("DmlExecutionProvider") by stripping the EP suffix before lookup.
+  const key = lower(target).replace(/executionprovider$/g, "").replace(/\s+/g, "-");
   return CANONICAL_HARDWARE[key] ?? target;
 }
 
@@ -230,30 +231,30 @@ function canonicalPassNamesForChain(workspace: AiWorkspaceContext | null | undef
   if (fromRecipe?.length) return fromRecipe.slice(0, 8);
   if (!workspace) return [];
 
-  const state = workspace as unknown as UIState;
+  const passes = workspace.passes;
   const names: string[] = [];
-  if (state.passes.conversion) {
-    const resolved = resolvePassName("conversion", state);
+  if (passes.conversion) {
+    const resolved = resolvePassName("conversion", workspace);
     if (resolved) names.push(resolved);
   }
-  if (state.passes.quantization) {
-    const resolved = resolvePassName("quantization", state);
+  if (passes.quantization) {
+    const resolved = resolvePassName("quantization", workspace);
     if (resolved) names.push(resolved);
   }
-  if (state.passes.pruning) {
-    const resolved = resolvePassName("pruning", state);
+  if (passes.pruning) {
+    const resolved = resolvePassName("pruning", workspace);
     if (resolved) names.push(resolved);
   }
-  if (state.passes.onnxTransforms) {
-    const resolved = resolvePassName("transformer_opt", state);
+  if (passes.onnxTransforms) {
+    const resolved = resolvePassName("transformer_opt", workspace);
     if (resolved) names.push(resolved);
   }
-  if (state.passes.splitting) {
-    const resolved = resolvePassName("splitting", state);
+  if (passes.splitting) {
+    const resolved = resolvePassName("splitting", workspace);
     if (resolved) names.push(resolved);
   }
-  if (state.passes.peft) {
-    const resolved = resolvePassName("peft", state);
+  if (passes.peft) {
+    const resolved = resolvePassName("peft", workspace);
     if (resolved) names.push(resolved);
   }
   return names.slice(0, 8);
@@ -483,12 +484,7 @@ export function selectOliveMcpToolsForChat(
   workspace?: AiWorkspaceContext | null,
 ): McpToolRequest[] {
   const mode = getRetrievalMode();
-  const requests: McpToolRequest[] = [
-    {
-      toolName: "search_olive_documentation",
-      args: { query: message.slice(0, 500), top_k: 20, live: false, mode },
-    },
-  ];
+  const requests: McpToolRequest[] = [];
 
   if (looksLikeError(message) || looksLikeStudioIssue(message)) {
     requests.push({
@@ -544,6 +540,14 @@ export function selectOliveMcpToolsForChat(
       });
     }
   }
+
+  // Reserve prompt capacity for the other tool sections: only a docs-only
+  // request gets the full top_k of 20.
+  const topK = requests.length === 0 ? 20 : 8;
+  requests.unshift({
+    toolName: "search_olive_documentation",
+    args: { query: message.slice(0, 500), top_k: topK, live: false, mode },
+  });
 
   return requests;
 }
@@ -626,21 +630,20 @@ function mergeRetrievalMeta(
   let degraded = false;
   let reason: string | undefined;
   let effective: "auto" | "keyword" | "semantic" | undefined;
+  let sawSemantic = false;
   const isKnownMode = (v: string): v is "auto" | "keyword" | "semantic" =>
     v === "auto" || v === "keyword" || v === "semantic";
+  // Scan every entry: an early break on semantic would drop degraded/reason
+  // values reported by later tools.
   for (const m of metas) {
     if (m.degraded) {
       degraded = true;
       if (!reason) reason = m.reason;
     }
-    if (m.effective === "semantic") {
-      effective = "semantic";
-      break;
-    }
-    if (!effective && m.effective && isKnownMode(m.effective)) {
-      effective = m.effective;
-    }
+    if (m.effective === "semantic") sawSemantic = true;
+    else if (!effective && m.effective && isKnownMode(m.effective)) effective = m.effective;
   }
+  if (sawSemantic) effective = "semantic";
   if (!effective) effective = requestedMode;
   return { mode: requestedMode, effective, degraded, reason };
 }
@@ -696,6 +699,7 @@ function buildKnowledgeResult(
  * Gather Olive MCP knowledge from a set of tool requests.
  *
  * @param requests - MCP tool requests to execute
+ * @param opts - Optional configuration for fallback behavior and sufficiency heuristics
  * @param opts.webFallbackQuery - Optional query for the web fallback
  * @param opts.sufficientFn - Optional override for sufficiency heuristics
  * @returns The formatted knowledge result
@@ -735,7 +739,7 @@ async function gatherFromRequests(
   let usedWebFallback = false;
   const sufficientFn =
     opts.sufficientFn ?? ((anyOk, docsOk_, toolsUsed_) => anyOk && (docsOk_ || toolsUsed_.length >= 2));
-  let sufficient = sufficientFn(anyOk, docsOk, toolsUsed);
+  const sufficient = sufficientFn(anyOk, docsOk, toolsUsed);
 
   if (!sufficient && opts.webFallbackQuery) {
     const web = await optionalWebSearchFallback(opts.webFallbackQuery);
@@ -745,9 +749,6 @@ async function gatherFromRequests(
       // Still not "sufficient" Olive-KB coverage; prompt will tell the model to treat this as secondary.
     }
   }
-
-  // Recompute sufficiency after optional web fallback (web does not make MCP sufficient).
-  sufficient = sufficientFn(anyOk, docsOk, toolsUsed);
 
   const retrieval = mergeRetrievalMeta(requestedMode, retrievalMetas);
   return buildKnowledgeResult(sections, toolsUsed, sufficient, usedWebFallback, retrieval);

@@ -43,8 +43,9 @@ _SOURCE_FORMAT_ALIASES = {
 
 
 # Source formats for which an incompatibility with a pass's input_formats is an
-# actionable error rather than a warning.
-_KNOWN_SOURCE_FORMATS = {"torch", "hf", "tf", "onnx", "openvino", "qnn"}
+# actionable error rather than a warning. Derived from the canonical alias
+# values so new entries in _SOURCE_FORMAT_ALIASES are known automatically.
+_KNOWN_SOURCE_FORMATS = set(_SOURCE_FORMAT_ALIASES.values())
 
 
 def _normalize_source_format(fmt: str) -> str:
@@ -99,7 +100,14 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
             if not has_compatible_conversion:
                 normalized_source = _normalize_source_format(source_format)
                 input_formats = meta.get("input_formats", [])
-                if normalized_source and normalized_source not in input_formats:
+                if not normalized_source:
+                    # No source format supplied: still surface the missing
+                    # conversion so callers are not left without guidance.
+                    warnings.append(
+                        f"Pass '{name}' requires input format in {input_formats} and no source_format was provided. "
+                        "Specify source_format (e.g. 'onnx', 'torch', 'hf') or add a compatible conversion pass."
+                    )
+                elif normalized_source not in input_formats:
                     if normalized_source in _KNOWN_SOURCE_FORMATS:
                         errors.append(
                             f"Pass '{name}' requires input format in {input_formats} but no compatible conversion pass precedes it in the chain."

@@ -78,13 +78,9 @@ function isAsrModel(ctx: AuditFilterContext): boolean {
   );
 }
 
-function isLlmModel(ctx: AuditFilterContext): boolean {
-  return modelLooksLikeLlm(modelFromContext(ctx));
-}
-
 function looksLikeAsrAdvice(text: string, ctx: AuditFilterContext): boolean {
   const model = modelFromContext(ctx);
-  return !isAsrModel(ctx) && (isLlmModel(ctx) || model.length > 0) && SPEECH_JUNK.test(text);
+  return !isAsrModel(ctx) && model.length > 0 && SPEECH_JUNK.test(text);
 }
 
 function isClassicTrtNoise(text: string, ep: string): boolean {
@@ -174,8 +170,14 @@ export function filterAuditAnalysis(analysis: AuditAnalysis, ctx: AuditFilterCon
 function findingText(finding: Finding): string {
   const bits = [finding.title, finding.description, finding.evidence];
   for (const action of finding.actions) {
+    bits.push(action.label);
     if (action.kind === "applyPatch") {
       bits.push(JSON.stringify(action.payload));
+    } else if (action.kind === "explain") {
+      bits.push(action.payload.body);
+    } else if (action.kind === "documentation") {
+      if (action.payload.url) bits.push(action.payload.url);
+      if (action.payload.topicKey) bits.push(action.payload.topicKey);
     }
   }
   return bits.join("\n");
@@ -202,6 +204,9 @@ export function isFindingRelevant(finding: Finding, ctx: AuditFilterContext): bo
 
 /**
  * Filters findings for the active model and execution provider.
+ *
+ * The trailing `slice(0, 3)` is the review pipeline's authoritative final
+ * limit; upstream parsers may hand over more candidates.
  *
  * @param findings - The findings to filter
  * @param ctx - The active model and execution-provider context

@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../mcp/client.ts", () => ({
   callOliveMcpTools: vi.fn(),
 }));
 
 import { callOliveMcpTools } from "../mcp/client.ts";
+import type { AiWorkspaceContext } from "../../../lib/aiWorkspaceContext.ts";
 import {
   selectOliveMcpToolsForChat,
   selectOliveMcpToolsForReview,
@@ -18,6 +19,13 @@ import {
 const mockedBatch = vi.mocked(callOliveMcpTools);
 
 describe("getRetrievalMode", () => {
+  const savedMode = process.env.OLIVE_MCP_RETRIEVAL_MODE;
+
+  afterEach(() => {
+    if (savedMode === undefined) delete process.env.OLIVE_MCP_RETRIEVAL_MODE;
+    else process.env.OLIVE_MCP_RETRIEVAL_MODE = savedMode;
+  });
+
   it("defaults to auto when unset", () => {
     delete process.env.OLIVE_MCP_RETRIEVAL_MODE;
     expect(getRetrievalMode()).toBe("auto");
@@ -26,13 +34,16 @@ describe("getRetrievalMode", () => {
   it("honors env keyword", () => {
     process.env.OLIVE_MCP_RETRIEVAL_MODE = "keyword";
     expect(getRetrievalMode()).toBe("keyword");
-    delete process.env.OLIVE_MCP_RETRIEVAL_MODE;
+  });
+
+  it("honors env semantic", () => {
+    process.env.OLIVE_MCP_RETRIEVAL_MODE = "semantic";
+    expect(getRetrievalMode()).toBe("semantic");
   });
 
   it("falls back to auto for unknown env values", () => {
     process.env.OLIVE_MCP_RETRIEVAL_MODE = "bogus";
     expect(getRetrievalMode()).toBe("auto");
-    delete process.env.OLIVE_MCP_RETRIEVAL_MODE;
   });
 });
 
@@ -66,6 +77,13 @@ describe("selectOliveMcpToolsForChat", () => {
     const tools = selectOliveMcpToolsForChat("How do I target TensorRT?");
     expect(tools.some((t) => t.toolName === "get_hardware_optimization_guide")).toBe(true);
   });
+
+  it("shrinks documentation top_k when additional tools are selected", () => {
+    const tools = selectOliveMcpToolsForChat("Which AWQ settings for an LLM on CUDA?");
+    expect(tools.length).toBeGreaterThan(1);
+    const search = tools.find((t) => t.toolName === "search_olive_documentation")!;
+    expect((search.args as Record<string, number>).top_k).toBeLessThan(20);
+  });
 });
 
 describe("selectOliveMcpToolsForReview", () => {
@@ -84,7 +102,7 @@ describe("selectOliveMcpToolsForReview", () => {
       passes: { quantization: true, conversion: true, pruning: false, peft: false, diffusionLora: false, splitting: false, onnxTransforms: false },
       activePassLabels: ["quantization", "conversion"],
       ...overrides,
-    } as unknown as import("../../../lib/aiWorkspaceContext.ts").AiWorkspaceContext);
+    } as unknown as AiWorkspaceContext);
 
   it("queries scoped tools for the active passes and execution provider", () => {
     const tools = selectOliveMcpToolsForReview(makeWorkspace());
@@ -120,9 +138,11 @@ describe("selectOliveMcpToolsForReview", () => {
         },
       }),
     );
-    const search = tools.find((t) => t.toolName === "search_olive_documentation")!;
-    expect(search).toBeDefined();
-    expect((search.args as Record<string, string>).query).toMatch(/NvTensorRTRTXExecutionProvider|RTX|NVIDIA/i);
+    const guide = tools.find((t) => t.toolName === "get_hardware_optimization_guide")!;
+    expect(guide).toBeDefined();
+    const target = (guide.args as Record<string, string>).target_hardware;
+    expect(target).toBe("NVIDIA TensorRT RTX");
+    expect(target).not.toBe("NVIDIA RTX 4090");
   });
 
   it("routes DirectML workspaces to the DirectML hardware profile", () => {
@@ -257,7 +277,7 @@ describe("gatherOliveMcpKnowledge", () => {
     expect(out.retrieval.effective).toBe("semantic");
   });
 
-  it("marks coverage insufficient and surfaces retrieval.degraded when MCP search falls back", async () => {
+  it("surfaces retrieval.degraded when MCP search degrades to the keyword fallback", async () => {
     mockedBatch.mockResolvedValue([
       {
         result: {
@@ -304,7 +324,7 @@ describe("gatherOliveMcpKnowledgeForReview", () => {
     },
     passes: { quantization: true, conversion: true, pruning: false, peft: false, diffusionLora: false, splitting: false, onnxTransforms: false },
     activePassLabels: ["quantization"],
-  } as unknown as import("../../../lib/aiWorkspaceContext.ts").AiWorkspaceContext;
+  } as unknown as AiWorkspaceContext;
 
   it("collects review-scoped MCP context and does not use web fallback", async () => {
     mockedBatch.mockResolvedValue([
