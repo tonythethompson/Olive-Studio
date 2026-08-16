@@ -146,8 +146,10 @@ describe("spawnSidecar lifecycle", () => {
       // the hard kill and hang shutdown.
       record.killed = true;
       if (sig === "SIGKILL") {
-        // After SIGKILL, the process exits — resolve exitPromise
-        process.nextTick(() => proc.emit("exit", 137));
+        // Signal termination: Node reports exit(null, "SIGKILL") and sets
+        // signalCode — resolve exitPromise the same way.
+        record.signalCode = "SIGKILL";
+        process.nextTick(() => proc.emit("exit", null, "SIGKILL"));
       }
       return true;
     };

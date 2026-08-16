@@ -392,7 +392,9 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
         /* already gone */
       }
     },
-    alive: () => !spawnFailed && child.exitCode === null && !child.killed,
+    // `child.killed` is true once any signal was delivered, even if the
+    // process ignored it — only the exit indicators prove termination.
+    alive: () => !spawnFailed && child.exitCode === null && child.signalCode === null,
     exitPromise,
   };
 
