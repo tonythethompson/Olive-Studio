@@ -5,6 +5,25 @@ GitHub Action and begins with `/oc` (or `/opencode`). The message usually carrie
 `<pull_request>` context block (title, body, changed files, comments, reviews) — read it
 carefully before answering.
 
+## Model routing
+
+The workflow probes and selects the agent model per command (see `.github/workflows/opencode.yml`):
+
+| Command      | Primary model                          | Fallback chain                                                          |
+| ------------ | -------------------------------------- | ---------------------------------------------------------------------- |
+| `/oc review` | `opencode/gpt-5.6-luna` (`variant: max`) | `opencode/big-pickle` → `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max` |
+| `/oc fix`    | `opencode/big-pickle`                  | `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max`                |
+
+Each model is probed with a minimal request before the run; a disabled or unavailable model
+falls through to the next in the chain. `/oc review` runs are short and judgment-heavy, so
+the cost-efficient `gpt-5.6-luna` runs with `max` reasoning effort to maximize finding
+quality while keeping per-run cost in the tens of cents; `/oc fix` runs are long agentic
+edit loops, where the free big-pickle keeps cost at $0. Note that `big-pickle` advertises no
+reasoning-effort variants, so `variant: max` is only applied when `gpt-5.6-luna` is actually
+selected — the probe clears it on any fallback. Review runs send code snippets to an
+OpenAI-hosted model — acceptable for public repos; keep in mind OpenAI may retain requests
+for evaluation purposes.
+
 ## `/oc review`
 
 When a user message is exactly `/oc review` or begins with `/oc review`, treat it as a
@@ -45,9 +64,20 @@ You are reviewing, not editing:
 - **Do NOT modify any files and do NOT leave the working tree dirty.** The action auto-commits
   and pushes any uncommitted changes to the PR branch — that is not wanted here.
 - Include a **committable suggestion** in each finding comment when it is feasible to write
-  one for that specific finding: a concrete diff (lines with `+`/`-`) or exact replacement
-  snippet the author can apply. If a finding does not have a cut-and-dried fix, say so and
-  describe the change needed instead of inventing code.
+  one for that specific finding. Wrap the exact replacement in a GitHub `suggestion`
+  fenced block so GitHub renders a one-click **Commit suggestion** button right in the
+  comment:
+
+  ````
+  ```suggestion
+  <exact replacement lines — must match the current file content>
+  ```
+  ````
+
+  Use one contiguous block per finding, matching the existing lines it replaces; GitHub
+  applies it to the file on commit. If a finding does not have a cut-and-dried fix — no
+  contiguous single-file replacement — say so and describe the change needed instead of
+  inventing code.
 
 ### Finding comment format
 
@@ -56,7 +86,8 @@ Each finding comment should contain:
 1. **Severity** — `high` / `medium` / `low` (or `critical`).
 2. **Location** — `file:line` (or a line range).
 3. **Problem** — why it is wrong, grounded in the actual code.
-4. **Suggested fix** — a committable diff or snippet when feasible.
+4. **Suggested fix** — a GitHub `suggestion` fenced block (see "Committing behavior")
+   when the fix is a contiguous replacement, otherwise a description of the change needed.
 
 ### Review scope
 
