@@ -88,8 +88,8 @@ request to review the current pull request. Extra text after the shortcut, e.g.
    include the `html_url`); and an **"Out of diff"** section listing every finding that
    could not be posted as a review thread — fallback issue comments and any finding with no
    diff location (e.g. missing tests, missing docs, cross-file concerns) — with its
-   severity, why it wasn't threaded, and a link to its issue comment when one was posted.
-   Keep the rest tight — the detail lives in the per-finding comments.
+   severity, the file name(s) and line(s) it covers, and the issue found. Keep the rest
+   tight — the detail lives in the per-finding comments.
 4. Group low-severity nits and non-actionable observations into the final summary comment
    instead of posting more comments.
 
