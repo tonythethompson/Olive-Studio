@@ -99,4 +99,7 @@ install.sh
 QWEN.md
 .superdesign/design_iterations/default_ui_darkmode.css
 Assets/logo_large.png
-infra/terraform/terraform.tfstate.backup
+
+# Terraform: live state must never be committed (contains account/region/credentials)
+infra/terraform/terraform.tfstate*
+infra/terraform/.terraform/

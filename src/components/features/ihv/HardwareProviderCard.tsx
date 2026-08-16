@@ -768,7 +768,7 @@ function ProviderPluginInstalls({
   }
   if (
     providerId === "MIGraphXExecutionProvider" &&
-    Boolean(hardwareProbe?.rocm?.gpus.length) &&
+    isProviderDetectedLocally("MIGraphXExecutionProvider", hardwareProbe) &&
     hardwareProbe?.migraphx?.loadable !== true
   ) {
     return (
@@ -966,8 +966,10 @@ export const HardwareProviderCard = memo(function HardwareProviderCard({
     computeDirectMlHardwareReady({ os: hardwareProbe?.platform.os ?? "" }) &&
     Boolean(hardwareProbe) &&
     !isProviderDetectedLocally("DmlExecutionProvider", hardwareProbe);
+  // MIGraphX install-needed is gated on the provider being detected at all
+  // (AMD Instinct hardware) — a consumer Radeon box never shows the CTA.
   const migraphxNeedsInstall =
-    Boolean(hardwareProbe?.rocm?.gpus.length) &&
+    isProviderDetectedLocally("MIGraphXExecutionProvider", hardwareProbe) &&
     hardwareProbe?.migraphx?.loadable !== true;
   const needsPluginInstall =
     (p.id === "NvTensorRTRTXExecutionProvider" && trtRtxNeedsInstall) ||

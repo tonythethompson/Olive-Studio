@@ -138,6 +138,27 @@ export async function ensureProviderCapability(
         python,
       };
     }
+
+    // MIGraphX: the migraphx pip package installs its own ORT build that
+    // registers MIGraphXExecutionProvider. Verify the registration exactly like
+    // DNNL above — the package import succeeding is not enough, the EP must be
+    // present in the probed ORT providers list.
+    if (provider === "MIGraphXExecutionProvider") {
+      const python = getVenvPython(family);
+      if (status.ortProviders.includes("MIGraphXExecutionProvider")) {
+        return { ok: true, family, python };
+      }
+      return {
+        ok: false,
+        error:
+          "MIGraphXExecutionProvider is not registered by the installed ORT wheel. " +
+          "MIGraphX requires an AMD Instinct datacenter GPU (CDNA) with the ROCm stack — " +
+          "consumer Radeon (RDNA) GPUs are not supported. Reinstall the migraphx package in the " +
+          "default runtime and re-run the hardware probe.",
+        family,
+        python,
+      };
+    }
     return {
       ok: false,
       error: `Provider ${provider} has no capability slot in ${humanFamilyLabel(family)} (status mismatch)`,

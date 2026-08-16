@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ensureCoremltoolsMock = vi.fn();
+const ensureMigraphxMock = vi.fn();
 const ensureVenvFamilyMock = vi.fn();
 const getDualRuntimeStatusMock = vi.fn();
 const probeFamilyStatusMock = vi.fn();
 
 vi.mock("../olive/coreml.ts", () => ({
   ensureCoremltools: (...args: unknown[]) => ensureCoremltoolsMock(...args),
+}));
+
+vi.mock("../olive/migraphx.ts", () => ({
+  ensureMigraphx: (...args: unknown[]) => ensureMigraphxMock(...args),
 }));
 
 vi.mock("./familyEnsure.ts", () => ({
@@ -133,5 +138,59 @@ describe("ensureProviderCapability DnnlExecutionProvider", () => {
     ensureCoremltoolsMock.mockReset();
     await ensureProviderCapability("DnnlExecutionProvider", () => undefined);
     expect(ensureCoremltoolsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ensureProviderCapability MIGraphXExecutionProvider", () => {
+  beforeEach(() => {
+    ensureMigraphxMock.mockReset();
+    ensureMigraphxMock.mockResolvedValue({ ok: true });
+    ensureVenvFamilyMock.mockReset();
+    ensureVenvFamilyMock.mockResolvedValue({ ok: true });
+    getDualRuntimeStatusMock.mockReset();
+    probeFamilyStatusMock.mockReset();
+  });
+
+  it("succeeds when ORT reports MIGraphXExecutionProvider in available providers", async () => {
+    getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
+    probeFamilyStatusMock.mockResolvedValue({
+      capabilities: { cpu: { usable: true } },
+      ortProviders: ["CPUExecutionProvider", "MIGraphXExecutionProvider"],
+    });
+
+    const result = await ensureProviderCapability("MIGraphXExecutionProvider", () => undefined);
+
+    expect(result).toEqual({
+      ok: true,
+      family: "default",
+      python: "/fake/.venv/bin/python",
+    });
+    expect(ensureMigraphxMock).toHaveBeenCalledOnce();
+  });
+
+  it("returns failure with Instinct/ROCm hint when MIGraphXExecutionProvider is absent from providers", async () => {
+    getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
+    probeFamilyStatusMock.mockResolvedValue({
+      capabilities: { cpu: { usable: true } },
+      ortProviders: ["CPUExecutionProvider", "ROCMExecutionProvider"],
+    });
+
+    const result = await ensureProviderCapability("MIGraphXExecutionProvider", () => undefined);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("MIGraphXExecutionProvider is not registered");
+    expect(result.error).toContain("AMD Instinct");
+    expect(result.family).toBe("default");
+    expect(result.python).toBe("/fake/.venv/bin/python");
+  });
+
+  it("surfaces the migraphx install failure instead of the ORT check", async () => {
+    ensureMigraphxMock.mockResolvedValue({ ok: false, error: "migraphx install boom" });
+    getDualRuntimeStatusMock.mockResolvedValue({ families: {}, platform: "linux" });
+
+    const result = await ensureProviderCapability("MIGraphXExecutionProvider", () => undefined);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("migraphx install boom");
   });
 });

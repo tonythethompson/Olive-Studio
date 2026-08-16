@@ -49,24 +49,21 @@ export async function ensureMigraphx(
   }
 
   onLine("[migraphx] Installing migraphx (may take several minutes — requires ROCm)...");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MIGRAPHX_INSTALL_TIMEOUT_MS);
   try {
-    await Promise.race([
-      pipInstallForFamily("default", python, ["migraphx"], onLine),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                "migraphx installation timed out after 300s. Check network connectivity and ROCm availability.",
-              ),
-            ),
-          MIGRAPHX_INSTALL_TIMEOUT_MS,
-        ),
-      ),
-    ]);
+    await pipInstallForFamily("default", python, ["migraphx"], onLine, controller.signal);
   } catch (err: unknown) {
+    if (controller.signal.aborted) {
+      return {
+        ok: false,
+        error: `migraphx installation timed out after ${MIGRAPHX_INSTALL_TIMEOUT_MS / 1000}s. Check network connectivity and ROCm availability.`,
+      };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: `MIGraphX installation failed: ${msg}` };
+  } finally {
+    clearTimeout(timeout);
   }
 
   // Verify the install succeeded by importing the module

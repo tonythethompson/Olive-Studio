@@ -33,6 +33,33 @@ export interface GpuInfo {
 }
 
 /**
+ * CDNA ISA identifiers for AMD Instinct datacenter GPUs (MIGraphX targets).
+ * Consumer Vega (gfx900/gfx902/gfx904/gfx906/gfx90c) and RDNA
+ * (gfx10xx/gfx11xx/gfx12xx) parts are deliberately excluded.
+ */
+const INSTINCT_ISA_FAMILIES = new Set([
+  "gfx908", // CDNA 1 (Instinct MI100)
+  "gfx90a", // CDNA 2 (Instinct MI200)
+  "gfx940", // CDNA 3 (Instinct MI300A)
+  "gfx941", // CDNA 3 (Instinct MI300A/X variants)
+  "gfx942", // CDNA 3 (Instinct MI300X / MI325X)
+  "gfx950", // CDNA 4 (Instinct MI350X / MI355X)
+]);
+
+/**
+ * Whether a probed AMD GPU is an Instinct datacenter part that MIGraphX can
+ * serve. The marketing name ("Instinct" / "MIxxxx") is authoritative; the CDNA
+ * ISA list covers systems where only the ISA family is known. Anything else —
+ * consumer Radeon RDNA, legacy Vega, or an unknown architecture — returns false
+ * so MIGraphX is never advertised for hardware the installer cannot support.
+ */
+export function isInstinctGpu(gpu: Pick<GpuInfo, "name" | "isaFamily">): boolean {
+  if (/instinct/i.test(gpu.name)) return true;
+  const isa = gpu.isaFamily?.toLowerCase();
+  return isa !== undefined && INSTINCT_ISA_FAMILIES.has(isa);
+}
+
+/**
  * Minimum NVIDIA compute capability TensorRT 10.x and TensorRT-RTX can run on.
  * Turing (SM 7.5) is the floor; Maxwell/Pascal/Kepler cannot execute either
  * EP even when the SDK/runtime are installed. Centralizing this number avoids
@@ -180,7 +207,10 @@ export interface HardwareProbeResult {
   };
   /**
    * MIGraphX EP availability on AMD Instinct datacenter GPUs.
-   * Only populated when the `rocm` probe path detects at least one AMD GPU.
+   * Only populated when the `rocm` probe path detects at least one AMD
+   * Instinct (CDNA) GPU. Consumer Radeon / RDNA boxes omit the section entirely,
+   * so the IHV panel never advertises MIGraphX for hardware the installer
+   * cannot serve.
    * `loadable` is true when ORT reports MIGraphXExecutionProvider in
    * `get_available_providers()`.
    */
@@ -339,7 +369,9 @@ export function mergeDetectedProviders(input: {
   cudaLoadable?: boolean;
   /** True when an NVIDIA GPU meets the CUDA 12 toolkit floor (Maxwell+), independent of whether onnxruntime-gpu is installed yet. */
   cudaFamilyCapable?: boolean;
-  /** True when MIGraphXExecutionProvider is loadable (ROCm GPU + ORT reports it). */
+  /** True when at least one probed AMD GPU is an Instinct (CDNA) datacenter part. Gates the MIGraphX soft-detect below. */
+  hasInstinctGpu?: boolean;
+  /** True when MIGraphXExecutionProvider is loadable (Instinct GPU + ORT reports it). Drives the install-needed indicator. */
   migraphxLoadable?: boolean;
   /** Platform OS string for DirectML Windows detection. */
   os?: string;
@@ -358,7 +390,7 @@ export function mergeDetectedProviders(input: {
         continue;
       }
       if (provider === "MIGraphXExecutionProvider") {
-        // Gated below by migraphxLoadable + hasRocmGpu; do not trust ORT listing alone.
+        // Gated below by hasInstinctGpu + migraphxLoadable; do not trust ORT listing alone.
         continue;
       }
       if (provider === "TensorrtExecutionProvider" && !tensorRtOk) {
@@ -397,10 +429,13 @@ export function mergeDetectedProviders(input: {
   }
   if (input.hasRocmGpu) {
     detected.add("ROCMExecutionProvider");
-    // Always soft-detect MIGraphX when AMD GPU hardware is present — same pattern
-    // as CUDA/TensorRT: "compatible GPU, installer available" not "not on this system".
-    // The install-needed indicator shows when migraphxLoadable is false.
-    detected.add("MIGraphXExecutionProvider");
+    // MIGraphX targets AMD Instinct datacenter GPUs (CDNA) only. A consumer
+    // Radeon (RDNA) box with the ROCm stack must not be advertised as
+    // MIGraphX-capable — the installer cannot provide the EP on gfx10/gfx11/
+    // gfx12. The install-needed indicator shows when migraphxLoadable is false.
+    if (input.hasInstinctGpu) {
+      detected.add("MIGraphXExecutionProvider");
+    }
   }
   if (input.hasOpenVino || input.hasOpenVinoCompatibleHardware) {
     detected.add("OpenVINOExecutionProvider");
