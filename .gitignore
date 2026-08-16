@@ -41,6 +41,8 @@ start-server.bat
 # Local agent/tool state
 /.ocx/
 /.opencode/
+!.opencode/
+!.opencode/github-commands.md
 /.remember/logs/
 /.cursor/hooks/state/
 /.devin/
