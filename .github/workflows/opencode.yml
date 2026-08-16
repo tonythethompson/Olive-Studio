@@ -88,7 +88,15 @@ jobs:
             echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "::warning::Nemotron 3.5 Lightning free unavailable - falling back to alibaba-token-plan"
+          echo "::warning::Nemotron 3.5 Lightning free unavailable - trying free fallback (deepseek-v4-flash-free)"
+          MODEL="opencode/deepseek-v4-flash-free"
+          VARIANT=""
+          if probe_zen deepseek-v4-flash-free; then
+            echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+            echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::warning::DeepSeek V4 Flash free unavailable - falling back to alibaba-token-plan"
           MODEL="alibaba-token-plan/qwen3.8-max"
           VARIANT=""
           if ! curl -sf --max-time 15 \
