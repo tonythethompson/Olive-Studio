@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vites
 import express, { type Express } from "express";
 import type { Server } from "node:http";
 
+import { mountProviderRoutes } from "./providerRoutes.ts";
+import { downloadModel, getModelStatus } from "../../services/genai/modelDownload.ts";
+import { isGenaiVenvReady, ensureGenaiVenv } from "../../services/genai/venv.ts";
+
 // Deterministic GenAI service stubs: never touch the real venv, disk cache,
 // or network during route tests.
 vi.mock("../../services/genai/venv.ts", () => ({
@@ -13,7 +17,7 @@ vi.mock("../../services/genai/modelDownload.ts", () => ({
   DEFAULT_GENAI_MODEL: "qwen2.5-coder-1.5b-instruct-onnx",
   getModelStatus: vi.fn(() => ({
     ready: true,
-    localPath: "",
+    localPath: "C:\\Users\\tester\\.olive-studio\\models\\genai\\qwen2.5-coder-1.5b-instruct-onnx",
     filesPresent: 6,
     filesRequired: 6,
     localSizeBytes: 0,
@@ -48,10 +52,6 @@ vi.mock("../../services/ai/env.ts", () => ({
   matchedEnvApiKeyName: vi.fn(() => undefined),
 }));
 
-import { mountProviderRoutes } from "./providerRoutes.ts";
-import { downloadModel, getModelStatus } from "../../services/genai/modelDownload.ts";
-import { isGenaiVenvReady } from "../../services/genai/venv.ts";
-
 let server: Server;
 let baseUrl: string;
 
@@ -74,7 +74,7 @@ beforeEach(() => {
   vi.mocked(isGenaiVenvReady).mockReturnValue(true);
   vi.mocked(getModelStatus).mockReturnValue({
     ready: true,
-    localPath: "",
+    localPath: "C:\\Users\\tester\\.olive-studio\\models\\genai\\qwen2.5-coder-1.5b-instruct-onnx",
     filesPresent: 6,
     filesRequired: 6,
     localSizeBytes: 0,
@@ -120,7 +120,7 @@ describe("POST /api/ai/provider keyless activation", () => {
   it("rejects genai activation before the model is downloaded", async () => {
     vi.mocked(getModelStatus).mockReturnValue({
       ready: false,
-      localPath: "",
+      localPath: "C:\\Users\\tester\\.olive-studio\\models\\genai\\qwen2.5-coder-1.5b-instruct-onnx",
       filesPresent: 2,
       filesRequired: 6,
       localSizeBytes: 0,
@@ -177,10 +177,12 @@ describe("POST /api/ai/models keyless catalog", () => {
 });
 
 describe("genai engine endpoints", () => {
-  it("reports engine and model status", async () => {
+  it("reports engine and model status without leaking the local path", async () => {
     const res = await fetch(`${baseUrl}/api/ai/genai/status`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ venvReady: true, model: { ready: true } });
+    const body = (await res.json()) as { venvReady: boolean; model: Record<string, unknown> };
+    expect(body).toMatchObject({ venvReady: true, model: { ready: true } });
+    expect(body.model.localPath).toBeUndefined();
   });
 
   it("blocks downloads that arrive via a reverse proxy hop", async () => {
@@ -198,5 +200,6 @@ describe("genai engine endpoints", () => {
       headers: { "x-forwarded-for": "203.0.113.9" },
     });
     expect(res.status).toBe(403);
+    expect(ensureGenaiVenv).not.toHaveBeenCalled();
   });
 });
