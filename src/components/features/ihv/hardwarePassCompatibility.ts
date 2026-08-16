@@ -203,14 +203,14 @@ export const PASS_VALIDATIONS: OptimizationPassValidation[] = [
     description:
       "Zero-shot data-free quantization using half-quadratic optimization to find optimal quantization parameters without calibration data.",
     isUnsupported: (provider) => !isQuantMethodAllowed("hqq", provider),
-    getIncompatibilityReason: () => "Requires CPU, CUDA, or CoreML execution provider.",
+    getIncompatibilityReason: () => "Requires CPU, CUDA, CoreML, or MIGraphX execution provider.",
     isActive: (passes) => passes.quantization && passes.quantMethod === "hqq",
     toggle: (passes, active) =>
       active
         ? { ...passes, quantMethod: "ptq" }
         : { ...passes, quantization: true, quantMethod: "hqq" },
     requiresExplanation:
-      "HQQ is currently supported on CPU, CUDA, and CoreML providers for half-quadratic optimization inference.",
+      "HQQ is currently supported on CPU, CUDA, CoreML, and MIGraphX providers for half-quadratic optimization inference.",
     estimates: { speedup: "2.0x", vram: "-68% VRAM", efficiency: "89%" },
   },
   {
