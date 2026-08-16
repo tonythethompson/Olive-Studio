@@ -3,7 +3,6 @@
 from typing import Any
 
 from . import load_passes
-from .normalization import normalize_framework
 
 
 # Canonical ordering constraints: each pass type should appear after its
@@ -24,6 +23,35 @@ def _type_index(pass_type: str) -> int:
         return _TYPE_ORDER.index(pass_type)
     except ValueError:
         return len(_TYPE_ORDER)
+
+
+# Known source-format aliases and the canonical tokens used by passes.json.
+_SOURCE_FORMAT_ALIASES = {
+    "pytorch": "torch",
+    "torch": "torch",
+    "pt": "torch",
+    "huggingface": "hf",
+    "hf": "hf",
+    "transformers": "hf",
+    "tensorflow": "tf",
+    "tf": "tf",
+    "onnx": "onnx",
+    "openvino": "openvino",
+    "ov": "openvino",
+    "qnn": "qnn",
+}
+
+
+# Source formats for which an incompatibility with a pass's input_formats is an
+# actionable error rather than a warning. Derived from the canonical alias
+# values so new entries in _SOURCE_FORMAT_ALIASES are known automatically.
+_KNOWN_SOURCE_FORMATS = set(_SOURCE_FORMAT_ALIASES.values())
+
+
+def _normalize_source_format(fmt: str) -> str:
+    """Map common source-format aliases to the tokens used in passes.json."""
+    normalized = fmt.strip().lower()
+    return _SOURCE_FORMAT_ALIASES.get(normalized, normalized)
 
 
 def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, Any]:
@@ -70,15 +98,23 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
                         has_compatible_conversion = True
                         break
             if not has_compatible_conversion:
-                normalized_source = normalize_framework(source_format).lower()
-                if normalized_source not in meta.get("input_formats", []):
-                    if normalized_source in ("torch", "pytorch", "tf", "tensorflow"):
+                normalized_source = _normalize_source_format(source_format)
+                input_formats = meta.get("input_formats", [])
+                if not normalized_source:
+                    # No source format supplied: still surface the missing
+                    # conversion so callers are not left without guidance.
+                    warnings.append(
+                        f"Pass '{name}' requires input format in {input_formats} and no source_format was provided. "
+                        "Specify source_format (e.g. 'onnx', 'torch', 'hf') or add a compatible conversion pass."
+                    )
+                elif normalized_source not in input_formats:
+                    if normalized_source in _KNOWN_SOURCE_FORMATS:
                         errors.append(
-                            f"Pass '{name}' requires input format in {meta.get('input_formats', [])} but no compatible conversion pass precedes it in the chain."
+                            f"Pass '{name}' requires input format in {input_formats} but no compatible conversion pass precedes it in the chain."
                         )
                     else:
                         warnings.append(
-                            f"Pass '{name}' requires input format in {meta.get('input_formats', [])}. "
+                            f"Pass '{name}' requires input format in {input_formats}. "
                             f"If your source model is already compatible, this is fine; otherwise add a conversion pass."
                         )
 

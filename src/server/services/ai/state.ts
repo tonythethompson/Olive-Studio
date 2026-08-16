@@ -75,6 +75,8 @@ export function restoreProviderFromPreference(pref: AiPreference): ProviderConfi
     pref.provider === "devin" ||
     // Bedrock can restore on the default AWS credential chain alone.
     pref.provider === "bedrock" ||
+    // Built-in GenAI runs a local engine and never stores an API key.
+    pref.provider === "genai" ||
     Boolean(pref.baseUrl && /localhost|127\.0\.0\.1/i.test(pref.baseUrl));
 
   if (pref.provider === "cloudflare") {

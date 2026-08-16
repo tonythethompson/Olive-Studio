@@ -8,10 +8,10 @@ import type { UIState } from "@/types";
  * PassGuidanceCard, StepInspector, RecipeDiffOverlay, and the recipe builder.
  *
  * @param nodeId  The graph node identifier (e.g. "conversion", "quantization").
- * @param state   The current UI state.
+ * @param state   The current UI passes state (a full UIState also satisfies this).
  * @returns       The Olive pass type name, or undefined for nodes without a pass mapping.
  */
-export function resolvePassName(nodeId: string, state: UIState): string | undefined {
+export function resolvePassName(nodeId: string, state: Pick<UIState, "passes">): string | undefined {
   if (nodeId === "conversion") {
     if (state.passes.conversionFormat === "openvino") return "OpenVINOConversion";
     return "OnnxConversion";

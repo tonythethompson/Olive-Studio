@@ -17,6 +17,93 @@ import { app, markServerReady } from "../../../server.ts";
 import { jobRegistry, resetJobRegistry } from "../services/olive/state.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { clearAgentSessionsForTests } from "../services/olive/agentSessions.ts";
+import { callAI } from "../services/ai/index.ts";
+
+// Review knowledge gathering normally spawns the Python MCP server (spawnSync,
+// not mocked by the integration setup). Stub it so analyze-state tests are
+// deterministic and fast while still exercising the response wiring.
+vi.mock("../services/ai/oliveMcpKnowledge.ts", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    gatherOliveMcpKnowledgeForReview: vi.fn().mockResolvedValue({
+      promptBlock: "PRIMARY SOURCE — Olive MCP knowledge (mocked for integration tests).",
+      toolsUsed: ["search_olive_documentation"],
+      sufficient: true,
+      usedWebFallback: false,
+      retrieval: { mode: "auto", effective: "auto", degraded: false },
+    }),
+  };
+});
+
+const mockedCallAI = vi.mocked(callAI);
+
+const VALID_REVIEW_JSON = JSON.stringify({
+  score: 72,
+  level: "Suboptimal",
+  summary: "The pipeline can be tightened.",
+  findings: [
+    {
+      id: "review-1",
+      title: "Raise the conversion opset",
+      description: "A newer opset unlocks more graph optimizations.",
+      severity: "warning",
+      evidence: "Opset below the recommended range.",
+      actions: [{ kind: "explain", label: "Learn more", payload: { body: "Raise conversionOpset." } }],
+    },
+  ],
+});
+
+function analyzeStateBody() {
+  return {
+    state: {
+      modelSource: "huggingface",
+      localFiles: [],
+      azureModelPath: "",
+      hfModelId: "meta-llama/Meta-Llama-3-8B",
+      hfDataset: "",
+      hfTask: "",
+      ihvProvider: "CPUExecutionProvider",
+      openvinoTargetDevice: "CPU",
+      memoryOffload: "gpu_only",
+      cudaVersion: "auto",
+      cacheDir: "",
+      azureStr: "",
+      distributedCaching: false,
+      activeJobId: null,
+      passes: {
+        conversion: true,
+        conversionFormat: "onnx",
+        conversionOpset: 14,
+        conversionSourceFormat: "pytorch",
+        conversionInputTargetTypes: "",
+        quantization: false,
+        quantMethod: "ptq",
+        quantPrecision: "int8",
+        quantPreset: "",
+        pruning: false,
+        pruningType: "unstructured",
+        pruningMethod: "magnitude",
+        pruningCriteria: "l2_norm",
+        pruningSparsity: 0.5,
+        peft: false,
+        peftMethod: "lora",
+        diffusionLora: false,
+        splitting: false,
+        onnxTransforms: false,
+        gptqBlockSize: 128,
+        gptqGroupSize: 128,
+        gptqDescAct: false,
+        awqGroupSize: 128,
+        awqDampPercent: 0.01,
+        awqSym: false,
+        qatQuantPrecision: "int8",
+        qatCalibrateMethod: "minmax",
+        qatCalibrateSteps: 100,
+      },
+    },
+  };
+}
 
 let server: Server;
 let baseUrl: string;
@@ -329,6 +416,48 @@ describe("Route integration tests", () => {
       const body = await res.json();
       expect(body).toHaveProperty("error");
       expect(String(body.error)).toContain("passes");
+    });
+
+    it("returns the Finding/Action contract with retrieval metadata on success", async () => {
+      mockedCallAI.mockResolvedValueOnce(VALID_REVIEW_JSON);
+
+      const res = await fetch(`${baseUrl}/api/ai/analyze-state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(analyzeStateBody()),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.score).toBe(72);
+      expect(body.level).toBe("Suboptimal");
+      expect(Array.isArray(body.findings)).toBe(true);
+      expect(body.findings).toHaveLength(1);
+      expect(body.findings[0].id).toBe("review-1");
+      expect(Array.isArray(body.findings[0].actions)).toBe(true);
+      expect(body.findings[0].actions[0].kind).toBe("explain");
+      // The legacy suggestions contract is not required by the new response.
+      expect(body).not.toHaveProperty("suggestions");
+      expect(["auto", "keyword", "semantic"]).toContain(body.mcp.retrieval.mode);
+      expect(typeof body.mcp.retrieval.degraded).toBe("boolean");
+    });
+
+    it("retries once when the first reply is unstructured", async () => {
+      mockedCallAI.mockClear();
+      mockedCallAI.mockResolvedValueOnce("I cannot produce the review right now.");
+      mockedCallAI.mockResolvedValueOnce(VALID_REVIEW_JSON);
+
+      const res = await fetch(`${baseUrl}/api/ai/analyze-state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(analyzeStateBody()),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.score).toBe(72);
+      expect(body.findings).toHaveLength(1);
+      expect(mockedCallAI).toHaveBeenCalledTimes(2);
     });
   });
 

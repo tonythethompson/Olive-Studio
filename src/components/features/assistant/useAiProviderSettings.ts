@@ -41,6 +41,8 @@ function validateApiKeyProviderForm(input: {
     input.settingsProvider === "openai-compat" ||
     // Bedrock can activate on the default AWS credential chain alone.
     input.settingsProvider === "bedrock" ||
+    // Built-in GenAI runs a local engine and never uses an API key.
+    input.settingsProvider === "genai" ||
     isLocalAllowEmptyKey(input.resolvedBaseUrl);
   if (input.settingsProvider === "cloudflare") {
     // Env-only activation requires both manual fields empty. A partial paste is rejected.
@@ -155,8 +157,7 @@ export function useAiProviderSettings({
    */
   const userModelOverrideRef = useRef(false);
 
-  const providerOption =
-    PROVIDER_OPTIONS.find((p) => p.id === settingsProvider) ?? PROVIDER_OPTIONS[0]!;
+  const providerOption = PROVIDER_OPTIONS.find((p) => p.id === settingsProvider) ?? PROVIDER_OPTIONS[0]!;
   const isCompatMode = settingsProvider === "openai-compat" || !!providerOption.baseUrl;
 
   const isStaleRefresh = (sequence: number) => sequence !== refreshSequenceRef.current;
