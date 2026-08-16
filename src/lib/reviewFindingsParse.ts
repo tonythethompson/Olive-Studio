@@ -172,7 +172,14 @@ export function parseAiReviewReply(rawText: string): ParsedReviewResult {
     };
   }
 
-  if (!isRecord(parsed)) {
+  // Require the expected top-level shape; otherwise treat as unstructured so callers may retry.
+  const scoreLike =
+    typeof parsed.score === "number" ||
+    (typeof parsed.score === "string" && parsed.score.trim() !== "" && Number.isFinite(Number(parsed.score)));
+  const summaryLike = typeof parsed.summary === "string" && parsed.summary.trim() !== "";
+  const levelLike = typeof parsed.level === "string";
+  const findingsLike = Array.isArray(parsed.findings);
+  if (!scoreLike || !summaryLike || !levelLike || !findingsLike) {
     return {
       score: 50,
       level: "Suboptimal",
@@ -183,10 +190,7 @@ export function parseAiReviewReply(rawText: string): ParsedReviewResult {
   }
 
   const score = clampScore(parsed.score);
-  const summary =
-    typeof parsed.summary === "string" && parsed.summary.trim()
-      ? parsed.summary.trim().slice(0, 1200)
-      : "Pipeline analysis complete.";
+  const summary = parsed.summary.trim().slice(0, 1200);
   const level = normalizeLevel(parsed.level);
 
   const findings = parseFindings(parsed.findings);
