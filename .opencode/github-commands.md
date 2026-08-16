@@ -93,7 +93,7 @@ the current pull request.
    gh api graphql -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:10){nodes{databaseId}}}}}}}' -F owner=... -F repo=... -F number=...
 
    # 2. Resolve a thread whose comments you fully addressed
-   gh api graphql -f query='mutation($id:ID!){updatePullRequestReviewThread(input:{pullRequestReviewThreadId:$id,state:RESOLVED}){pullRequestReviewThread{isResolved}}}' -F id=THREAD_ID
+   gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -F id=THREAD_ID
    ```
 
    Only resolve threads you actually addressed. Leave open any thread you could not fully
