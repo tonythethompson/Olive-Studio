@@ -112,7 +112,17 @@ const setupListeners = new Set<SetupListener>();
 export function ensureGenaiVenv(onLine: SetupListener): Promise<{ ok: boolean; error?: string }> {
   setupListeners.add(onLine);
   if (!activeVenvSetup) {
-    const operation = runGenaiVenvSetup((line) => {
+  if (!activeVenvSetup) {
+    activeVenvSetup = (async () => {
+      const operation = runGenaiVenvSetup((line) => {
+        for (const listener of setupListeners) listener(line);
+      });
+      return operation;
+    })().finally(() => {
+      activeVenvSetup = null;
+      setupListeners.clear();
+    });
+  }
       for (const listener of setupListeners) listener(line);
     });
     activeVenvSetup = operation.finally(() => {
