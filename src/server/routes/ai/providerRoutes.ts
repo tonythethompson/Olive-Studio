@@ -61,7 +61,10 @@ function allowsEmptyApiKey(provider: string, normalizedBaseUrl?: string): boolea
     provider === "openai-compat" ||
     provider === "codex" ||
     provider === "devin" ||
-    provider === "cloudflare"
+    provider === "cloudflare" ||
+    // Bedrock can authenticate through the default AWS chain (profile, IAM
+    // role, ~/.aws/credentials) without an explicit key.
+    provider === "bedrock"
   ) {
     return true;
   }

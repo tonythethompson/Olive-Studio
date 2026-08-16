@@ -5,7 +5,9 @@
  * inference sidecar. Separate from the Olive venv families to avoid dependency
  * conflicts (GenAI has its own ORT build bundled).
  *
- * Venv location: .venvs/genai/ (relative to project root)
+ * Venv location: .venvs/genai/ under the project root in dev, or under the
+ * per-user writable root in packaged apps (the installed resource directory
+ * is read-only).
  */
 
 import { execFile, spawn } from "node:child_process";
@@ -13,18 +15,23 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { isPackagedApp, writableRoot } from "../shared/runtimePaths.ts";
 
 const execFileAsync = promisify(execFile);
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-const GENAI_VENV_DIR = path.join(process.cwd(), ".venvs", "genai");
+/** Resolved lazily so env-based packaged-app detection is always current. */
+function genaiVenvDir(): string {
+  const root = isPackagedApp() ? writableRoot() : process.cwd();
+  return path.join(root, ".venvs", "genai");
+}
 
 /** Python executable inside the GenAI venv. */
 export function genaiPythonPath(): string {
   return process.platform === "win32"
-    ? path.join(GENAI_VENV_DIR, "Scripts", "python.exe")
-    : path.join(GENAI_VENV_DIR, "bin", "python");
+    ? path.join(genaiVenvDir(), "Scripts", "python.exe")
+    : path.join(genaiVenvDir(), "bin", "python");
 }
 
 /** Whether the GenAI venv exists and has python. */
@@ -111,12 +118,13 @@ export async function ensureGenaiVenv(
   // Create venv
   onLine("[genai] Creating virtual environment...");
   try {
-    fs.mkdirSync(path.dirname(GENAI_VENV_DIR), { recursive: true });
+    const venvDir = genaiVenvDir();
+    fs.mkdirSync(path.dirname(venvDir), { recursive: true });
 
     const venvArgs =
       process.platform === "win32" && systemPython === "py"
-        ? ["-3", "-m", "venv", GENAI_VENV_DIR]
-        : ["-m", "venv", GENAI_VENV_DIR];
+        ? ["-3", "-m", "venv", venvDir]
+        : ["-m", "venv", venvDir];
 
     await execFileAsync(systemPython, venvArgs, { timeout: 60_000 });
   } catch (err: unknown) {
@@ -168,6 +176,13 @@ export interface SidecarProcess {
   send: (request: Record<string, unknown>) => void;
   /** Register a handler for NDJSON responses. */
   onResponse: (handler: (data: Record<string, unknown>) => void) => () => void;
+  /**
+   * Register a settler that rejects an in-flight request if the process dies
+   * or is replaced before responding. Returns an unregister function.
+   */
+  onTerminate: (settle: () => void) => () => void;
+  /** Settle all in-flight requests immediately (replacement/shutdown). */
+  settlePending: () => void;
   /** Kill the sidecar process. */
   kill: () => void;
   /** Whether the process is still alive. */
@@ -190,8 +205,10 @@ let activeSidecarKey: string | null = null;
 export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProcess {
   const key = `${modelPath}\u0000${ep}`;
   if (activeSidecar?.alive() && activeSidecarKey === key) return activeSidecar;
-  // Stale sidecar for a different model/EP — stop it before spawning a new one.
+  // Stale sidecar for a different model/EP — settle its in-flight requests
+  // (they would otherwise wait for their timeout) before replacing it.
   if (activeSidecar?.alive()) {
+    activeSidecar.settlePending();
     activeSidecar.kill();
   }
   activeSidecar = null;
@@ -210,6 +227,18 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   });
 
   const responseHandlers: Array<(data: Record<string, unknown>) => void> = [];
+  // Settlers for requests that are waiting on this process. Invoked when the
+  // process dies or is replaced so callers reject instead of timing out.
+  const pendingSettlers = new Set<() => void>();
+  const settlePending = (): void => {
+    const settlers = [...pendingSettlers];
+    pendingSettlers.clear();
+    for (const settle of settlers) {
+      try {
+        settle();
+      } catch { /* a failing settler must not block teardown */ }
+    }
+  };
   let buffer = "";
 
   child.stdout?.on("data", (chunk: Buffer) => {
@@ -238,6 +267,7 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   // that would crash the whole server.
   child.on("error", (err) => {
     console.warn("[genai-sidecar] spawn error:", err.message);
+    settlePending();
     if (activeSidecar === sidecar) {
       activeSidecar = null;
       activeSidecarKey = null;
@@ -245,6 +275,7 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
   });
 
   child.on("exit", (code) => {
+    settlePending();
     if (activeSidecar === sidecar) {
       activeSidecar = null;
       activeSidecarKey = null;
@@ -267,7 +298,15 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
         if (index >= 0) responseHandlers.splice(index, 1);
       };
     },
+    onTerminate: (settle) => {
+      pendingSettlers.add(settle);
+      return () => {
+        pendingSettlers.delete(settle);
+      };
+    },
+    settlePending,
     kill: () => {
+      settlePending();
       try {
         sidecar.send({ command: "shutdown" });
       } catch { /* ignore */ }

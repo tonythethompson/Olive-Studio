@@ -72,6 +72,7 @@ async function call(
     const tokens: string[] = [];
     let settled = false;
     let unsubscribe: (() => void) | undefined;
+    let unregisterTerminate: (() => void) | undefined;
 
     const timeout = setTimeout(() => {
       if (!settled) {
@@ -85,6 +86,8 @@ async function call(
       clearTimeout(timeout);
       unsubscribe?.();
       unsubscribe = undefined;
+      unregisterTerminate?.();
+      unregisterTerminate = undefined;
     }
 
     function handleResponse(data: Record<string, unknown>) {
@@ -109,6 +112,15 @@ async function call(
         reject(new Error(`GenAI inference error: ${data.error ?? "unknown"}`));
       }
     }
+
+    // Reject promptly if the sidecar dies or is replaced mid-request instead
+    // of waiting for the timeout.
+    unregisterTerminate = sidecar.onTerminate(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("GenAI sidecar terminated before responding."));
+    });
 
     unsubscribe = sidecar.onResponse(handleResponse);
 

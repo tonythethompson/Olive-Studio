@@ -15,17 +15,27 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 import { resolvePublicS3Config } from "../s3/client.ts";
 import { pullModel } from "../s3/operations.ts";
+import { isPackagedApp, writableRoot } from "../shared/runtimePaths.ts";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 /** Default model to download for the built-in GenAI assistant. */
 export const DEFAULT_GENAI_MODEL = "qwen2.5-coder-1.5b-instruct-onnx";
 
-/** Local cache directory for GenAI models. */
-const GENAI_MODELS_DIR = path.join(process.cwd(), ".cache", "genai-models");
+/**
+ * Local cache directory for GenAI models. Resolved lazily: the project root
+ * in dev, the per-user writable root in packaged apps (the installed resource
+ * directory is read-only).
+ */
+function genaiModelsDir(): string {
+  const root = isPackagedApp() ? writableRoot() : process.cwd();
+  return path.join(root, ".cache", "genai-models");
+}
 
 /**
  * CDN base URL for model downloads. Falls back to direct S3 if not set.
@@ -101,7 +111,7 @@ export function getModelStatus(modelName: string = DEFAULT_GENAI_MODEL): ModelDo
     return { ready: false, localPath: "", filesPresent: 0, filesRequired: 0, localSizeBytes: 0 };
   }
 
-  const modelDir = path.join(GENAI_MODELS_DIR, manifest.name);
+  const modelDir = path.join(genaiModelsDir(), manifest.name);
   let filesPresent = 0;
   let localSizeBytes = 0;
 
@@ -144,26 +154,52 @@ export type DownloadProgressCallback = (progress: {
   percent: number;
 }) => void;
 
+export type DownloadResult = { ok: true; modelPath: string } | { ok: false; error: string };
+
+/**
+ * In-flight downloads keyed by model name. Concurrent callers await the same
+ * operation instead of racing on the same .partial/final files.
+ */
+const activeDownloads = new Map<string, Promise<DownloadResult>>();
+
 /**
  * Downloads all files for a GenAI model from S3/CDN to the local cache.
  *
  * Uses the public S3 bucket or CDN URL. Downloads are resumable at the file
  * level (partially downloaded files are removed and re-fetched).
  *
+ * Serialized per model: if a download for the same model is already running,
+ * this call awaits that operation and returns its result (progress is only
+ * reported through the original caller's callback).
+ *
  * @param modelName - Model identifier from the catalog.
  * @param onProgress - Progress callback for UI streaming.
  * @returns The local model directory path on success.
  */
-export async function downloadModel(
+export function downloadModel(
   modelName: string = DEFAULT_GENAI_MODEL,
   onProgress?: DownloadProgressCallback,
-): Promise<{ ok: true; modelPath: string } | { ok: false; error: string }> {
+): Promise<DownloadResult> {
+  const inFlight = activeDownloads.get(modelName);
+  if (inFlight) return inFlight;
+
+  const operation = runDownload(modelName, onProgress).finally(() => {
+    activeDownloads.delete(modelName);
+  });
+  activeDownloads.set(modelName, operation);
+  return operation;
+}
+
+async function runDownload(
+  modelName: string,
+  onProgress?: DownloadProgressCallback,
+): Promise<DownloadResult> {
   const manifest = GENAI_MODEL_CATALOG.find((m) => m.name === modelName);
   if (!manifest) {
     return { ok: false, error: `Unknown model: ${modelName}` };
   }
 
-  const modelDir = path.join(GENAI_MODELS_DIR, manifest.name);
+  const modelDir = path.join(genaiModelsDir(), manifest.name);
   fs.mkdirSync(modelDir, { recursive: true });
 
   const cdnUrl = getCdnBaseUrl();
@@ -266,6 +302,10 @@ export async function downloadModel(
 
 /**
  * Downloads a single file from CloudFront/CDN via HTTPS.
+ *
+ * Uses stream.pipeline so backpressure, teardown, and errors from any stage
+ * (network read, progress transform, or disk write) propagate as a rejection
+ * — no unhandled 'error' events on the writer.
  */
 async function downloadFromCdn(
   baseUrl: string,
@@ -279,31 +319,18 @@ async function downloadFromCdn(
   if (!response.ok) {
     throw new Error(`CDN download failed: ${response.status} ${response.statusText} for ${relativePath}`);
   }
+  if (!response.body) throw new Error("No response body");
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
-
-  const writer = fs.createWriteStream(localPath);
+  const source = Readable.fromWeb(response.body as unknown as Parameters<typeof Readable.fromWeb>[0]);
   let loaded = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!writer.write(Buffer.from(value))) {
-        await new Promise<void>((resolve, reject) => {
-          writer.once("drain", resolve);
-          writer.once("error", reject);
-        });
-      }
-      loaded += value.byteLength;
+  const progress = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      loaded += chunk.length;
       onProgress?.(loaded);
-    }
-  } finally {
-    writer.end();
-    await new Promise<void>((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-  }
+      callback(null, chunk);
+    },
+  });
+  const writer = fs.createWriteStream(localPath);
+
+  await pipeline(source, progress, writer);
 }

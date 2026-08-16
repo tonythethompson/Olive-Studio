@@ -57,6 +57,16 @@ function hasExplicitCredentials(cfg: ProviderConfig): boolean {
 }
 
 /**
+ * Detects a half-packed credential (access key present, secret missing). These
+ * must surface an error instead of silently falling back to the default
+ * chain, which would authenticate as an entirely different account.
+ */
+function hasHalfPackedCredentials(cfg: ProviderConfig): boolean {
+  if (!cfg.apiKey?.trim() || !cfg.apiKey.includes(":") || !/^A[KS]IA/.test(cfg.apiKey)) return false;
+  return cfg.apiKey.slice(cfg.apiKey.indexOf(":") + 1).trim().length === 0;
+}
+
+/**
  * Creates a BedrockRuntimeClient with appropriate credentials.
  *
  * When explicit credentials are packed in apiKey, uses them directly.
@@ -64,6 +74,13 @@ function hasExplicitCredentials(cfg: ProviderConfig): boolean {
  * env vars → shared credentials file (~/.aws/credentials) → IAM role → SSO.
  */
 function createBedrockClient(cfg: ProviderConfig): BedrockRuntimeClient {
+  if (hasHalfPackedCredentials(cfg)) {
+    throw new Error(
+      "Bedrock credentials are incomplete: an access key was provided without a secret key. " +
+        "Enter both as accessKeyId:secretAccessKey, or clear the key to use the default AWS credential chain.",
+    );
+  }
+
   const region = resolveRegion(cfg);
 
   if (hasExplicitCredentials(cfg)) {

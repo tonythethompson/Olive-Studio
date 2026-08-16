@@ -22,6 +22,7 @@ import { parseBody, isParseBodyError } from "../middleware/bodyGuard.ts";
 import { resolveS3Config, resolvePublicS3Config } from "../services/s3/client.ts";
 import { listUserModels, listPublicModels, pushModel, pullModel } from "../services/s3/operations.ts";
 import { resolveOliveOutputForDownload } from "../services/playground/oliveOutputScan.ts";
+import { containmentRoot } from "../services/shared/runtimePaths.ts";
 
 /**
  * Validates a pull destination directory against the project root.
@@ -51,6 +52,27 @@ function validatePullDestDir(cwd: string, destDir: string): { ok: true } | { ok:
     }
   }
   return { ok: true };
+}
+
+/**
+ * Application-owned staging directory for pull downloads. Bytes are written
+ * here — never directly into the caller-supplied destination — so a symlink
+ * swapped into the destination tree after validation cannot redirect the
+ * download outside the project root. The finished file is published into the
+ * destination only after re-validation.
+ *
+ * realpath resolves symlinks, so a staging directory that merely looks like
+ * it lives under the project root is rejected.
+ */
+function resolvePullStagingDir(cwd: string): string {
+  const staging = path.join(cwd, ".cache", "s3-pulls");
+  fs.mkdirSync(staging, { recursive: true });
+  const realStaging = fs.realpathSync(staging);
+  const realCwd = fs.realpathSync(cwd);
+  if (realStaging !== realCwd && !realStaging.startsWith(realCwd + path.sep)) {
+    throw new Error("Staging directory could not be verified inside the project directory.");
+  }
+  return staging;
 }
 
 export function mountS3Routes(router: Router): void {
@@ -147,18 +169,31 @@ export function mountS3Routes(router: Router): void {
     }
     const source = rawSource === "public" ? "public" as const : "private" as const;
 
-    // Default destination: ./models/optimized/<basename>
+    // Default destination: <containment root>/models/optimized/<basename>.
+    // In packaged apps the containment root is the per-user writable directory
+    // — the installed resource directory (cwd) is read-only.
     const basename = path.basename(key);
-    const cwd = process.cwd();
+    const cwd = containmentRoot();
     const destDir = rawDestDir?.trim() ? path.resolve(cwd, rawDestDir.trim()) : path.resolve(cwd, "models", "optimized");
     const destValidation = validatePullDestDir(cwd, destDir);
     if (!destValidation.ok) {
       return res.status(400).json({ error: destValidation.error });
     }
     const localPath = path.join(destDir, basename);
+    // Download into the application-owned staging directory (realpath-verified
+    // to be inside the project root). The destination tree is only touched at
+    // publish time, after re-validation — a symlink swap during the download
+    // cannot redirect bytes outside the project directory.
+    let stagingDir: string;
+    try {
+      stagingDir = resolvePullStagingDir(cwd);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return res.status(400).json({ error: msg });
+    }
     // Request-owned temp file: concurrent pulls can never clobber each other's
     // active download, and the final file only appears once fully downloaded.
-    const tmpPath = `${localPath}.${process.pid}-${Date.now()}.tmp`;
+    const tmpPath = path.join(stagingDir, `${process.pid}-${Date.now()}-${basename}`);
 
     // Fast-fail for the common case; the exclusive publish below is the
     // authoritative guard against concurrent pulls.
@@ -172,6 +207,13 @@ export function mountS3Routes(router: Router): void {
 
     try {
       await pullModel(key, tmpPath, source);
+      // Re-validate the destination immediately before publishing: a symlink
+      // introduced into the destination tree after the preflight must abort
+      // the publish instead of redirecting it.
+      const revalidation = validatePullDestDir(cwd, destDir);
+      if (!revalidation.ok) {
+        return res.status(400).json({ error: revalidation.error });
+      }
       try {
         // COPYFILE_EXCL fails if the destination appeared in the meantime.
         fs.copyFileSync(tmpPath, localPath, fs.constants.COPYFILE_EXCL);
