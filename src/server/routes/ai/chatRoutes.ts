@@ -173,6 +173,12 @@ export function mountChatRoutes(router: Router): void {
         level: parsed.level,
         summary,
         findings: filteredFindings,
+        mcp: {
+          toolsUsed: mcpKnowledge.toolsUsed,
+          sufficient: mcpKnowledge.sufficient,
+          usedWebFallback: mcpKnowledge.usedWebFallback,
+          retrieval: mcpKnowledge.retrieval,
+        },
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
