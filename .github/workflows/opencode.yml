@@ -35,23 +35,23 @@ jobs:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
-          MODEL="alibaba-token-plan/qwen3.8-max"
+          MODEL="opencode/big-pickle"
           if ! curl -sf --max-time 15 \
-            -X POST "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
-            -H "Authorization: Bearer ${ALIBABA_TOKEN_PLAN_API_KEY}" \
+            -X POST "https://opencode.ai/zen/v1/chat/completions" \
+            -H "Authorization: Bearer ${OPENCODE_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"model":"qwen3.8-max","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
+            -d '{"model":"big-pickle","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
             >/dev/null 2>&1; then
-            echo "::warning::Primary model (alibaba-token-plan) unavailable - falling back to DashScope"
-            MODEL="alibaba/qwen3.8-max"
+            echo "::warning::Primary model (opencode/big-pickle) unavailable - falling back to alibaba-token-plan"
+            MODEL="alibaba-token-plan/qwen3.8-max"
             if ! curl -sf --max-time 15 \
-              -X POST "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions" \
-              -H "Authorization: Bearer ${DASHSCOPE_API_KEY}" \
+              -X POST "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
+              -H "Authorization: Bearer ${ALIBABA_TOKEN_PLAN_API_KEY}" \
               -H "Content-Type: application/json" \
               -d '{"model":"qwen3.8-max","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
               >/dev/null 2>&1; then
-              echo "::warning::DashScope unavailable - falling back to OpenCode Zen (big-pickle)"
-              MODEL="opencode/big-pickle"
+              echo "::warning::alibaba-token-plan unavailable - falling back to DashScope"
+              MODEL="alibaba/qwen3.8-max"
             fi
           fi
           echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
