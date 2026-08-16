@@ -57,6 +57,7 @@ function inertChildProcess(): ChildProcess {
   const record = proc as unknown as Record<string, unknown>;
   record.pid = 4242;
   record.exitCode = null;
+  record.signalCode = null;
   record.killed = false;
   record.kill = () => true;
   return proc;
@@ -135,9 +136,21 @@ describe("spawnSidecar lifecycle", () => {
   it("hard-kills a sidecar that ignores graceful shutdown after the wait cap", async () => {
     vi.useFakeTimers();
     const proc = inertChildProcess();
+    const record = proc as unknown as Record<string, unknown>;
     const kills: string[] = [];
-    (proc as unknown as Record<string, unknown>).kill = (sig?: string) => {
+    record.kill = (sig?: string) => {
       kills.push(sig ?? "");
+      // Model real Node semantics: `killed` flips to true as soon as a signal
+      // is sent (even if the process ignores it). The process stays alive
+      // until SIGKILL — exactly the state that used to make killHard() skip
+      // the hard kill and hang shutdown.
+      record.killed = true;
+      if (sig === "SIGKILL") {
+        // Signal termination: Node reports exit(null, "SIGKILL") and sets
+        // signalCode — resolve exitPromise the same way.
+        record.signalCode = "SIGKILL";
+        process.nextTick(() => proc.emit("exit", null, "SIGKILL"));
+      }
       return true;
     };
     mocks.spawnImpl = () => proc;

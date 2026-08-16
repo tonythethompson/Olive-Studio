@@ -114,7 +114,13 @@ export function ensureGenaiVenv(onLine: SetupListener): Promise<{ ok: boolean; e
   if (!activeVenvSetup) {
     activeVenvSetup = (async () => {
       const operation = runGenaiVenvSetup((line) => {
-        for (const listener of setupListeners) listener(line);
+        for (const listener of setupListeners) {
+          try {
+            listener(line);
+          } catch {
+            // One bad listener must not abort the shared setup for everyone.
+          }
+        }
       });
       return operation;
     })().finally(() => {
@@ -374,7 +380,11 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
       }, 2000);
     },
     killHard: () => {
-      if (child.exitCode !== null || child.killed) return;
+      // child.killed only means a signal was successfully sent — a sidecar
+      // that ignores SIGTERM still has killed === true. exitCode/signalCode
+      // are set only once the process has actually terminated, so use them to
+      // decide whether SIGKILL still needs to be sent.
+      if (child.exitCode !== null || child.signalCode !== null) return;
       try {
         // Windows maps SIGKILL to TerminateProcess; POSIX sends SIGKILL.
         child.kill("SIGKILL");
@@ -382,7 +392,9 @@ export function spawnSidecar(modelPath: string, ep: string = "cpu"): SidecarProc
         /* already gone */
       }
     },
-    alive: () => !spawnFailed && child.exitCode === null && !child.killed,
+    // `child.killed` is true once any signal was delivered, even if the
+    // process ignored it — only the exit indicators prove termination.
+    alive: () => !spawnFailed && child.exitCode === null && child.signalCode === null,
     exitPromise,
   };
 
@@ -409,6 +421,26 @@ export function getActiveSidecar(modelPath?: string, ep?: string): SidecarProces
 }
 
 /**
+ * Resolves true if `promise` is still pending after `ms`, false if it settled
+ * first. Never rejects. Bounds waits without leaking the timer that backs it.
+ */
+async function waitOrTimeout<T>(promise: Promise<T>, ms: number): Promise<boolean> {
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const timer = new Promise<void>((resolve) => {
+    handle = setTimeout(() => {
+      timedOut = true;
+      resolve();
+    }, ms);
+  });
+  await Promise.race([promise.then(() => { timedOut = false; }), timer]);
+  // The race has settled either way — drop the timer so a fast resolution
+  // does not keep the event loop alive for the remaining wait cap.
+  clearTimeout(handle);
+  return timedOut;
+}
+
+/**
  * Shutdown the active sidecar cleanly. Waits (bounded) for the child to exit
  * so server shutdown does not orphan the inference process with its loaded
  * model still holding CPU/GPU memory.
@@ -421,22 +453,15 @@ export async function shutdownSidecar(): Promise<void> {
   sidecar.kill();
   // kill() sends the shutdown command now and SIGTERM after 2s; cap the wait
   // so a wedged sidecar can never hang server shutdown.
-  let timedOut = false;
-  await Promise.race([
-    sidecar.exitPromise.then(() => {
-      timedOut = false;
-    }),
-    new Promise<void>((resolve) =>
-      setTimeout(() => {
-        timedOut = true;
-        resolve();
-      }, 5000),
-    ),
-  ]);
-  // A sidecar that ignores the graceful shutdown (command + SIGTERM) would
-  // keep its loaded model in memory after Studio exits — escalate to SIGKILL.
-  if (timedOut) {
+  if (await waitOrTimeout(sidecar.exitPromise, 5000)) {
+    // A sidecar that ignores the graceful shutdown (command + SIGTERM) would
+    // keep its loaded model in memory after Studio exits — escalate to SIGKILL.
     console.warn("[genai-sidecar] shutdown timed out; sending SIGKILL.");
     sidecar.killHard();
+    // The forced kill is bounded too: a process that survives SIGKILL must not
+    // hang graceful shutdown forever, so report it and move on.
+    if (await waitOrTimeout(sidecar.exitPromise, 5000)) {
+      console.warn("[genai-sidecar] SIGKILL did not stop the sidecar; it may still be running.");
+    }
   }
 }
