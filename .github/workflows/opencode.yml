@@ -27,34 +27,65 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Probe primary model availability
+      - name: Probe model availability
         id: probe
         shell: bash
         env:
+          COMMENT: ${{ github.event.comment.body }}
           ALIBABA_TOKEN_PLAN_API_KEY: ${{ secrets.ALIBABA_TOKEN_PLAN_API_KEY }}
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
-          MODEL="opencode/big-pickle"
-          if ! curl -sf --max-time 15 \
-            -X POST "https://opencode.ai/zen/v1/chat/completions" \
-            -H "Authorization: Bearer ${OPENCODE_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d '{"model":"big-pickle","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
-            >/dev/null 2>&1; then
-            echo "::warning::Primary model (opencode/big-pickle) unavailable - falling back to alibaba-token-plan"
-            MODEL="alibaba-token-plan/qwen3.8-max"
-            if ! curl -sf --max-time 15 \
-              -X POST "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
-              -H "Authorization: Bearer ${ALIBABA_TOKEN_PLAN_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d '{"model":"qwen3.8-max","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
-              >/dev/null 2>&1; then
-              echo "::warning::alibaba-token-plan unavailable - falling back to DashScope"
-              MODEL="alibaba/qwen3.8-max"
+          probe_zen() {
+            local id="$1"
+            local url="https://opencode.ai/zen/v1/chat/completions"
+            local body="{\"model\":\"${id}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}"
+            local auth="Authorization: Bearer ${OPENCODE_API_KEY}"
+            local extra=()
+            if [[ "${id}" == "gpt-5.6-luna" ]]; then
+              url="https://opencode.ai/zen/v1/responses"
+              body="{\"model\":\"${id}\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"ping\"}]}],\"max_output_tokens\":1}"
             fi
+            curl -sf --max-time 15 -X POST "${url}" \
+              -H "${auth}" "${extra[@]}" -H "Content-Type: application/json" \
+              -d "${body}" >/dev/null 2>&1
+          }
+
+          MODEL="opencode/big-pickle"
+          VARIANT=""
+          if [[ "${COMMENT}" =~ (^|[[:space:]])/(oc|opencode)[[:space:]]+review ]]; then
+            echo "::notice::/oc review detected - using review model (opencode/gpt-5.6-luna, max reasoning)"
+            MODEL="opencode/gpt-5.6-luna"
+            VARIANT="max"
+            if probe_zen gpt-5.6-luna; then
+              echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+              echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::warning::Review model (opencode/gpt-5.6-luna) unavailable - falling back to big-pickle"
+            MODEL="opencode/big-pickle"
+            VARIANT=""
+          fi
+
+          if probe_zen big-pickle; then
+            echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+            echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::warning::Primary model (${MODEL}) unavailable - falling back to alibaba-token-plan"
+          MODEL="alibaba-token-plan/qwen3.8-max"
+          VARIANT=""
+          if ! curl -sf --max-time 15 \
+            -X POST "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions" \
+            -H "Authorization: Bearer ${ALIBABA_TOKEN_PLAN_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"model":"qwen3.8-max","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' \
+            >/dev/null 2>&1; then
+            echo "::warning::alibaba-token-plan unavailable - falling back to DashScope"
+            MODEL="alibaba/qwen3.8-max"
           fi
           echo "model=${MODEL}" >> "$GITHUB_OUTPUT"
+          echo "variant=${VARIANT}" >> "$GITHUB_OUTPUT"
 
       - name: Run opencode
         uses: anomalyco/opencode/github@14b37df39168eaf6a6faf862ec4a7bbe9c825bbd # v1.18.18
@@ -65,3 +96,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: ${{ steps.probe.outputs.model }}
+          variant: ${{ steps.probe.outputs.variant }}
