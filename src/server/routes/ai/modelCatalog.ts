@@ -2,10 +2,7 @@
  * Live model-catalog fetching for AI providers.
  * `baseUrl` arguments must already be sanitized before reaching these helpers.
  */
-import {
-  sanitizeProviderBaseUrl,
-  stripTrailingSlashes,
-} from "../../services/ai/security.ts";
+import { sanitizeProviderBaseUrl, stripTrailingSlashes } from "../../services/ai/security.ts";
 import { fetchWithTimeout } from "../../services/shared/http.ts";
 import {
   catalogModelsFromOpenAiCompatRows,
@@ -24,6 +21,25 @@ export async function fetchLiveModelCatalog(provider: string, apiKey: string, ba
     }
     if (provider === "copilot") {
       return await fetchCopilotModelCatalog(apiKey, baseUrl);
+    }
+    if (provider === "bedrock") {
+      // Bedrock model availability is region/account-scoped and has no
+      // OpenAI-style catalog endpoint; the static default list stands.
+      return {
+        models: [],
+        source: "fallback" as const,
+        error: "Bedrock models are region-scoped; use the default model ID or one enabled for your account.",
+      };
+    }
+    if (provider === "genai") {
+      // The built-in engine serves a single locally downloaded model; it has
+      // no remote catalog endpoint. Return the static default list instead of
+      // attempting an OpenAI-style fetch.
+      return {
+        models: [],
+        source: "fallback" as const,
+        error: "Built-in GenAI runs one locally downloaded model; the default is preconfigured in Settings.",
+      };
     }
 
     const base = stripTrailingSlashes(baseUrl || defaultBaseUrl(provider));

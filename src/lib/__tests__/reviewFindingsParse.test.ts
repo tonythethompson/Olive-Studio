@@ -1,0 +1,292 @@
+import { describe, it, expect } from "vitest";
+import { parseAiReviewReply, REVIEW_FINDINGS_RESPONSE_CONTRACT } from "../reviewFindingsParse.ts";
+import { filterFindings } from "../auditSuggestionFilter.ts";
+import type { Finding } from "../types/findingTypes.ts";
+
+type AuditFilterContext = Parameters<typeof filterFindings>[1];
+
+describe("REVIEW_FINDINGS_RESPONSE_CONTRACT", () => {
+  it("describes a findings[] array with shared Finding/Action fields", () => {
+    expect(REVIEW_FINDINGS_RESPONSE_CONTRACT).toContain('"findings"');
+    expect(REVIEW_FINDINGS_RESPONSE_CONTRACT).toContain("applyPatch");
+    expect(REVIEW_FINDINGS_RESPONSE_CONTRACT).toContain("navigate");
+    expect(REVIEW_FINDINGS_RESPONSE_CONTRACT).toContain("explain");
+    expect(REVIEW_FINDINGS_RESPONSE_CONTRACT).toContain("documentation");
+  });
+});
+
+describe("parseAiReviewReply", () => {
+  it("parses a compliant findings response", () => {
+    const json = JSON.stringify({
+      score: 72,
+      level: "Suboptimal",
+      summary: "The pipeline can be improved with AWQ int4.",
+      findings: [
+        {
+          id: "review-1",
+          title: "Enable AWQ int4 quantization",
+          description: "Weights should be quantized to int4 for consumer TensorRT RTX.",
+          severity: "warning",
+          evidence: "Selected EP is NvTensorRT-RTX.",
+          actions: [
+            {
+              kind: "applyPatch",
+              label: "Apply AWQ int4",
+              payload: { passes: { quantMethod: "awq", quantPrecision: "int4" } },
+            },
+            { kind: "explain", label: "Learn more", payload: { body: "AWQ int4 is recommended." } },
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseAiReviewReply(json);
+    expect(parsed.structured).toBe(true);
+    expect(parsed.score).toBe(72);
+    expect(parsed.level).toBe("Suboptimal");
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]!.actions).toHaveLength(2);
+    expect(parsed.findings[0]!.actions[0]!.kind).toBe("applyPatch");
+    expect(parsed.findings[0]!.actions[0]!.payload).toEqual({
+      passes: { quantMethod: "awq", quantPrecision: "int4" },
+    });
+  });
+
+  it("strips invalid applyPatch payloads and falls back to explain", () => {
+    const json = JSON.stringify({
+      score: 55,
+      level: "Inefficient",
+      summary: "Bad suggestion.",
+      findings: [
+        {
+          id: "review-2",
+          title: "Set nested Olive path",
+          description: "Should not be allowed.",
+          severity: "warning",
+          evidence: "Nested path.",
+          actions: [
+            {
+              kind: "applyPatch",
+              label: "Apply nested",
+              payload: { "passes.conversion.config.input_model_dtype": "fp16" },
+            },
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseAiReviewReply(json);
+    expect(parsed.structured).toBe(true);
+    expect(parsed.findings[0]!.actions[0]!.kind).toBe("explain");
+  });
+
+  it("ensures every finding has at least one action", () => {
+    const json = JSON.stringify({
+      score: 80,
+      level: "Optimized",
+      summary: "Looks good.",
+      findings: [
+        {
+          id: "review-3",
+          title: "No patch available",
+          description: "Everything is configured.",
+          severity: "info",
+          evidence: "No action.",
+          actions: [],
+        },
+      ],
+    });
+
+    const parsed = parseAiReviewReply(json);
+    expect(parsed.findings[0]!.actions).toHaveLength(1);
+    expect(parsed.findings[0]!.actions[0]!.kind).toBe("explain");
+  });
+
+  it("returns structured=false for malformed JSON", () => {
+    const parsed = parseAiReviewReply("not json");
+    expect(parsed.structured).toBe(false);
+    expect(parsed.findings).toEqual([]);
+  });
+
+  it("returns structured=false for parseable JSON with an invalid top-level shape", () => {
+    for (const raw of ["[1, 2, 3]", "42", '"ok"', JSON.stringify({ suggestions: [] }), JSON.stringify({ ok: true })]) {
+      const parsed = parseAiReviewReply(raw);
+      expect(parsed.structured).toBe(false);
+      expect(parsed.findings).toEqual([]);
+    }
+  });
+
+  it("converts topicKey-only documentation actions to explain", () => {
+    const json = JSON.stringify({
+      score: 60,
+      level: "Suboptimal",
+      summary: "Topic only.",
+      findings: [
+        {
+          id: "review-5",
+          title: "Docs topic",
+          description: "No URL available.",
+          severity: "info",
+          evidence: "Topic.",
+          actions: [{ kind: "documentation", label: "Docs", payload: { topicKey: "quantization" } }],
+        },
+      ],
+    });
+
+    const parsed = parseAiReviewReply(json);
+    expect(parsed.findings[0]!.actions).toHaveLength(1);
+    expect(parsed.findings[0]!.actions[0]!).toMatchObject({
+      kind: "explain",
+      payload: { body: expect.stringContaining("quantization") },
+    });
+  });
+
+  it("ignores invalid actions and keeps valid ones", () => {
+    const json = JSON.stringify({
+      score: 60,
+      level: "Suboptimal",
+      summary: "Mixed actions.",
+      findings: [
+        {
+          id: "review-4",
+          title: "Mixed",
+          description: "Some actions are invalid.",
+          severity: "warning",
+          evidence: "Mixed.",
+          actions: [
+            { kind: "navigate", label: "Open", payload: {} },
+            { kind: "documentation", label: "Docs", payload: { url: "https://example.com" } },
+            { kind: "bogus", label: "Bogus", payload: {} },
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseAiReviewReply(json);
+    expect(parsed.findings[0]!.actions).toHaveLength(1);
+    expect(parsed.findings[0]!.actions[0]!.kind).toBe("documentation");
+  });
+
+  it("parses up to 10 findings; filterFindings owns the final cap of 3", () => {
+    const findings = Array.from({ length: 12 }, (_, i) => ({
+      id: `f-${i}`,
+      title: `Finding ${i}`,
+      description: "Desc.",
+      severity: "info",
+      evidence: "E.",
+      actions: [{ kind: "explain", label: "Learn", payload: { body: "x" } }],
+    }));
+    const parsed = parseAiReviewReply(JSON.stringify({ score: 50, level: "Inefficient", summary: "Many", findings }));
+    expect(parsed.findings).toHaveLength(10);
+  });
+
+  it("lets a relevant finding at index 4 survive parse plus filtering", () => {
+    const noise = (i: number) => ({
+      id: `noise-${i}`,
+      title: `Noise ${i}`,
+      description: "Add TensorRTExecutionProvider for classic TRT engine builds.",
+      severity: "info",
+      evidence: "Classic TRT.",
+      actions: [{ kind: "explain", label: "Learn", payload: { body: "Add TensorRTExecutionProvider." } }],
+    });
+    const relevant = {
+      id: "relevant-4",
+      title: "Enable AWQ",
+      description: "AWQ int4 fits consumer RTX.",
+      severity: "warning",
+      evidence: "EP is NvTensorRT-RTX.",
+      actions: [{ kind: "explain", label: "Learn", payload: { body: "AWQ int4." } }],
+    };
+    const findings = [noise(0), noise(1), noise(2), noise(3), relevant, noise(5)];
+    const parsed = parseAiReviewReply(JSON.stringify({ score: 50, level: "Inefficient", summary: "Mixed", findings }));
+    expect(parsed.findings).toHaveLength(6);
+
+    const ctx = {
+      model: { displayName: "meta-llama/Llama-2-7b", huggingFaceId: "meta-llama/Llama-2-7b", hfTask: "" },
+      hardware: { executionProvider: "NvTensorRTRTXExecutionProvider" },
+    } as unknown as AuditFilterContext;
+    const filtered = filterFindings(parsed.findings, ctx);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.id).toBe("relevant-4");
+  });
+});
+
+describe("filterFindings", () => {
+  const ctx = {
+    model: { displayName: "meta-llama/Llama-2-7b", huggingFaceId: "meta-llama/Llama-2-7b", hfTask: "" },
+    hardware: { executionProvider: "NvTensorRTRTXExecutionProvider" },
+  } as unknown as AuditFilterContext;
+
+  it("drops classic TensorRT suggestions when on NvTensorRT-RTX", () => {
+    const findings: Finding[] = [
+      {
+        id: "bad",
+        title: "Add TensorRTExecutionProvider",
+        description: "Use classic TRT engine build.",
+        severity: "warning",
+        evidence: "Engine build.",
+        actions: [{ kind: "applyPatch", label: "Apply", payload: { passes: { conversion: true } } }],
+      },
+      {
+        id: "good",
+        title: "Use AWQ int4",
+        description: "Consumer RTX works best with AWQ.",
+        severity: "warning",
+        evidence: "OK.",
+        actions: [{ kind: "applyPatch", label: "Apply", payload: { passes: { quantMethod: "awq" } } }],
+      },
+    ];
+
+    const filtered = filterFindings(findings, ctx);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.id).toBe("good");
+  });
+
+  it("drops classic-TRT advice hidden in an explain body under a neutral title", () => {
+    const findings: Finding[] = [
+      {
+        id: "sneaky",
+        title: "Improve throughput",
+        description: "A general performance suggestion.",
+        severity: "warning",
+        evidence: "Benchmarks.",
+        actions: [
+          {
+            kind: "explain",
+            label: "Learn more",
+            payload: { body: "Add TensorRTExecutionProvider after CUDAExecutionProvider for classic TensorRT engines." },
+          },
+        ],
+      },
+    ];
+
+    expect(filterFindings(findings, ctx)).toHaveLength(0);
+  });
+
+  it("drops ASR advice for non-ASR models", () => {
+    const findings: Finding[] = [
+      {
+        id: "bad",
+        title: "Whisper pipeline",
+        description: "Use Whisper automatic speech recognition.",
+        severity: "warning",
+        evidence: "ASR.",
+        actions: [{ kind: "explain", label: "Learn", payload: { body: "x" } }],
+      },
+    ];
+
+    expect(filterFindings(findings, ctx)).toHaveLength(0);
+  });
+
+  it("limits results to 3 findings", () => {
+    const findings: Finding[] = Array.from({ length: 5 }, (_, i) => ({
+      id: `f-${i}`,
+      title: `Finding ${i}`,
+      description: "Desc.",
+      severity: "info",
+      evidence: "E.",
+      actions: [{ kind: "explain", label: "Learn", payload: { body: "x" } }],
+    }));
+    expect(filterFindings(findings, ctx)).toHaveLength(3);
+  });
+});

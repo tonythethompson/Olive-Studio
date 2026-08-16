@@ -5,6 +5,8 @@
  *  1. UI-entered: user pastes AWS access key + secret key + region in the settings panel.
  *     These are passed via ProviderConfig.apiKey as a packed string:
  *     `<accessKeyId>:<secretAccessKey>` (region comes from baseUrl field as the region string).
+ *     An optional third segment carries the STS session token for assumed-role /
+ *     temporary credentials: `<accessKeyId>:<secretAccessKey>:<sessionToken>`.
  *  2. Auto-detect: if no explicit keys are provided, falls back to the default AWS credential
  *     chain (env vars, ~/.aws/credentials, IAM role, etc.) via @aws-sdk/credential-providers.
  *
@@ -67,6 +69,41 @@ function hasHalfPackedCredentials(cfg: ProviderConfig): boolean {
 }
 
 /**
+ * Splits a packed `accessKeyId:secretAccessKey[:sessionToken]` string.
+ * AWS key material never contains ":", so segment boundaries are unambiguous.
+ * Invalid packed formats fail loudly rather than silently producing corrupted
+ * credentials that would authenticate as a different account.
+ */
+export function parsePackedCredentials(packed: string): {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+} {
+  const colonIdx = packed.indexOf(":");
+  if (colonIdx === -1) {
+    throw new Error(
+      "Invalid packed Bedrock credentials: expected accessKeyId:secretAccessKey[:sessionToken].",
+    );
+  }
+  const accessKeyId = packed.slice(0, colonIdx).trim();
+  if (!accessKeyId) {
+    throw new Error("Packed Bedrock credentials are missing an access key id.");
+  }
+  const rest = packed.slice(colonIdx + 1);
+  const secondColon = rest.indexOf(":");
+  const secretAccessKey = (secondColon === -1 ? rest : rest.slice(0, secondColon)).trim();
+  if (!secretAccessKey) {
+    throw new Error("Packed Bedrock credentials are missing a secret access key.");
+  }
+  const sessionToken = secondColon === -1 ? undefined : rest.slice(secondColon + 1).trim();
+  return {
+    accessKeyId,
+    secretAccessKey,
+    ...(sessionToken ? { sessionToken } : {}),
+  };
+}
+
+/**
  * Creates a BedrockRuntimeClient with appropriate credentials.
  *
  * When explicit credentials are packed in apiKey, uses them directly.
@@ -84,14 +121,15 @@ function createBedrockClient(cfg: ProviderConfig): BedrockRuntimeClient {
   const region = resolveRegion(cfg);
 
   if (hasExplicitCredentials(cfg)) {
-    const colonIdx = cfg.apiKey.indexOf(":");
-    const accessKeyId = cfg.apiKey.slice(0, colonIdx);
-    const secretAccessKey = cfg.apiKey.slice(colonIdx + 1);
+    // Temporary / assumed-role credentials carry a third packed segment;
+    // static keys omit it and no env token is mixed in.
+    const { accessKeyId, secretAccessKey, sessionToken } = parsePackedCredentials(cfg.apiKey);
     return new BedrockRuntimeClient({
       region,
       credentials: {
         accessKeyId,
         secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
       },
     });
   }
@@ -185,13 +223,24 @@ registerProvider({
   // AWS_PROFILE alone is enough for the default chain, so detect it too.
   envVarNames: ["AWS_ACCESS_KEY_ID", "AWS_PROFILE"],
   buildConfig: (apiKey) => {
-    const secretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim() ?? "";
-    return {
-      provider: "bedrock",
-      apiKey: `${apiKey}:${secretKey}`,
-      model: "anthropic.claude-3-5-haiku-20241022-v1:0",
-      baseUrl: process.env.AWS_REGION?.trim() || "us-east-1",
-    };
+    const defaultModel = "anthropic.claude-3-5-haiku-20241022-v1:0";
+    const region = process.env.AWS_REGION?.trim() || "us-east-1";
+    const accessKeyId = apiKey.trim();
+    // Env detection may match AWS_PROFILE, which yields a profile name rather
+    // than an access key id — packing it would produce an invalid credential.
+    // Also bail when the secret key is absent so we never send a half key;
+    // createBedrockClient falls back to the default AWS credential chain.
+    if (!/^A[KS]IA/.test(accessKeyId) || !process.env.AWS_SECRET_ACCESS_KEY?.trim()) {
+      return { provider: "bedrock", apiKey: "", model: defaultModel, baseUrl: region };
+    }
+    const secretKey = process.env.AWS_SECRET_ACCESS_KEY!.trim();
+    // Only temporary (ASIA) credentials carry a session token; never mix an
+    // env token into a long-term (AKIA) key.
+    const sessionToken = /^ASIA/.test(accessKeyId) ? process.env.AWS_SESSION_TOKEN?.trim() : undefined;
+    const packedKey = sessionToken
+      ? `${accessKeyId}:${secretKey}:${sessionToken}`
+      : `${accessKeyId}:${secretKey}`;
+    return { provider: "bedrock", apiKey: packedKey, model: defaultModel, baseUrl: region };
   },
   call,
   supportsJsonResponseFormat: false,
