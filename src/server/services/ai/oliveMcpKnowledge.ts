@@ -164,10 +164,10 @@ function docsSearchSufficient(result: unknown): boolean {
 const CANONICAL_HARDWARE: Record<string, string> = {
   cuda: "NVIDIA RTX 4090",
   tensorrt: "NVIDIA RTX 4090",
-  "tensorrt-rtx": "NVIDIA RTX 4090",
-  nvtensorrtrtx: "NVIDIA RTX 4090",
-  directml: "NVIDIA RTX 4090",
-  dml: "NVIDIA RTX 4090",
+  "tensorrt-rtx": "NVIDIA TensorRT RTX",
+  nvtensorrtrtx: "NVIDIA TensorRT RTX",
+  directml: "Windows DirectML GPU",
+  dml: "Windows DirectML GPU",
   openvino: "Intel Core i9 CPU",
   cpu: "Intel Core i9 CPU",
   qnn: "Qualcomm Snapdragon NPU",
@@ -269,7 +269,12 @@ function canonicalPassNamesForChain(workspace: AiWorkspaceContext | null | undef
 function inferQuantArgs(message: string, workspace: AiWorkspaceContext | null | undefined) {
   const m = lower(message);
   let modelType = "llm";
-  if (/cnn|resnet|vision|image|yolo|mobilenet/.test(m)) modelType = "cnn";
+  // The resolved workspace task is more authoritative than name heuristics; a
+  // model whose hfTask is an ASR or vision task must not default to "llm".
+  const task = lower(workspace?.model.hfTask ?? "");
+  if (/speech|asr|audio/.test(task)) modelType = "speech";
+  else if (/image|vision|video|object-detection|segmentation/.test(task)) modelType = "cnn";
+  else if (/cnn|resnet|vision|image|yolo|mobilenet/.test(m)) modelType = "cnn";
   else if (/whisper|speech|audio|asr/.test(m)) modelType = "speech";
   else if (workspace?.model.displayName) {
     const name = lower(workspace.model.displayName);
@@ -281,7 +286,8 @@ function inferQuantArgs(message: string, workspace: AiWorkspaceContext | null | 
   if (ep.includes("openvino") || ep.includes("cpu")) targetHardware = "intel-cpu";
   else if (ep.includes("qnn")) targetHardware = "qualcomm-npu";
   else if (ep.includes("directml") || ep.includes("dml")) targetHardware = "directml";
-  else if (ep.includes("tensorrt") || ep.includes("cuda") || ep.includes("nvtensor")) {
+  else if (ep.includes("nvtensorrtrtx")) targetHardware = "tensorrt-rtx";
+  else if (ep.includes("tensorrt") || ep.includes("cuda")) {
     targetHardware = "nvidia-gpu";
   } else if (/openvino|cpu/.test(m)) targetHardware = "intel-cpu";
   else if (/qnn|qualcomm|npu/.test(m)) targetHardware = "qualcomm-npu";

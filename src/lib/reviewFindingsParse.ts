@@ -173,12 +173,27 @@ export function parseAiReviewReply(rawText: string): ParsedReviewResult {
   }
 
   // Require the expected top-level shape; otherwise treat as unstructured so callers may retry.
+  if (!isRecord(parsed)) {
+    return {
+      score: 50,
+      level: "Suboptimal",
+      summary: "Model returned an unexpected response format. Try Analyze again.",
+      findings: [],
+      structured: false,
+    };
+  }
+
+  const rawScore: unknown = parsed.score;
+  const rawSummary: unknown = parsed.summary;
+  const rawLevel: unknown = parsed.level;
+  const rawFindings: unknown = parsed.findings;
+
   const scoreLike =
-    typeof parsed.score === "number" ||
-    (typeof parsed.score === "string" && parsed.score.trim() !== "" && Number.isFinite(Number(parsed.score)));
-  const summaryLike = typeof parsed.summary === "string" && parsed.summary.trim() !== "";
-  const levelLike = typeof parsed.level === "string";
-  const findingsLike = Array.isArray(parsed.findings);
+    typeof rawScore === "number" ||
+    (typeof rawScore === "string" && rawScore.trim() !== "" && Number.isFinite(Number(rawScore)));
+  const summaryLike = typeof rawSummary === "string" && rawSummary.trim() !== "";
+  const levelLike = typeof rawLevel === "string";
+  const findingsLike = Array.isArray(rawFindings);
   if (!scoreLike || !summaryLike || !levelLike || !findingsLike) {
     return {
       score: 50,
@@ -189,11 +204,11 @@ export function parseAiReviewReply(rawText: string): ParsedReviewResult {
     };
   }
 
-  const score = clampScore(parsed.score);
-  const summary = parsed.summary.trim().slice(0, 1200);
-  const level = normalizeLevel(parsed.level);
+  const score = clampScore(rawScore);
+  const summary = typeof rawSummary === "string" ? rawSummary.trim().slice(0, 1200) : "";
+  const level = normalizeLevel(rawLevel);
 
-  const findings = parseFindings(parsed.findings);
+  const findings = parseFindings(rawFindings);
 
   return { score, level, summary, findings, structured: true };
 }

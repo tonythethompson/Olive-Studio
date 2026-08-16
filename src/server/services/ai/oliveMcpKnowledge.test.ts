@@ -125,6 +125,64 @@ describe("selectOliveMcpToolsForReview", () => {
     expect((search.args as Record<string, string>).query).toMatch(/NvTensorRTRTXExecutionProvider|RTX|NVIDIA/i);
   });
 
+  it("routes DirectML workspaces to the DirectML hardware profile", () => {
+    const tools = selectOliveMcpToolsForReview(
+      makeWorkspace({
+        hardware: {
+          executionProvider: "DmlExecutionProvider",
+          executionProviderShort: "Dml",
+          accelerator: "GPU",
+          hasDiscreteGpu: true,
+          detectedGpus: [{ name: "Radeon RX 7800", vramMb: 16384 }],
+          vramEstimateMb: 16384,
+        },
+      }),
+    );
+    const guide = tools.find((t) => t.toolName === "get_hardware_optimization_guide")!;
+    expect((guide.args as Record<string, string>).target_hardware).toBe("Windows DirectML GPU");
+    const quant = tools.find((t) => t.toolName === "get_quantization_strategy")!;
+    expect((quant.args as Record<string, string>).target_hardware).toBe("Windows DirectML GPU");
+  });
+
+  it("routes NvTensorRT-RTX workspaces to the TensorRT RTX profile, not classic CUDA", () => {
+    const tools = selectOliveMcpToolsForReview(
+      makeWorkspace({
+        hardware: {
+          executionProvider: "NvTensorRTRTXExecutionProvider",
+          executionProviderShort: "NvTensorRTRTX",
+          accelerator: "GPU",
+          hasDiscreteGpu: true,
+          detectedGpus: [{ name: "RTX 4070", vramMb: 12288 }],
+          vramEstimateMb: 12288,
+        },
+      }),
+    );
+    const guide = tools.find((t) => t.toolName === "get_hardware_optimization_guide")!;
+    expect((guide.args as Record<string, string>).target_hardware).toBe("NVIDIA TensorRT RTX");
+    const quant = tools.find((t) => t.toolName === "get_quantization_strategy")!;
+    expect((quant.args as Record<string, string>).target_hardware).toBe("NVIDIA TensorRT RTX");
+  });
+
+  it("infers quantization model_type from the workspace hfTask (ASR)", () => {
+    const tools = selectOliveMcpToolsForReview(
+      makeWorkspace({
+        model: { displayName: "Whisper Tiny", huggingFaceId: "openai/whisper-tiny", hfTask: "automatic-speech-recognition" },
+      }),
+    );
+    const quant = tools.find((t) => t.toolName === "get_quantization_strategy")!;
+    expect((quant.args as Record<string, string>).model_type).toBe("speech");
+  });
+
+  it("infers quantization model_type from the workspace hfTask (vision)", () => {
+    const tools = selectOliveMcpToolsForReview(
+      makeWorkspace({
+        model: { displayName: "CustomVisionNet", huggingFaceId: "org/custom-vision", hfTask: "image-classification" },
+      }),
+    );
+    const quant = tools.find((t) => t.toolName === "get_quantization_strategy")!;
+    expect((quant.args as Record<string, string>).model_type).toBe("cnn");
+  });
+
   it("resolves quantization method to the concrete Olive pass name", () => {
     const tools = selectOliveMcpToolsForReview(
       makeWorkspace({
