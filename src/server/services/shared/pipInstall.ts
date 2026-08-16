@@ -63,9 +63,11 @@ export async function pipInstallViaPython(
     });
     proc.on("close", (code: number | null) => {
       signal?.removeEventListener("abort", abort);
-      code === 0
-        ? resolve()
-        : reject(new Error(`pip install ${label} failed (exit ${code})`));
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`pip install ${label} failed (exit ${code})`));
+      }
     });
   });
 }

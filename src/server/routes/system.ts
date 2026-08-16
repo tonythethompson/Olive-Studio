@@ -214,7 +214,9 @@ async function probeRocmIsaFamilies(): Promise<string[]> {
       const match = props.match(/gfx_target_version\s+(\d+)/);
       if (!match) continue;
       const value = match[1];
-      // "0" is the CPU node; malformed/short values are skipped.
+      // gfx_target_version is decimal major*10000 + minor*100 + revision
+      // (gfx942 → 90402, gfx1030 → 100300), so valid GPUs are always ≥5
+      // digits. "0" is the CPU node; shorter values are malformed — skip.
       if (value === "0" || value.length < 5) continue;
       const revision = parseInt(value.slice(-2), 10);
       const minor = parseInt(value.slice(-4, -2), 10);
