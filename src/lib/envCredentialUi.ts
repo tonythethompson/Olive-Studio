@@ -7,6 +7,11 @@ export type EnvCredentialStatus = {
   present: boolean;
   envVar: string | null;
   usable: boolean;
+  /** Cloudflare-only: independent status of CLOUDFLARE_ACCOUNT_ID env var. */
+  cloudflareAccountId?: {
+    present: boolean;
+    valid: boolean;
+  };
 };
 
 export type ProviderStatusSource = "env" | "runtime" | "saved" | "none";

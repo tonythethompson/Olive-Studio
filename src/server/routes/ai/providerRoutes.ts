@@ -99,7 +99,14 @@ function envCredentialsPayload() {
   const cloudflareUsable =
     Boolean(cfAuth) ||
     (Boolean(readEnvApiKey("CLOUDFLARE_API_TOKEN")) && isValidCloudflareAccountId(cfAccount));
-  return listEnvCredentialStatus({ cloudflare: cloudflareUsable });
+
+  const cfAccountIdPresent = cfAccount.length > 0 || Boolean(cfAuth?.accountId);
+  const cfAccountIdValid = isValidCloudflareAccountId(cfAccount) || Boolean(cfAuth?.accountId);
+
+  return listEnvCredentialStatus(
+    { cloudflare: cloudflareUsable },
+    { cloudflare: { cloudflareAccountId: { present: cfAccountIdPresent, valid: cfAccountIdValid } } },
+  );
 }
 
 /**

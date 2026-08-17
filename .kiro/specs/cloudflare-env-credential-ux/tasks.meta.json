@@ -1,0 +1,134 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add optional `cloudflareAccountId` field to `EnvCredentialStatus` in `src/lib/envCredentialUi.ts`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962799751
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962837962
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963046537
+      }
+    ],
+    "2.1 Add `extraFields` parameter to `listEnvCredentialStatus()` in `src/server/services/ai/registry.ts`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962800134
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963058613
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963258261
+      }
+    ],
+    "3.1 Compute Cloudflare Account ID presence and validity in `envCredentialsPayload()` in `src/server/routes/ai/providerRoutes.ts`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962800593
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963268517
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963425779
+      }
+    ],
+    "3.2 Pass `extraFields` to `listEnvCredentialStatus()`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962801016
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963435964
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963545997
+      }
+    ],
+    "4.1 Add badge logic to the Cloudflare Account ID `<label>` in `src/components/features/assistant/ManualProviderSetup.tsx`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962801835
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963554617
+      }
+    ],
+    "4.2 Make the Account ID placeholder dynamic based on `envUsable`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962811760
+      }
+    ],
+    "5.1 Update the `envPresentOnly` amber badge on the API Key field in `src/components/features/assistant/ManualProviderSetup.tsx`": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962819721
+      }
+    ],
+    "6.1 Create or extend test file for `envCredentialsPayload` env var combinations": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962820519
+      }
+    ],
+    "7.1 Create or extend component test for Account ID and API Key badge logic": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786962821362
+      }
+    ],
+    "1. Extend EnvCredentialStatus type": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963046710
+      }
+    ],
+    "2. Update listEnvCredentialStatus in registry.ts": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963258492
+      }
+    ],
+    "3. Update envCredentialsPayload in providerRoutes.ts": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963546132
+      }
+    ]
+  }
+}

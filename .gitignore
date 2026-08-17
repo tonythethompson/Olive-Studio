@@ -115,3 +115,4 @@ src-tauri/gen/
 # Terraform: live state must never be committed (contains account/region/credentials)
 infra/terraform/terraform.tfstate*
 infra/terraform/.terraform/
+.kiro/specs/cloudflare-env-credential-ux/.config.kiro
