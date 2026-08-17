@@ -62,7 +62,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Model source",
       description:
-        "Select a recipe to load your model. You can pull from Hugging Face, upload local weights, or use an Azure ML asset. The sample recipe is a quick starter.",
+        "Select a recipe to load a model you want to optimize. You can pull from Hugging Face, upload local weights, or use an Azure ML asset.",
       side: "bottom",
       align: "start",
     },
