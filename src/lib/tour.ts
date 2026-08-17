@@ -38,7 +38,7 @@ export const TOUR_STEPS: DriveStep[] = [
   {
     data: { id: "overview" },
     popover: {
-      title: "What Olive is",
+      title: "Meet Olive",
       description:
         "Olive is an open-source toolkit from Microsoft for optimizing machine learning models. It can convert models to ONNX and run optimizations like quantization and pruning so they run efficiently on your CPU, GPU, or NPU. Olive Studio is where you pick a model, choose your target hardware, and build that recipe.",
       align: "center",
