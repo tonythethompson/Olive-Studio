@@ -44,28 +44,15 @@ async function renameDir(from: string, to: string, maxAttempts = 10): Promise<vo
 
 async function rmDirSafe(dir: string, maxAttempts = 5): Promise<void> {
   if (!fs.existsSync(dir)) return;
-  let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
       return;
     } catch (err) {
-      lastError = err;
       if (attempt === maxAttempts || !fs.existsSync(dir)) {
         console.warn(`[venv] rmDirSafe: failed to remove ${dir} after ${attempt} attempts`, err);
         throw err;
       }
-      await sleep(50 * attempt);
-    }
-  }
-}
-  if (!fs.existsSync(dir)) return;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-      return;
-    } catch {
-      if (attempt === maxAttempts || !fs.existsSync(dir)) return;
       await sleep(50 * attempt);
     }
   }

@@ -131,20 +131,6 @@ export function ensureTourDemoModel(): { applied: boolean } {
     return { applied: false };
   }
 }
-  const store = usePipelineStore.getState();
-  if (hasSelectedModel(store.state)) return { applied: false };
-  const defaults = createDefaultPipelineState();
-  const derived = deriveUiStateFromOliveRecipe(tourDemoRecipe, { replacePasses: true });
-  store.replaceState({
-    ...defaults,
-    ...derived,
-    passes: {
-      ...defaults.passes,
-      ...(derived.passes ?? {}),
-    },
-  });
-  return { applied: true };
-}
 
 export function startGuidedTour(onSettled: () => void) {
   if (isPipelineOliveRunning() || tourActive) return null;

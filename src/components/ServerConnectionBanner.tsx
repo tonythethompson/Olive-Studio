@@ -50,6 +50,7 @@ export function ServerConnectionBanner({ checkIntervalMs = 10000 }: ServerConnec
 
   useEffect(() => {
     // Run an initial health check immediately on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial health poll on mount
     void checkHealth();
 
     const interval = window.setInterval(() => {
@@ -78,7 +79,6 @@ export function ServerConnectionBanner({ checkIntervalMs = 10000 }: ServerConnec
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <Button
-          size="sm"
           variant="outline"
           className="h-7 text-xs border-rose-500/40 text-rose-200 hover:bg-rose-900/40 hover:text-white"
           onClick={() => void checkHealth()}

@@ -712,6 +712,7 @@ export function useAiProviderSettings({
     refreshCodexAccount,
     handleCodexLogin,
     handleCodexLogout,
+    devinModels,
     devinStatus,
     devinBusy,
     devinMessage,
