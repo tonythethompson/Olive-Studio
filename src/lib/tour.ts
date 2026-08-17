@@ -115,6 +115,24 @@ export const TOUR_STEPS: DriveStep[] = [
 export function ensureTourDemoModel(): { applied: boolean } {
   const store = usePipelineStore.getState();
   if (hasSelectedModel(store.state)) return { applied: false };
+  try {
+    const defaults = createDefaultPipelineState();
+    const derived = deriveUiStateFromOliveRecipe(tourDemoRecipe, { replacePasses: true });
+    store.replaceState({
+      ...defaults,
+      ...derived,
+      passes: {
+        ...defaults.passes,
+        ...(derived.passes ?? {}),
+      },
+    });
+    return { applied: true };
+  } catch {
+    return { applied: false };
+  }
+}
+  const store = usePipelineStore.getState();
+  if (hasSelectedModel(store.state)) return { applied: false };
   const defaults = createDefaultPipelineState();
   const derived = deriveUiStateFromOliveRecipe(tourDemoRecipe, { replacePasses: true });
   store.replaceState({
