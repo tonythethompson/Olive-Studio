@@ -1,337 +1,333 @@
-# Roadmap: Reconciled Migration Plan
+# Reconciled Migration Roadmap
 
-Unified migration plan combining the ATX codebase analysis (dependency-aware component ordering, technical debt assessment) with Kiro's MCP TypeScript port roadmap and AI SDK adoption plan. Where the two plans differed, this document picks the simpler path.
+Unified execution plan combining the **AI SDK adoption** and **MCP TypeScript port / monorepo** roadmaps into a single sequenced timeline. Phases are ordered to avoid conflicting refactors and maximize shared groundwork.
 
----
-
-## Guiding Principles
-
-1. **Single runtime.** Eliminate Python. One `pnpm install` → `pnpm dev` for everything.
-2. **AI SDK as the provider abstraction.** Delete the hand-rolled registry; use `generateText`/`streamText` with official provider packages.
-3. **No premature monorepo.** Keep the flat `src/` structure. The MCP server becomes a TypeScript module inside the project, not a separate workspace package. Revisit `packages/` only if a concrete need emerges.
-4. **Ship incrementally.** Each phase is independently deployable. Python remains as fallback until fully validated.
+See also:
+- [ROADMAP-ai-sdk-adoption.md](./ROADMAP-ai-sdk-adoption.md) — detailed AI SDK plan
+- [ROADMAP-mcp-typescript-monorepo.md](./ROADMAP-mcp-typescript-monorepo.md) — detailed MCP port plan
 
 ---
 
-## Current Pain Points (from both analyses)
+## Sequencing Rationale
 
-- Python venv management (5+ min install, `mcp<2` pin fragility)
-- 8 provider files doing raw `fetch` with per-provider request/response shapes
-- HTTP bridge overhead (MCP tool → loopback POST → Express → service)
-- Type duplication between Python and TypeScript
-- `parseJsonFromAiResponse` / `softRepairJson` fragility
+The AI SDK adoption touches the Express server's AI routes and provider layer. The monorepo migration touches the MCP server and project structure. They mostly don't conflict, but:
+
+1. **AI SDK Phase 1 (provider swap)** should land first — it establishes AI SDK provider instances that the MCP server's TS port will also use for any LLM calls (e.g., `plan_optimization` uses the assistant to parse NL intent).
+2. **Monorepo Phase 0 (workspace scaffold)** can happen in parallel with AI SDK work since it doesn't move existing code.
+3. **AI SDK Phase 2 (streaming)** and **MCP Phase 1 (port tools)** are independent and can run concurrently or in either order.
+4. **MCP Phase 2 (eliminate HTTP bridge)** benefits from AI SDK Phase 2 being done, because the Express routes will have stabilized after the streaming refactor.
 
 ---
 
-## Phase 1: AI SDK Provider Collapse (~1 day)
+## Timeline
 
-**Goal:** Replace 8 provider files + registry with AI SDK provider packages.
+```
+Week 1          AI SDK Phase 1: Provider swap (1 day)
+                Monorepo Phase 0: Workspace scaffolding (half day)
+                ─── both land, CI green ───
 
-**Why first:** Lowest risk, highest code reduction, unblocks streaming (Phase 2) and simplifies the MCP port (Phase 4) since tools calling AI no longer need provider internals.
+Week 2-3        AI SDK Phase 2: Streaming chat (2-3 days)
+                MCP Phase 1: Port easy tools, keyword-only (1 week, parallel)
 
-### What Changes
+Week 4          AI SDK Phase 3: Structured output schemas (1-2 days)
+                MCP Phase 2: Eliminate Studio HTTP bridge (2-3 days)
 
-**Delete:**
-- `src/server/services/ai/gemini.ts`
-- `src/server/services/ai/openai.ts`
-- `src/server/services/ai/anthropic.ts`
-- `src/server/services/ai/bedrock.ts`
-- `src/server/services/ai/cloudflare.ts`
-- `src/server/services/ai/codex.ts`
-- `src/server/services/ai/devin.ts`
-- `src/server/services/ai/genai.ts`
+Week 5-6        MCP Phase 3: Semantic search in TypeScript (1 week)
 
-**Replace with:** A single `src/server/services/ai/providers.ts`:
+Week 7          MCP Phase 4: Remove Python, finalize monorepo (2-3 days)
+                ─── migration complete ───
+```
+
+Total: ~6-7 weeks of focused work (not calendar time — interleaved with feature work).
+
+---
+
+## Phase 1: Foundation (Week 1)
+
+### AI SDK Provider Swap (~1 day)
+
+Replace hand-rolled HTTP calls in each provider plugin with AI SDK `generateText()`. No user-facing change.
+
+- Install `ai`, `@ai-sdk/google`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/mistral`, `@ai-sdk/amazon-bedrock`
+- Swap internal `call()` methods to use `generateText()`
+- Keep existing registry, env detection, and `callAI()` dispatch
+- Verify all provider tests pass
+
+**Output:** AI SDK provider instances available for streaming (next phase) and for the TS MCP server (later phases).
+
+### Monorepo Workspace Scaffold (~half day)
+
+Prove pnpm workspace works without moving code.
+
+- Create `pnpm-workspace.yaml` listing `packages/*`
+- Create `packages/shared/` with shared types (`UIState`, `OliveRecipe`, `ProviderConfig`)
+- Verify `pnpm install`, `pnpm dev`, and CI still pass
+
+**Output:** Workspace structure ready for the MCP server package.
+
+---
+
+## Phase 2: Streaming + Tool Port (Weeks 2-3)
+
+### AI SDK Streaming Chat (~2-3 days)
+
+Add token-by-token streaming to the assistant chat.
+
+- Server: Replace `callAI()` in `/api/ai/chat` with `streamText()`, stream text progressively, send `actions[]` as final chunk
+- Client: Rewrite `useAiChat` to consume a `ReadableStream`, add abort/cancel support
+- Protocol: NDJSON lines (`{"type":"text","content":"..."}` ... `{"type":"done","actions":[...],"mcp":{...}}`)
+
+**Output:** Users see text appearing immediately instead of waiting for full response. Cancel button works.
+
+### MCP Tool Port — Keyword Only (~1 week, parallel)
+
+Create `packages/mcp-server/` and port all 22 non-semantic tools.
+
+- Set up package with `@modelcontextprotocol/sdk`, `zod`
+- Copy knowledge base JSON files
+- Implement tools, starting with trivial (pass catalog) → medium (strategy advisor, agent planner)
+- Keyword-only fallback for `search_olive_documentation` and `troubleshoot_olive_error`
+- Smoke test: start server via stdio, call each tool
+
+**Output:** TypeScript MCP server functional with keyword search. Python server still available as fallback.
+
+---
+
+## Phase 3: Structured Output + Bridge Elimination (Week 4)
+
+### AI SDK Structured Output (~1-2 days)
+
+Replace `parseJsonFromAiResponse` / `softRepairJson` with Zod-validated `Output.object()`.
+
+- Define schemas for: chat reply, review findings, recipe validation
+- Apply to `/ai/validate` and `/ai/analyze-state` routes (non-streaming)
+- Chat route optionally uses structured streaming for the `actions[]` portion
+
+**Output:** Type-safe AI responses, no more regex-based JSON extraction. Fewer malformed-response bugs.
+
+### Eliminate Studio HTTP Bridge (~2-3 days)
+
+MCP Studio tools call Express services directly instead of loopback HTTP.
+
+- Import Olive job services directly into MCP tool modules
+- Update Express MCP proxy route to call TS tools in-process
+- Remove HTTP serialization overhead for 7 tools
+- Integration tests proving direct calls work
+
+**Output:** MCP ↔ Express bridge is zero-latency in-process calls. No more loopback HTTP.
+
+---
+
+## Phase 4: Semantic Search Port (Weeks 5-6)
+
+### Semantic Search in TypeScript (~1 week)
+
+Port hybrid semantic + keyword search using `@huggingface/transformers`.
+
+- Convert `.npz` indexes to flat `.bin` (Float32Array) + JSON manifest
+- Implement embedding encoding via `Xenova/bge-small-en-v1.5` ONNX model
+- Implement cosine similarity (pure TS, ~20 lines)
+- Port hybrid scoring (0.6 x semantic + 0.4 x keyword + bonus)
+- Port `troubleshoot_olive_error` with frequency tracking, domain routing, caching
+- Port `search_olive_documentation` with KB flattening and result ranking
+- Validate: cross-check embedding similarity > 0.99 between Python and TS outputs
+
+**Output:** Full semantic search parity with Python. All 32 tools ported and tested.
+
+---
+
+## Phase 5: Semantic Search in TypeScript (~3-5 days)
+
+**Goal:** Port hybrid semantic + keyword search with zero bundled ML model.
+
+### Key Insight
+
+Document/passage embeddings are **already pre-built at release time** — they ship as `.npz` files in `knowledge_base/indexes/` (4,711 doc entries + 48 troubleshooting entries). The only reason `build_kb_index` / `encode_texts` runs at runtime is as a fallback when the shipped index is stale or `OLIVE_MCP_REBUILD_INDEX=1` is set.
+
+The only runtime model invocation for normal queries is `encode_query()` — a single 384-dim vector for the user's search string. That's the one place where the model must load in the Python version.
+
+### Index Format Migration
+
+Replace `.npz` (numpy-specific) with JS-native format:
+- **`.bin`** — raw packed Float32Array (one per index: docs, troubleshooting)
+- **`.json` manifest** — metadata (entry count, dimension, content hashes, text labels)
+
+Build script runs once during migration, then regenerates from KB JSON going forward.
+
+### Query Embedding Strategy
+
+| Option | Install Weight | Latency | Accuracy |
+|--------|--------------|---------|----------|
+| **A. Pre-computed query expansions** — ship a lookup table of common query embeddings + fall back to keyword/BM25 for novel queries | Zero runtime deps | <1ms | Good for fixed KB, degrades on novel queries |
+| **B. External embedding endpoint** — call a local or cloud embedding API (OpenAI `text-embedding-3-small`, Ollama, etc.) via the existing AI provider infrastructure | Zero bundled model | ~50-200ms | Exact |
+| C. Lightweight WASM embedding — quantized BGE-micro or all-MiniLM ONNX model via `onnxruntime-node` (~30MB model, not 130MB) | ~30MB model file | ~20ms | Near-equivalent |
+
+**Decision: Option A as default, Option B as opt-in.**
+
+The knowledge base is fixed between releases. Pre-compute embeddings for common query patterns (pass names, error codes, hardware names, frequent troubleshooting terms) and ship them alongside the document embeddings. At runtime:
+
+1. Check the pre-computed query lookup table (exact match or nearest neighbor in the table)
+2. If no match: fall back to BM25/keyword scoring over the same index
+3. Hybrid score: weighted combination of any semantic match found + keyword relevance
+
+If users want full semantic search for arbitrary queries, they configure an embedding endpoint — same pattern as the existing AI provider plugin system. Add an optional config:
 
 ```ts
-import { google } from '@ai-sdk/google';
-import { openai } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { amazon as bedrock } from '@ai-sdk/amazon-bedrock';
-import { createOpenAI } from '@ai-sdk/openai';
+// In env or config:
+OLIVE_MCP_EMBED_ENDPOINT=http://localhost:11434/api/embeddings  // Ollama
+// or
+OLIVE_MCP_EMBED_ENDPOINT=openai  // Uses configured OpenAI key
+```
 
-// OpenAI-compatible providers use createOpenAI with custom baseURL
-const codex = createOpenAI({ baseURL: '...', apiKey: process.env.CODEX_API_KEY });
-const devin = createOpenAI({ baseURL: '...', apiKey: process.env.DEVIN_API_KEY });
+### What This Eliminates
 
-export function resolveModel(cfg: ProviderConfig) {
-  switch (cfg.provider) {
-    case 'gemini':     return google(cfg.model, { apiKey: cfg.apiKey });
-    case 'openai':     return openai(cfg.model, { apiKey: cfg.apiKey });
-    case 'anthropic':  return anthropic(cfg.model, { apiKey: cfg.apiKey });
-    case 'bedrock':    return bedrock(cfg.model, { region: cfg.region });
-    case 'cloudflare': return openai(cfg.model, { apiKey: cfg.apiKey, baseURL: cfg.baseUrl });
-    case 'codex':      return codex(cfg.model);
-    case 'devin':      return devin(cfg.model);
-    default:           throw new Error(`Unknown provider: ${cfg.provider}`);
+- `@huggingface/transformers` as a runtime dependency for MCP
+- `onnxruntime-node` native bindings
+- 130MB model download on first run
+- The entire `sentence-transformers` → ONNX → model download chain
+
+### Build-Time Tooling
+
+`src/server/mcp/scripts/build-indexes.ts`:
+- Reads KB JSON files
+- Calls the Python embedder one final time (or a cloud API) to generate all document + common-query embeddings
+- Outputs `.bin` + `.json` manifest
+- This runs during release prep, not at user install time
+
+### Runtime Implementation
+
+```ts
+// Pre-computed query table (shipped with app)
+const queryIndex = loadQueryIndex();       // { terms: string[], embeddings: Float32Array[] }
+const docIndex = loadDocIndex();           // { texts: string[], embeddings: Float32Array[] }
+
+async function search(query: string, topK = 5) {
+  // 1. Try pre-computed query match
+  const queryEmb = queryIndex.lookup(query);  // fuzzy match against known queries
+  
+  // 2. If no semantic match available, pure keyword
+  if (!queryEmb) {
+    return bm25Search(query, docIndex.texts, topK);
   }
+  
+  // 3. Hybrid: semantic + keyword
+  const semanticHits = cosineSimilarityTopK(queryEmb, docIndex.embeddings, topK * 2);
+  const keywordHits = bm25Search(query, docIndex.texts, topK * 2);
+  return mergeAndRank(semanticHits, keywordHits, topK);  // 0.6 semantic + 0.4 keyword
 }
 ```
 
-**Simplify `registry.ts`:** Keep `detectEnvProvider()` and `listEnvCredentialStatus()` (UI needs these), but `callProvider()` becomes:
+### Optional: External Embedding Endpoint
 
 ```ts
-import { generateText } from 'ai';
-import { resolveModel } from './providers.ts';
-
-export async function callProvider(cfg, system, messages, wantJson) {
-  const result = await generateText({
-    model: resolveModel(cfg),
-    system,
-    messages: messages.map(m => ({ role: m.role, content: m.content })),
-    ...(wantJson && { output: Output.object({ schema: responseSchema }) }),
+// Only activated when OLIVE_MCP_EMBED_ENDPOINT is configured
+async function encodeQuery(text: string): Promise<Float32Array> {
+  const endpoint = process.env.OLIVE_MCP_EMBED_ENDPOINT;
+  if (!endpoint) return queryIndex.lookup(text);  // pre-computed fallback
+  
+  if (endpoint === 'openai') {
+    const res = await openaiEmbed(text);  // text-embedding-3-small
+    return truncateTo384(res);            // project down to match index dims
+  }
+  // Ollama / custom endpoint
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({ model: 'bge-small-en-v1.5', prompt: text }),
   });
-  return wantJson ? JSON.stringify(result.output) : result.text;
+  return new Float32Array(await res.json().then(r => r.embedding));
 }
 ```
 
-**Keep:** `detect.ts`, `env.ts`, `security.ts`, `state.ts`, `localEngineState.ts`, `oliveMcpKnowledge.ts`
-
-### Dependencies
-
-```
-pnpm add ai @ai-sdk/google @ai-sdk/openai @ai-sdk/anthropic @ai-sdk/amazon-bedrock
-```
-
-(`@ai-sdk/cloudflare` not needed if Cloudflare Workers AI is OpenAI-compatible — verify)
-
 ### Success Criteria
 
-- All existing tests pass (`registry.test.ts`, `bedrock.test.ts`, `providers.validation.test.ts`)
-- `detectEnvProvider()` still works
-- Chat responses identical to before
-- 8 files deleted, ~1 file added
+- `troubleshoot_olive_error` and `search_olive_documentation` return quality-parity results for common queries (covered by pre-computed table)
+- BM25 fallback handles novel queries reasonably
+- Zero ML dependencies in default install
+- Optional embedding endpoint works when configured
+- Build script generates indexes from KB JSON
+
+## Phase 6: Cleanup & Finalization (Week 7)
+
+### Remove Python (~2-3 days)
+
+Delete the Python MCP server and clean up all references.
+
+- Delete `olive-mcp-server/` directory
+- Remove from CI: `python-tests` job, `olive-pass-availability` job, Docker build
+- Remove: `scripts/setup-mcp.ps1`, `scripts/setup-mcp.sh`, `scripts/postinstall-mcp-setup.mjs`
+- Remove: `.kiro/hooks/check-mcp-venv`
+- Update `.mcp.json` to point to TS server only
+- Update all docs: `AGENTS.md`, steering files, README
+
+### Optional: Move app into workspace package
+
+- Move `src/` → `packages/app/` (biggest refactor — all import paths, Vite config, tsconfig)
+- Can be deferred indefinitely if the workspace works with app at root
+
+**Output:** Zero Python. Single `pnpm install` → `pnpm dev` setup. One language, one toolchain.
 
 ---
 
-## Phase 2: Streaming + Structured Output (~3 days)
+## Dependency Summary
 
-**Goal:** Token-by-token streaming in the assistant; schema-validated responses on non-streaming routes.
+### Added in Phase 1
+| Package                  | Purpose                                              |
+| ------------------------ | ---------------------------------------------------- |
+| `ai`                     | Core AI SDK (`generateText`, `streamText`, `Output`) |
+| `@ai-sdk/google`         | Gemini provider                                      |
+| `@ai-sdk/openai`         | OpenAI + compatible providers                        |
+| `@ai-sdk/anthropic`      | Anthropic/Claude                                     |
+| `@ai-sdk/mistral`        | Mistral                                              |
+| `@ai-sdk/amazon-bedrock` | AWS Bedrock                                          |
+| `zod`                    | Schema validation (structured output + MCP tools)    |
 
-### Streaming (chat route)
+### Added in Phase 2
+| Package                     | Purpose                 |
+| --------------------------- | ----------------------- |
+| `@modelcontextprotocol/sdk` | TS MCP server framework |
 
-```ts
-import { streamText } from 'ai';
+### Added in Phase 4
+| Package            | Purpose                                |
+| ------------------ | -------------------------------------- |
+| `onnxruntime-node` | ONNX inference for embeddings          |
+| `cheerio`          | HTML parsing (replaces beautifulsoup4) |
 
-// In chatRoutes.ts:
-const result = streamText({
-  model: resolveModel(cfg),
-  system,
-  messages,
-});
-result.pipeTextStreamToResponse(res); // Express response
-```
-
-Client-side: replace `await r.json()` with `ReadableStream` consumer in `useAiChat.ts`. Actions sent as final NDJSON chunk.
-
-### Structured Output (validation/analysis routes)
-
-```ts
-import { generateText, Output } from 'ai';
-import { z } from 'zod';
-
-const result = await generateText({
-  model: resolveModel(cfg),
-  system,
-  messages,
-  output: Output.object({ schema: validationSchema }),
-});
-// Typed, validated output — no parseJsonFromAiResponse needed
-```
-
-**Delete:** `softRepairJson`, `scanJsonStringEnd`, fenced-JSON stripping utilities (once all routes migrated).
-
-### Dependencies
-
-```
-pnpm add zod
-```
-
-### Success Criteria
-
-- Chat shows tokens as they arrive (no "Thinking..." delay)
-- Cancel button works (AbortController)
-- Validation/analysis routes return typed responses
-- JSON parsing utilities removed
+### Removed in Phase 5
+| Package                       | Purpose                |
+| ----------------------------- | ---------------------- |
+| `mcp<2` (pip)                 | Python MCP framework   |
+| `sentence-transformers` (pip) | Python embedding model |
+| `numpy` (pip)                 | Python array math      |
+| `requests` (pip)              | Python HTTP client     |
+| `beautifulsoup4` (pip)        | Python HTML parser     |
 
 ---
 
-## Phase 3: MCP TypeScript Port — Keyword Tools (~1 week)
+## Risk Mitigation
 
-**Goal:** Port all 22 non-semantic MCP tools to TypeScript. No monorepo restructure.
-
-### Architecture Decision: Module, Not Package
-
-Instead of Kiro's `packages/mcp-server/`, place the MCP server at:
-
-```
-src/server/mcp/
-├── server.ts           (entry point, @modelcontextprotocol/sdk)
-├── tools/              (one file per tool group)
-├── knowledge-base/     (JSON files from Python)
-└── stdio.ts            (standalone stdio entry for external MCP clients)
-```
-
-**Rationale:** The MCP tools need to call Olive service modules (`src/server/services/olive/`). In the same TypeScript project, this is a direct import. In a separate workspace package, it requires extracting services into `packages/shared/` — a large refactor for no functional benefit.
-
-The `stdio.ts` entry allows running the server standalone for external MCP clients (Kiro, Claude), while the Express route can import and call tools directly in-process.
-
-### Tool Port Order (from Kiro's plan, grouped by complexity)
-
-**Trivial (copy JSON + return):**
-`get_olive_passes`, `get_mcp_capabilities`, `get_integration_recipe`
-
-**Low (light logic):**
-`get_pass_parameters`, `get_pass_config_template`, `get_hardware_optimization_guide`, `get_pass_chain`, `get_data_config_template`, `get_model_compatibility`, `get_cli_command`, `get_runtime_ep_hints`, `record_troubleshoot_feedback`, `compare_results`, `get_model_info`
-
-**Medium (business logic):**
-`get_quantization_strategy`, `evaluate_optimization_tradeoff`, `validate_ui_state_recipe`, `get_recipe_for_ui_state`, `plan_optimization`, `execute_and_observe`, `diagnose_and_fix`, `get_context_for_pipeline`
-
-**Keyword search (fallback mode):**
-`search_olive_documentation`, `troubleshoot_olive_error` — substring + term frequency only
-
-### Dependencies
-
-```
-pnpm add @modelcontextprotocol/sdk
-```
-
-(`zod` already added in Phase 2)
-
-### Success Criteria
-
-- All 22 tools pass vitest tests
-- MCP server responds via stdio
-- `.mcp.json` updated to point to TS server
-- Keyword search returns reasonable results
+| Risk                            | Phase | Mitigation                                                                       |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------- |
+| Streaming breaks chat actions   | 2     | Stream text first, send structured `actions` as final chunk — UI still gets them |
+| Provider swap breaks a provider | 1     | One provider at a time, test each before moving to next                          |
+| Monorepo breaks CI              | 1     | Phase 0 changes no existing code; workspace is additive                          |
+| MCP tool behavior diverges      | 2-4   | Python server runs in parallel; compare outputs for same inputs                  |
+| Semantic search quality drops   | 4     | Cross-validate embeddings; keep keyword fallback always available                |
+| Large PR scope                  | All   | Each phase is independently shippable and mergeable                              |
 
 ---
 
-## Phase 4: Eliminate HTTP Bridge (~2 days)
+## Success Metrics
 
-**Goal:** Studio bridge tools call services directly instead of loopback HTTP.
+| Metric                                | Before                                                       | After                                   |
+| ------------------------------------- | ------------------------------------------------------------ | --------------------------------------- |
+| Setup time (new contributor)          | ~15 min (Node + Python venv + sentence-transformers)         | ~2 min (`pnpm install`)                 |
+| Chat response latency (perceived)     | 3-15s (full wait)                                            | <500ms to first token                   |
+| MCP tool call latency (Studio bridge) | ~50-100ms (HTTP round-trip)                                  | <1ms (in-process)                       |
+| CI pipeline jobs                      | 5 (validate + security + python-tests + olive-pass + docker) | 3 (validate + security + olive-pass-ts) |
+| Languages in repo                     | 2 (TypeScript + Python)                                      | 1 (TypeScript)                          |
+| JSON parsing failure rate             | ~2-5% (malformed AI responses)                               | ~0% (schema-validated)                  |
 
-### What Changes
-
-The 6 Studio tools (`list_optimization_jobs`, `get_optimization_job`, `get_optimization_results`, `validate_optimization_job`, `submit_optimization_job`, `cancel_optimization_job`) currently POST to `localhost:3000/api/olive/...`.
-
-Since the MCP server now lives in `src/server/mcp/`, it directly imports from `src/server/services/olive/`. No HTTP, no serialization.
-
-### Update MCP Route
-
-`src/server/routes/mcp.ts` calls MCP tools in-process instead of spawning a subprocess:
-
-```ts
-import { callTool } from '../mcp/server.ts';
-
-router.post('/api/mcp/tool', async (req, res) => {
-  const result = await callTool(req.body.name, req.body.arguments);
-  res.json(result);
-});
-```
-
-### Success Criteria
-
-- Zero loopback HTTP calls from MCP tools
-- Measurable latency reduction
-- Integration tests pass
-
----
-
-## Phase 5: Semantic Search in TypeScript (~1 week)
-
-**Goal:** Port hybrid semantic + keyword search. This is the highest-risk phase.
-
-### Approach: Pre-computed Only (Simplified from Kiro's plan)
-
-The knowledge base is **static** — it ships with the app and doesn't change at runtime. This means:
-
-1. **Build time:** Generate embeddings for all KB entries and store as `.bin` (Float32Array) + JSON manifest
-2. **Runtime:** Load pre-computed embeddings, encode the query, cosine similarity — that's it
-
-This avoids shipping `sentence-transformers` equivalent at runtime for 95% of queries. Only the query needs encoding at runtime.
-
-### Runtime Query Encoding
-
-```ts
-import { pipeline } from '@huggingface/transformers';
-
-// Lazy-loaded, cached after first use
-let embedder: any;
-async function encode(text: string): Promise<Float32Array> {
-  embedder ??= await pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5');
-  const output = await embedder(text, { pooling: 'cls', normalize: true });
-  return output.data;
-}
-```
-
-### Validation
-
-Port Kiro's compatibility test: encode same queries with Python and TypeScript, assert cosine similarity > 0.99.
-
-### Fallback
-
-If `@huggingface/transformers` fails to load (memory, platform), fall back to keyword-only mode (already working from Phase 3).
-
-### Dependencies
-
-```
-pnpm add onnxruntime-node
-```
-
-(`@huggingface/transformers` already in root package.json)
-
-### Success Criteria
-
-- `troubleshoot_olive_error` and `search_olive_documentation` return quality-parity results
-- Embedding compatibility test passes (>0.99 cosine sim)
-- Fallback to keyword-only works when ONNX unavailable
-
----
-
-## Phase 6: Remove Python (~1 day)
-
-**Goal:** Delete `olive-mcp-server/` and all Python infrastructure.
-
-### Delete
-
-- `olive-mcp-server/` directory
-- `scripts/setup-mcp.ps1`, `scripts/setup-mcp.sh`
-- `scripts/postinstall-mcp-setup.mjs`
-- `.kiro/hooks/check-mcp-venv`
-- Python CI jobs (`.github/workflows/ci.yml`: `python-tests`, `olive-pass-availability`, Docker MCP image)
-
-### Update
-
-- `.mcp.json` → point to TS server only
-- `AGENTS.md` → remove Python setup instructions
-- `README.md` → simplify getting-started (no Python requirement)
-- `.kiro/` steering files → update MCP references
-
-### Success Criteria
-
-- Zero Python in the repo
-- `pnpm install` → `pnpm dev` is the only setup
-- All MCP tools work identically
-- CI green
-
----
-
-## What This Plan Omits (Intentionally)
-
-| Kiro Proposed | This Plan's Position |
-|---|---|
-| `packages/mcp-server/` workspace package | MCP server at `src/server/mcp/` — same project, direct imports |
-| `packages/shared/` types package | Types stay in `src/lib/types/` — already shared within the project |
-| `packages/app/` restructure | Not needed. Single Vite build, one team, no benefit |
-| `pnpm-workspace.yaml` | Not created. Revisit only if a second build target emerges |
-| `cheerio` for HTML parsing | Keep existing approach or defer to when live-docs fetch is needed |
-
----
-
-## Dependency Graph (Execution Order)
-
-```
+```text
 Phase 1 (AI SDK)
     │
     ├──→ Phase 2 (Streaming + Structured Output)
@@ -354,8 +350,8 @@ Phases 2 and 3 can run in parallel (different parts of the codebase).
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | AI SDK doesn't support a provider's edge case | Low | Medium | Fall back to `createOpenAI` with custom baseURL for that provider |
-| Embedding quality regression (Phase 5) | Medium | High | Compatibility test + keyword fallback + keep Python until validated |
-| `onnxruntime-node` platform issues | Medium | Low | Keyword-only mode is already functional from Phase 3 |
+| Pre-computed query table misses important queries | Medium | Medium | BM25 fallback covers gaps; expand table over time based on usage logs |
+| Novel queries degrade without embedding endpoint | Low | Low | Keyword/BM25 still returns reasonable results; users can opt into endpoint |
 | Streaming breaks `ChatAction` parsing | Medium | Medium | Send actions as final chunk after stream completes |
 | Breaking MCP protocol compatibility | Low | High | Test with `.mcp.json` and external MCP clients before removing Python |
 
@@ -363,8 +359,19 @@ Phases 2 and 3 can run in parallel (different parts of the codebase).
 
 ## Decision Log
 
+| Date       | Decision                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| 2025-08-17 | Reconciled two roadmaps into single sequenced plan                                        |
+| 2025-08-17 | AI SDK provider swap goes first (unblocks everything)                                     |
+| 2025-08-17 | Streaming and MCP tool port are parallel workstreams                                      |
+| 2025-08-17 | Python stays as fallback until Phase 5 (no hard cutover)                                  |
+| 2025-08-17 | `packages/app/` move is optional — workspace works with app at root                       |
+| 2025-08-17 | `useChat` (full hook replacement) deferred — only revisit if assistant becomes primary UI |
+| 2025-08-17 | AI Elements UI components skipped — custom sidebar layout doesn't benefit                 |
+| 2025-08-17 | Turborepo skipped — single-package CI is fast enough at current scale                     |
+
 - **AI SDK before MCP port:** Simplifies the MCP server (it just calls `generateText` without knowing provider details). Also the fastest win.
 - **No monorepo:** The project has one build output (Vite → web app + Express server). Workspace packages add `tsconfig` path mapping, cross-package build coordination, and import indirection for zero functional benefit at current scale.
 - **MCP as module, not package:** Direct imports avoid the service-extraction refactor that a separate package would require. The stdio entry point still supports external MCP clients.
-- **Pre-computed embeddings preferred:** The KB is static. Runtime model loading is expensive and fragile. Pre-compute at build time, only encode queries at runtime.
+- **Pre-computed embeddings preferred:** The KB is static. Ship pre-computed doc embeddings + common query embeddings. Zero ML runtime deps by default. External embedding endpoint as opt-in for full semantic search on novel queries.
 - **`useChat` hook deferred indefinitely:** The sidebar's `ChatAction` system (pipeline state patches) doesn't map to the SDK's chat model. Custom streaming (Phase 2) is sufficient.
