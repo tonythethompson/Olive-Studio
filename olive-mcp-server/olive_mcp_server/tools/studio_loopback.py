@@ -23,7 +23,7 @@ _LOOPBACK_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 class _NoRedirect(HTTPRedirectHandler):
     """Refuse redirects so a loopback URL cannot bounce off-host (SSRF)."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+    def redirect_request(self, req, fp, code, msg, headers, newurl) -> None:  # noqa: ANN001
         return None
 
 

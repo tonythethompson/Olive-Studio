@@ -14,6 +14,7 @@ import importlib
 import logging
 import os
 import sys
+from collections.abc import Callable, Iterator
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -122,7 +123,7 @@ _mcp_instance: Any | None = None
 _resolved_tools: dict[str, Any] = {}
 
 
-def _resolve_tool(name: str):
+def _resolve_tool(name: str) -> Callable[..., Any] | None:
     """Resolve and cache a registered tool by name.
 
     Parameters:
@@ -157,7 +158,7 @@ def _resolve_tool(name: str):
     return fn
 
 
-def call_tool(name: str, args: dict | None = None):
+def call_tool(name: str, args: dict | None = None) -> Any:
     """
     Invoke a registered tool with the supplied arguments.
 
@@ -178,7 +179,7 @@ def call_tool(name: str, args: dict | None = None):
         return {"error": f"Invalid arguments for {name}: {exc}"}
 
 
-def _iter_tools():
+def _iter_tools() -> Iterator[Callable[..., Any]]:
     """Lazily resolve and yield all registered tool functions."""
     for name in _TOOL_IMPORTS:
         fn = _resolve_tool(name)
@@ -186,7 +187,7 @@ def _iter_tools():
             yield fn
 
 
-def _build_mcp():
+def _build_mcp() -> Any:
     """Create the FastMCP server (requires the optional ``mcp`` package)."""
     from mcp.server.fastmcp import FastMCP
 
@@ -196,7 +197,7 @@ def _build_mcp():
     return instance
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """
     Lazily provides the module's `mcp` and `TOOLS` attributes.
 

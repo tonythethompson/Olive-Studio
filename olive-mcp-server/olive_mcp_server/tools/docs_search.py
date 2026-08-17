@@ -11,6 +11,8 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -77,7 +79,7 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
     return results
 
 
-def _iter_kb_json_files():
+def _iter_kb_json_files() -> Iterator[Path]:
     """Yield searchable KB JSON paths in a stable, sorted order.
 
     ``Path.glob`` order is OS-dependent; indexing and content hashing must
