@@ -62,7 +62,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Model source",
       description:
-        "Select a recipe to load a model you want to optimize. Studio fills in the Hugging Face URL so the model downloads during the Olive run, and you can change it to a different Hugging Face repo, local weights, or an Azure ML asset.",
+        "Select a recipe to load a model you want to optimize. We'll fill in the proper HuggingFace URL for that model to download during the Olive run. You may also change it to a different HuggingFace repo, upload local weights, or use an Azure ML asset.",
       side: "bottom",
       align: "start",
     },
