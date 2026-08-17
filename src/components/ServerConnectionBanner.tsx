@@ -68,7 +68,7 @@ export function ServerConnectionBanner({ checkIntervalMs = 10000 }: ServerConnec
   return (
     <aside
       aria-label="Server status alert"
-      className="fixed top-0 inset-x-0 z-50 bg-rose-950/90 border-b border-rose-600/50 text-rose-200 px-4 py-2 flex items-center justify-between shadow-lg backdrop-blur-md animate-in slide-in-from-top duration-300"
+      className="sticky top-0 inset-x-0 z-50 bg-rose-950/90 border-b border-rose-600/50 text-rose-200 px-4 py-2 flex items-center justify-between shadow-lg backdrop-blur-md animate-in slide-in-from-top duration-300"
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 animate-pulse" />
