@@ -45,9 +45,7 @@ def _truthy_env(name: str) -> bool:
 def _looks_absolute_fs_path(path: str) -> bool:
     if path.startswith(("/", "~")):
         return True
-    if re.match(r"^[A-Za-z]:[\\/]", path):
-        return True
-    return False
+    return bool(re.match(r"^[A-Za-z]:[\\/]", path))
 
 
 def _path_basename(path: str) -> str:

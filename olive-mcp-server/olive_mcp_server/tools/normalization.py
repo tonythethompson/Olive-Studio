@@ -186,9 +186,7 @@ def _is_word_boundary(text: str, index: int, length: int) -> bool:
     if index > 0 and text[index - 1].isalnum():
         return False
     end = index + length
-    if end < len(text) and text[end].isalnum():
-        return False
-    return True
+    return not (end < len(text) and text[end].isalnum())
 
 
 def _invalid_openvino_device(token: str) -> HardwareTarget:

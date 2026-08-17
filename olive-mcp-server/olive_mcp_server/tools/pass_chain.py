@@ -94,10 +94,11 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
         if ptype == "quantization":
             has_compatible_conversion = False
             for prev in resolved:
-                if prev.get("type") == "conversion":
-                    if any(fmt in meta.get("input_formats", []) for fmt in prev.get("output_formats", [])):
-                        has_compatible_conversion = True
-                        break
+                if prev.get("type") == "conversion" and any(
+                    fmt in meta.get("input_formats", []) for fmt in prev.get("output_formats", [])
+                ):
+                    has_compatible_conversion = True
+                    break
             if not has_compatible_conversion:
                 normalized_source = _normalize_source_format(source_format)
                 input_formats = meta.get("input_formats", [])

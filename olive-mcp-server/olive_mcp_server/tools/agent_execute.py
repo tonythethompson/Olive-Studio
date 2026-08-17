@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import time
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
@@ -101,10 +102,9 @@ class _PollState:
         if exit_code is None:
             exit_code = response.get("exit_code")
         if exit_code is not None:
-            try:
+            # Ignore invalid exit codes; preserve existing state.
+            with suppress(TypeError, ValueError):
                 self.exit_code = int(exit_code)
-            except (TypeError, ValueError):
-                pass  # ignore invalid exit codes, preserve existing state
 
     def elapsed_ms(self) -> int:
         """Return elapsed polling time in milliseconds."""

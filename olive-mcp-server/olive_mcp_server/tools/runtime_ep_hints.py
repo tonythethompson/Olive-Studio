@@ -179,10 +179,6 @@ def get_runtime_ep_hints(refresh: bool = False) -> dict[str, Any]:
 
     # Runtime is best-effort: probe-derived hints still succeed if it fails.
     runtime_raw = studio_request("GET", _RUNTIME_PATH)
-    runtime: dict[str, Any] | None
-    if "error" in runtime_raw:
-        runtime = None
-    else:
-        runtime = runtime_raw
+    runtime: dict[str, Any] | None = None if "error" in runtime_raw else runtime_raw
 
     return _project_success(studio_base=base, probe=probe, runtime=runtime)  # type: ignore[arg-type]

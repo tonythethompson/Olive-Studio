@@ -465,9 +465,8 @@ def _validate_plan_inputs(
                 "model_id must be a valid HuggingFace repo ID (owner/name), "
                 "without path traversal, query strings, or control characters.",
             )
-    if hardware_probe is not None:
-        if not isinstance(hardware_probe, dict):
-            return err("invalid_input", "hardware_probe must be a JSON object (dict).")
+    if hardware_probe is not None and not isinstance(hardware_probe, dict):
+        return err("invalid_input", "hardware_probe must be a JSON object (dict).")
     return None
 
 

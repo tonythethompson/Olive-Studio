@@ -211,9 +211,7 @@ def _probe_studio(timeout_s: float = 2.0) -> bool:
 
         payload = studio_request("GET", "/api/health", timeout=timeout_s)
         # health may be plain {ok:true} or error shape
-        if isinstance(payload, dict) and payload.get("error") == "studio_unavailable":
-            return False
-        return True
+        return not (isinstance(payload, dict) and payload.get("error") == "studio_unavailable")
     except Exception:
         return False
 

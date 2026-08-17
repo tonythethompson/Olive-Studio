@@ -148,9 +148,8 @@ def _collect_top_level_errors(matrix_data: dict[str, Any]) -> list[str]:
         errors.append(f"last_updated must be YYYY-MM-DD, got {last_updated!r}")
 
     models = matrix_data.get("models")
-    if models is not None:
-        if not isinstance(models, list) or len(models) < 1:
-            errors.append("models must be a non-empty array")
+    if models is not None and (not isinstance(models, list) or len(models) < 1):
+        errors.append("models must be a non-empty array")
     return errors
 
 
