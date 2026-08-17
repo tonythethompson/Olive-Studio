@@ -51,7 +51,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Your pipeline",
       description:
-        "Your pipeline has four steps: pick a model, choose your target hardware, build and run a recipe, then try the result. Select any step to jump there.",
+        "Your pipeline has four steps: pick a model, choose your target hardware, build and run a recipe, then try the result. Select the first step, Model source, to continue.",
       side: "right",
       align: "start",
     },
