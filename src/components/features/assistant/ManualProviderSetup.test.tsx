@@ -131,6 +131,32 @@ describe("ManualProviderSetup — Cloudflare badge rendering", () => {
     ).toBeDefined();
   });
 
+  it("suppresses amber invalid-format Account ID badge when user types a manual Account ID", () => {
+    const providers = createMockProviders({
+      settingsCloudflareAccountId: "manual-account-id-123",
+      providerStatus: {
+        source: "none",
+        envCredentials: {
+          cloudflare: {
+            present: true,
+            envVar: "CLOUDFLARE_API_TOKEN",
+            usable: false,
+            cloudflareAccountId: { present: true, valid: false },
+          },
+        },
+      },
+    });
+
+    render(<ManualProviderSetup providers={providers} />);
+
+    // User override suppresses the invalid-format warning on the Account ID field
+    expect(screen.queryByText(/Found CLOUDFLARE_ACCOUNT_ID \(invalid format\)/)).toBeNull();
+
+    // Placeholder stays on the manual default when a value is typed
+    const accountIdInput = screen.getByLabelText(/Cloudflare Account ID/i);
+    expect(accountIdInput.getAttribute("placeholder")).toBe("32-char hex CLOUDFLARE_ACCOUNT_ID");
+  });
+
   it("shows green badge on Account ID when it is valid in env but token is missing", () => {
     const providers = createMockProviders({
       providerStatus: {

@@ -8,21 +8,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// ── Mock env module BEFORE any registry imports ─────────────────────────────
-vi.mock("../services/ai/env.ts", () => ({
-  readEnvApiKey: vi.fn(),
-  matchedEnvApiKeyName: vi.fn(),
-}));
-
-// ── Mock Cloudflare client ──────────────────────────────────────────────────
-vi.mock("../../lib/cloudflare/client.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../lib/cloudflare/client.ts")>();
-  return {
-    ...actual,
-    resolveCloudflareAuth: vi.fn(() => null),
-  };
-});
-
 // Side-effect import: triggers all providers to register themselves.
 import "../services/ai/index.ts";
 
@@ -30,6 +15,21 @@ import { listEnvCredentialStatus } from "../services/ai/registry.ts";
 import { readEnvApiKey, matchedEnvApiKeyName } from "../services/ai/env.ts";
 import { resolveCloudflareAuth } from "../../lib/cloudflare/client.ts";
 import { isValidCloudflareAccountId } from "../../lib/cloudflare/credentials.ts";
+
+// Vitest hoists vi.mock() calls above every import, so these mocks still apply
+// to the modules imported above, regardless of their source order here.
+vi.mock("../services/ai/env.ts", () => ({
+  readEnvApiKey: vi.fn(),
+  matchedEnvApiKeyName: vi.fn(),
+}));
+
+vi.mock("../../lib/cloudflare/client.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/cloudflare/client.ts")>();
+  return {
+    ...actual,
+    resolveCloudflareAuth: vi.fn(() => null),
+  };
+});
 
 const mockedReadEnvApiKey = vi.mocked(readEnvApiKey);
 const mockedMatchedEnvApiKeyName = vi.mocked(matchedEnvApiKeyName);

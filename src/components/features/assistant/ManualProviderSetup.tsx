@@ -269,7 +269,9 @@ function CloudflareAccountIdField({ providers }: ProvidersProp) {
   const envCred = providerEnvCredential(providerStatus.envCredentials, "cloudflare");
   const envUsable = Boolean(envCred?.usable);
   const accountIdValid = Boolean(envCred?.cloudflareAccountId?.valid);
-  const accountIdInvalid = Boolean(envCred?.cloudflareAccountId?.present && !envCred.cloudflareAccountId.valid);
+  const accountIdInvalid = Boolean(
+    envCred?.cloudflareAccountId?.present && !envCred.cloudflareAccountId.valid && !settingsCloudflareAccountId.trim(),
+  );
   const showAvailableBadge = (envUsable || accountIdValid) && !settingsCloudflareAccountId.trim();
 
   return (
