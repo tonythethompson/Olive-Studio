@@ -39,6 +39,8 @@ dev = [
     "pytest>=8.0.0",
     "hypothesis>=6.0.0,<7",
     "ruff>=0.6.0,<1.0.0",
+    # 3.10 lacks stdlib tomllib (3.11+); scripts/check_mcp_pin.py falls back to it.
+    "tomli; python_version < '3.11'",
 ]
 # Semantic stack is a core dep today; keep the extra for explicit installs /
 # future slim core splits.
