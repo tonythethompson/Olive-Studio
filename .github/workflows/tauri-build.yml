@@ -31,6 +31,13 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Bundle Node runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/node-runtime | Out-Null
+          Copy-Item (Get-Command node).Source src-tauri/node-runtime/node.exe -Force
+          & src-tauri/node-runtime/node.exe --version
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
