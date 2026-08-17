@@ -167,17 +167,56 @@ function ModelField({ providers }: ProvidersProp) {
  *
  * @param providers - Provider settings, state, and actions used by the form
  */
-function ApiKeyForm({ providers }: ProvidersProp) {
-  const {
-    isCompatMode,
-    providerOption,
-    providerStatus,
-    settingsProvider,
-    settingsBaseUrl,
-    settingsApiKey,
-    settingsCloudflareAccountId,
-    isSavingProvider,
-  } = providers;
+function BaseUrlField({ providers }: ProvidersProp) {
+  return (
+    <div>
+      <label htmlFor="gemini-settings-base-url" className="text-sm text-slate-400 mb-1 block">
+        Base URL
+      </label>
+      <input
+        id="gemini-settings-base-url"
+        type="text"
+        placeholder="http://localhost:11434/v1"
+        value={providers.settingsBaseUrl}
+        onChange={(e) => providers.setSettingsBaseUrl(e.target.value)}
+        onBlur={() => providers.refreshModelsForTypedBaseUrl()}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+      />
+      <p className="text-[11px] text-slate-600 mt-1">
+        For OpenAI-compatible cloud or self-hosted endpoints (vLLM, SGLang, custom gateways). Local LM
+        Studio / Ollama live under the Local tab.
+      </p>
+    </div>
+  );
+}
+
+function BedrockRegionField({ providers }: ProvidersProp) {
+  return (
+    <div>
+      <label htmlFor="gemini-settings-base-url" className="text-sm text-slate-400 mb-1 block">
+        AWS Region
+      </label>
+      <input
+        id="gemini-settings-base-url"
+        type="text"
+        autoComplete="off"
+        placeholder="us-east-1"
+        value={providers.settingsBaseUrl}
+        onChange={(e) => providers.setSettingsBaseUrl(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+      />
+      <p className="text-[11px] text-slate-600 mt-1">
+        Optional — defaults to AWS_REGION, then us-east-1. Keys use the format accessKeyId:secretAccessKey
+        (add :sessionToken for assumed-role credentials), or leave blank for the default AWS credential
+        chain.
+      </p>
+    </div>
+  );
+}
+
+function ApiKeyField({ providers }: ProvidersProp) {
+  const { providerOption, providerStatus, settingsProvider, settingsApiKey } = providers;
   const envCred = providerEnvCredential(providerStatus.envCredentials, settingsProvider);
   const envUsable = Boolean(envCred?.usable && envCred.envVar);
   const envPresentOnly = Boolean(envCred?.present && envCred.envVar && !envCred.usable);
@@ -186,128 +225,101 @@ function ApiKeyForm({ providers }: ProvidersProp) {
     : "Stored in memory only, never persisted to disk";
 
   return (
+    <div>
+      <label
+        htmlFor="gemini-settings-api-key"
+        className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
+      >
+        <Key className="h-3 w-3" />
+        API Key
+        {envUsable && !settingsApiKey.trim() ? (
+          <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
+            Env available: {envCred!.envVar}
+          </span>
+        ) : envPresentOnly ? (
+          <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+            Found {envCred!.envVar} (incomplete —{" "}
+            {settingsProvider === "cloudflare" && !envCred?.cloudflareAccountId?.valid
+              ? "CLOUDFLARE_ACCOUNT_ID missing or invalid"
+              : "additional credentials needed"})
+          </span>
+        ) : "keyEnvVar" in providerOption && providerOption.keyEnvVar ? (
+          <span className="text-[9px] text-slate-600">
+            (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
+          </span>
+        ) : null}
+      </label>
+      <input
+        id="gemini-settings-api-key"
+        type="password"
+        autoComplete="off"
+        placeholder={keyPlaceholder}
+        value={settingsApiKey}
+        onChange={(e) => providers.setSettingsApiKey(e.target.value)}
+        onBlur={() => providers.refreshModelsForTypedApiKey()}
+        onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+      />
+    </div>
+  );
+}
+
+function CloudflareAccountIdField({ providers }: ProvidersProp) {
+  const { providerStatus, settingsCloudflareAccountId } = providers;
+  const envCred = providerEnvCredential(providerStatus.envCredentials, "cloudflare");
+  const envUsable = Boolean(envCred?.usable);
+  const accountIdValid = Boolean(envCred?.cloudflareAccountId?.valid);
+  const accountIdInvalid = Boolean(envCred?.cloudflareAccountId?.present && !envCred.cloudflareAccountId.valid);
+  const showAvailableBadge = (envUsable || accountIdValid) && !settingsCloudflareAccountId.trim();
+
+  return (
+    <div>
+      <label
+        className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
+        htmlFor="gemini-cf-account-id"
+      >
+        Cloudflare Account ID
+        {showAvailableBadge ? (
+          <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
+            Env available: CLOUDFLARE_ACCOUNT_ID
+          </span>
+        ) : accountIdInvalid ? (
+          <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+            Found CLOUDFLARE_ACCOUNT_ID (invalid format)
+          </span>
+        ) : null}
+      </label>
+      <input
+        id="gemini-cf-account-id"
+        type="text"
+        autoComplete="off"
+        placeholder={
+          envUsable && !settingsCloudflareAccountId.trim()
+            ? "Leave blank to use CLOUDFLARE_ACCOUNT_ID"
+            : "32-char hex CLOUDFLARE_ACCOUNT_ID"
+        }
+        value={settingsCloudflareAccountId}
+        onChange={(e) => providers.setSettingsCloudflareAccountId(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
+      />
+      <p className="text-[11px] text-slate-600 mt-1">
+        Required with the API token. Workers AI is account-scoped.
+      </p>
+    </div>
+  );
+}
+
+function ApiKeyForm({ providers }: ProvidersProp) {
+  const { isCompatMode, settingsProvider, isSavingProvider } = providers;
+
+  return (
     <>
-      {isCompatMode && (
-        <div>
-          <label htmlFor="gemini-settings-base-url" className="text-sm text-slate-400 mb-1 block">
-            Base URL
-          </label>
-          <input
-            id="gemini-settings-base-url"
-            type="text"
-            placeholder="http://localhost:11434/v1"
-            value={settingsBaseUrl}
-            onChange={(e) => providers.setSettingsBaseUrl(e.target.value)}
-            onBlur={() => providers.refreshModelsForTypedBaseUrl()}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-          />
-          <p className="text-[11px] text-slate-600 mt-1">
-            For OpenAI-compatible cloud or self-hosted endpoints (vLLM, SGLang, custom gateways). Local LM
-            Studio / Ollama live under the Local tab.
-          </p>
-        </div>
-      )}
-
-      {settingsProvider === "bedrock" && (
-        <div>
-          <label htmlFor="gemini-settings-base-url" className="text-sm text-slate-400 mb-1 block">
-            AWS Region
-          </label>
-          <input
-            id="gemini-settings-base-url"
-            type="text"
-            autoComplete="off"
-            placeholder="us-east-1"
-            value={settingsBaseUrl}
-            onChange={(e) => providers.setSettingsBaseUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-          />
-          <p className="text-[11px] text-slate-600 mt-1">
-            Optional — defaults to AWS_REGION, then us-east-1. Keys use the format accessKeyId:secretAccessKey
-            (add :sessionToken for assumed-role credentials), or leave blank for the default AWS credential
-            chain.
-          </p>
-        </div>
-      )}
-
-      {settingsProvider !== "genai" && (
-        <div>
-          <label
-            htmlFor="gemini-settings-api-key"
-            className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
-          >
-            <Key className="h-3 w-3" />
-            API Key
-            {envUsable && !settingsApiKey.trim() ? (
-              <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
-                Env available: {envCred!.envVar}
-              </span>
-            ) : envPresentOnly ? (
-              <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
-                Found {envCred!.envVar} (incomplete —{" "}
-                {settingsProvider === "cloudflare" && !envCred?.cloudflareAccountId?.valid
-                  ? "CLOUDFLARE_ACCOUNT_ID missing or invalid"
-                  : "additional credentials needed"})
-              </span>
-            ) : "keyEnvVar" in providerOption && providerOption.keyEnvVar ? (
-              <span className="text-[9px] text-slate-600">
-                (or env: <code className="font-mono">{providerOption.keyEnvVar}</code>)
-              </span>
-            ) : null}
-          </label>
-          <input
-            id="gemini-settings-api-key"
-            type="password"
-            autoComplete="off"
-            placeholder={keyPlaceholder}
-            value={settingsApiKey}
-            onChange={(e) => providers.setSettingsApiKey(e.target.value)}
-            onBlur={() => providers.refreshModelsForTypedApiKey()}
-            onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-          />
-        </div>
-      )}
-
+      {isCompatMode && <BaseUrlField providers={providers} />}
+      {settingsProvider === "bedrock" && <BedrockRegionField providers={providers} />}
+      {settingsProvider !== "genai" && <ApiKeyField providers={providers} />}
       {settingsProvider === "genai" && <GenaiEnginePanel />}
-
-      {settingsProvider === "cloudflare" && (
-        <div>
-          <label
-            className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
-            htmlFor="gemini-cf-account-id"
-          >
-            Cloudflare Account ID
-            {envUsable && !settingsCloudflareAccountId.trim() ? (
-              <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
-                Env available: CLOUDFLARE_ACCOUNT_ID
-              </span>
-            ) : envCred?.cloudflareAccountId?.present && !envCred.cloudflareAccountId.valid ? (
-              <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
-                Found CLOUDFLARE_ACCOUNT_ID (invalid format)
-              </span>
-            ) : envCred?.cloudflareAccountId?.present && envCred.cloudflareAccountId.valid && !envUsable && !settingsCloudflareAccountId.trim() ? (
-              <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
-                Env available: CLOUDFLARE_ACCOUNT_ID
-              </span>
-            ) : null}
-          </label>
-          <input
-            id="gemini-cf-account-id"
-            type="text"
-            autoComplete="off"
-            placeholder={envCred?.usable && !settingsCloudflareAccountId.trim() ? "Leave blank to use CLOUDFLARE_ACCOUNT_ID" : "32-char hex CLOUDFLARE_ACCOUNT_ID"}
-            value={settingsCloudflareAccountId}
-            onChange={(e) => providers.setSettingsCloudflareAccountId(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-electric-blue"
-          />
-          <p className="text-[11px] text-slate-600 mt-1">
-            Required with the API token. Workers AI is account-scoped.
-          </p>
-        </div>
-      )}
+      {settingsProvider === "cloudflare" && <CloudflareAccountIdField providers={providers} />}
 
       <button
         type="button"
