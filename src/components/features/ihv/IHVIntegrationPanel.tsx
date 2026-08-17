@@ -127,7 +127,6 @@ export function IHVIntegrationPanel({
       // Clear any stale notice when leaving QNN so a later switch back without
       // new coercions does not resurface passes from the previous QNN session.
       if (state.ihvProvider !== "QnnAbiExecutionProvider" && prevProvider === "QnnAbiExecutionProvider") {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: clear stale notice when leaving QNN
         setQnnAbiCoercedPasses([]);
       }
       return;

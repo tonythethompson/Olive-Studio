@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { screen, act } from "@testing-library/react";
 import { createMockUIState, useFetchRoutesMock, renderWithProviders as render } from "../__tests__/testUtils";
 import type { UIState } from "@/types";
+import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 
 // Mock the pipeline store
 const mockSetState = vi.fn();
@@ -129,20 +130,8 @@ describe("QNN ABI coercion notice transitions", () => {
   });
 
   /** Helper: build a passes object with sensible defaults + per-test overrides. */
-  function makePasses(overrides: Record<string, unknown> = {}) {
-    return {
-      conversion: true,
-      conversionFormat: "onnx",
-      conversionSourceFormat: "pytorch",
-      quantization: false,
-      quantizationMethod: "gptq",
-      pruning: false,
-      lora: false,
-      ortTransformers: false,
-      outputName: "model",
-      trustRemoteCode: false,
-      ...overrides,
-    };
+  function makePasses(overrides: Partial<UIState["passes"]> = {}): UIState["passes"] {
+    return { ...DEFAULT_PASSES, ...overrides };
   }
 
   it("shows coercion notice when switching to QnnAbiExecutionProvider", async () => {
