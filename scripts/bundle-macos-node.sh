@@ -36,5 +36,6 @@ lipo -create \
   "$NODE_STAGE/node-${NODE_VERSION}-darwin-arm64/bin/node" \
   -output "$OUTPUT_NODE"
 chmod 0755 "$OUTPUT_NODE"
-lipo -verify_arch x86_64 arm64 "$OUTPUT_NODE"
+# Xcode 26+ lipo requires the input file before -verify_arch.
+lipo "$OUTPUT_NODE" -verify_arch x86_64 arm64
 "$OUTPUT_NODE" --version

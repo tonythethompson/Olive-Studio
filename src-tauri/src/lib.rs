@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -22,8 +22,35 @@ use tauri_plugin_updater::UpdaterExt;
 const DEFAULT_PORT: u16 = 3000;
 const HEALTH_TIMEOUT_SECS: u64 = 120;
 
+/// How many trailing bytes of sidecar output to keep for diagnostics.
+const OUTPUT_TAIL_BYTES: usize = 16 * 1024;
+
+/// Bounded tail of a child stream, drained continuously so the OS pipe
+/// buffer never fills (a full pipe stalls the child's stdout/stderr writes).
+type OutputTail = Arc<Mutex<Vec<u8>>>;
+
 struct SidecarState {
   child: Mutex<Option<Child>>,
+}
+
+/// Rust's `canonicalize()` returns Windows extended-length `\\?\` paths.
+/// Node cannot run with such a cwd (module resolution fails with
+/// `EISDIR ... lstat 'C:'`), so strip the verbatim prefix again.
+#[cfg(windows)]
+fn strip_verbatim_prefix(p: PathBuf) -> PathBuf {
+  let s = p.to_string_lossy();
+  match s.strip_prefix(r"\\?\") {
+    Some(rest) => match rest.strip_prefix("UNC\\") {
+      Some(unc) => PathBuf::from(format!(r"\\{unc}")),
+      None => PathBuf::from(rest),
+    },
+    None => p,
+  }
+}
+
+#[cfg(not(windows))]
+fn strip_verbatim_prefix(p: PathBuf) -> PathBuf {
+  p
 }
 
 fn resolve_app_root(app: &AppHandle) -> PathBuf {
@@ -33,17 +60,19 @@ fn resolve_app_root(app: &AppHandle) -> PathBuf {
       .canonicalize()
       .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."))
   } else {
-    app
-      .path()
-      .resource_dir()
-      .ok()
-      .and_then(|p| p.canonicalize().ok())
-      .or_else(|| {
-        std::env::current_exe()
-          .ok()
-          .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
-      })
-      .unwrap_or_else(|| PathBuf::from("."))
+    strip_verbatim_prefix(
+      app
+        .path()
+        .resource_dir()
+        .ok()
+        .and_then(|p| p.canonicalize().ok())
+        .or_else(|| {
+          std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+        })
+        .unwrap_or_else(|| PathBuf::from(".")),
+    )
   }
 }
 
@@ -79,8 +108,9 @@ fn node_executable(root: &Path) -> PathBuf {
 }
 
 /// Picks an ephemeral loopback port and spawns the Node server on it.
-/// Returns both the child process and the assigned port.
-fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
+/// Returns the child process, the assigned port, and bounded tails of the
+/// child's stdout/stderr (drained continuously so pipes never block).
+fn spawn_node_server(root: &Path) -> Result<(Child, u16, OutputTail, OutputTail), String> {
   let entry = server_entry(root);
   if !entry.is_file() {
     return Err(format!(
@@ -116,24 +146,84 @@ fn spawn_node_server(root: &Path) -> Result<(Child, u16), String> {
     cmd.creation_flags(CREATE_NO_WINDOW);
   }
 
-  let child = cmd.spawn().map_err(|e| {
+  let mut child = cmd.spawn().map_err(|e| {
     format!(
       "Failed to start Node server with {}: {e}\nInstall Node.js 22+ or use a packaged build that includes the bundled runtime.",
       node.display()
     )
   })?;
 
-  Ok((child, port))
+  let stdout_tail: OutputTail = Arc::new(Mutex::new(Vec::new()));
+  let stderr_tail: OutputTail = Arc::new(Mutex::new(Vec::new()));
+  if let Some(out) = child.stdout.take() {
+    spawn_output_drain(out, stdout_tail.clone());
+  }
+  if let Some(err) = child.stderr.take() {
+    spawn_output_drain(err, stderr_tail.clone());
+  }
+
+  Ok((child, port, stdout_tail, stderr_tail))
+}
+
+fn push_tail(tail: &mut Vec<u8>, chunk: &[u8]) {
+  tail.extend_from_slice(chunk);
+  if tail.len() > OUTPUT_TAIL_BYTES {
+    let cut = tail.len() - OUTPUT_TAIL_BYTES;
+    tail.drain(..cut);
+  }
+}
+
+/// Drains a child stream into a bounded tail until EOF. Runs for the whole
+/// lifetime of the sidecar so its output pipes can never fill up and stall it.
+fn spawn_output_drain<R: Read + Send + 'static>(mut reader: R, tail: OutputTail) {
+  thread::spawn(move || {
+    let mut buf = [0u8; 4096];
+    loop {
+      match reader.read(&mut buf) {
+        Ok(0) => break,
+        Ok(n) => {
+          if let Ok(mut guard) = tail.lock() {
+            push_tail(&mut guard, &buf[..n]);
+          }
+        }
+        Err(_) => break,
+      }
+    }
+  });
+}
+
+/// Formats the captured sidecar output tails for inclusion in error messages.
+fn format_output_tails(stdout_tail: &OutputTail, stderr_tail: &OutputTail) -> String {
+  let mut detail = String::new();
+  if let Ok(guard) = stderr_tail.lock() {
+    let text = String::from_utf8_lossy(&guard);
+    let text = text.trim();
+    if !text.is_empty() {
+      detail.push_str("\n--- server stderr ---\n");
+      detail.push_str(text);
+    }
+  }
+  if let Ok(guard) = stdout_tail.lock() {
+    let text = String::from_utf8_lossy(&guard);
+    let text = text.trim();
+    if !text.is_empty() {
+      detail.push_str("\n--- server stdout ---\n");
+      detail.push_str(text);
+    }
+  }
+  detail
 }
 
 /// Wait until Express reports ready (and Vite warmup finished in dev).
 /// Rejects "port open but half-ready" — that was causing every UI module to
 /// "Failed to fetch" while Vite was still optimizing deps.
-/// Also verifies the child process is still alive (if provided).
+/// Also verifies the child process is still alive (if provided). When output
+/// tails are provided they are appended to failure messages for diagnostics.
 fn wait_for_health(
   port: u16,
   timeout: Duration,
   mut child: Option<&mut Child>,
+  tails: Option<(&OutputTail, &OutputTail)>,
 ) -> Result<(), String> {
   let deadline = Instant::now() + timeout;
   let addr = format!("127.0.0.1:{port}");
@@ -146,8 +236,11 @@ fn wait_for_health(
     if let Some(ref mut c) = child {
       match c.try_wait() {
         Ok(Some(status)) => {
+          let detail = tails
+            .map(|(out, err)| format_output_tails(out, err))
+            .unwrap_or_default();
           return Err(format!(
-            "Node server process exited prematurely with status: {status}"
+            "Node server process exited prematurely with status: {status}{detail}"
           ));
         }
         Err(e) => {
@@ -218,8 +311,11 @@ fn wait_for_health(
 
   Err(format!(
     "Olive Studio server did not become ready on http://127.0.0.1:{port} within {}s.\n\
-     Check that port {port} is free and `pnpm dev` / `dist/server.mjs` is running.",
-    timeout.as_secs()
+     Check that port {port} is free and `pnpm dev` / `dist/server.mjs` is running.{}",
+    timeout.as_secs(),
+    tails
+      .map(|(out, err)| format_output_tails(out, err))
+      .unwrap_or_default()
   ))
 }
 
@@ -290,7 +386,7 @@ pub fn run() {
         // In debug mode, use the configured PORT env var or default
         actual_port = port;
         // Fix Issue 3 & 4: Return error on health check failure instead of continuing
-        if let Err(e) = wait_for_health(actual_port, Duration::from_secs(HEALTH_TIMEOUT_SECS), None) {
+        if let Err(e) = wait_for_health(actual_port, Duration::from_secs(HEALTH_TIMEOUT_SECS), None, None) {
           log::error!("{e}");
           eprintln!("[olive-studio] {e}");
           return Err(e.into());
@@ -299,12 +395,17 @@ pub fn run() {
         let root = resolve_app_root(app.handle());
         log::info!("App root: {}", root.display());
         match spawn_node_server(&root) {
-          Ok((mut child, assigned_port)) => {
+          Ok((mut child, assigned_port, stdout_tail, stderr_tail)) => {
             actual_port = assigned_port;
             log::info!("Node server started on port {}", actual_port);
 
             // Wait for health and verify process is still alive
-            if let Err(e) = wait_for_health(actual_port, Duration::from_secs(HEALTH_TIMEOUT_SECS), Some(&mut child)) {
+            if let Err(e) = wait_for_health(
+              actual_port,
+              Duration::from_secs(HEALTH_TIMEOUT_SECS),
+              Some(&mut child),
+              Some((&stdout_tail, &stderr_tail)),
+            ) {
               log::error!("{e}");
               eprintln!("[olive-studio] {e}");
               kill_sidecar(&mut child);
