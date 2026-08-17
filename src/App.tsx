@@ -235,6 +235,9 @@ function Dashboard() {
           usePreferencesStore.getState().markTourSeen();
         });
         started = Boolean(instance);
+        if (started) {
+          usePreferencesStore.getState().markTourSeen();
+        }
       } catch {
         started = false;
       } finally {
@@ -243,13 +246,16 @@ function Dashboard() {
     })();
   }, []);
 
-  // Auto-offer once until the tour has been seen (finished or skipped).
+  // Auto-offer once on initial launch until the tour has been marked seen.
   // Replay from Settings → Take the tour. Auto-start never resizes.
   // Subscribe to tourSeen so persist rehydration or an in-progress tour
   // cancels the pending auto-offer timer.
   useEffect(() => {
     if (tourSeen) return;
-    const timer = window.setTimeout(() => startTour(), 600);
+    const timer = window.setTimeout(() => {
+      usePreferencesStore.getState().markTourSeen();
+      startTour();
+    }, 600);
     return () => window.clearTimeout(timer);
   }, [startTour, tourSeen]);
 
