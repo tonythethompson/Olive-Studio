@@ -65,10 +65,7 @@ def allows_mcp_two_or_newer(spec) -> bool:
     """True if any released mcp 2+ version satisfies the specifier."""
     if not spec:
         return True
-    for candidate in _get_candidate_versions(spec):
-        if spec.contains(candidate, prereleases=False):
-            return True
-    return False
+    return any(spec.contains(candidate, prereleases=False) for candidate in _get_candidate_versions(spec))
 
 
 def pin_excludes_two_plus(dep: str) -> bool:
@@ -87,9 +84,7 @@ def verify_pyproject(path: Path) -> str:
     if not req.specifier:
         raise SystemExit("mcp dependency must be pinned below 2 (unpinned specifier)")
     if allows_mcp_two_or_newer(req.specifier):
-        raise SystemExit(
-            f"mcp dependency must not allow 2.x or newer (e.g. 'mcp>=1,<2'). Got: {req}"
-        )
+        raise SystemExit(f"mcp dependency must not allow 2.x or newer (e.g. 'mcp>=1,<2'). Got: {req}")
     return str(req)
 
 

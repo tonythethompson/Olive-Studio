@@ -12,7 +12,6 @@ import pytest
 
 from olive_mcp_server.tools.agent_diagnosis import diagnose_and_fix
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------

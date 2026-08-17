@@ -111,7 +111,9 @@ def test_match_quant_accuracy_collapse():
 def test_match_ep_fallback_cpu():
     """ep-fallback-cpu: patterns include 'fallback', 'CPUExecutionProvider', 'not supported'."""
     resp = _call_direct(
-        error_message="WARNING: op NotSupported is not supported by CUDAExecutionProvider, fallback to CPUExecutionProvider",
+        error_message=(
+            "WARNING: op NotSupported is not supported by CUDAExecutionProvider, fallback to CPUExecutionProvider"
+        ),
         pass_name="",
     )
     assert resp["matched_entry"] == "ep-fallback-cpu"
@@ -370,7 +372,7 @@ def test_troubleshoot_relevant_quirks_always_populated():
 def test_troubleshoot_relevant_quirks_include_full_category_not_truncated():
     """All quirks from matched categories surface (not first-2 / max-6 truncation)."""
     from olive_mcp_server.tools import load_quirks
-    from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error, reset_frequency_store
+    from olive_mcp_server.tools.troubleshooting import reset_frequency_store, troubleshoot_olive_error
 
     reset_frequency_store()
     resp = troubleshoot_olive_error(
@@ -398,7 +400,7 @@ def test_troubleshoot_relevant_quirks_include_full_category_not_truncated():
 
 def test_troubleshoot_lora_quirks_include_qlora():
     """LoRA merge failures should surface every lora category quirk including QLoRA."""
-    from olive_mcp_server.tools.troubleshooting import troubleshoot_olive_error, reset_frequency_store
+    from olive_mcp_server.tools.troubleshooting import reset_frequency_store, troubleshoot_olive_error
 
     reset_frequency_store()
     resp = troubleshoot_olive_error(

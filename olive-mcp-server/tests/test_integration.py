@@ -75,7 +75,9 @@ def test_troubleshoot_olive_error_via_server():
         mcp.call_tool(
             "troubleshoot_olive_error",
             {
-                "error_message": "ValueError: The model file size is larger than 2GB. Please use use_external_data_format=True",
+                "error_message": (
+                    "ValueError: The model file size is larger than 2GB. Please use use_external_data_format=True"
+                ),
                 "pass_name": "OnnxConversion",
             },
         )
@@ -96,4 +98,3 @@ def test_troubleshoot_olive_error_via_server():
     data_unmatched = json.loads(result_unmatched[0].text)
     assert data_unmatched["matched_entry"] is None
     assert data_unmatched["title"] == "No exact match found"
-

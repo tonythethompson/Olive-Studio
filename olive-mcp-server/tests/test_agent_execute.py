@@ -17,7 +17,6 @@ import pytest
 import olive_mcp_server.tools.agent_execute as agent_execute
 from olive_mcp_server.tools.agent_execute import execute_and_observe
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -225,16 +224,15 @@ def test_derive_failure_text_captures_timeout_and_log_tail():
     """Timeout results include status, timeout, exit code, and bounded log tail."""
     failure = agent_execute._derive_failure_text(
         {
-          "status": "running",
-          "timed_out": True,
-          "exit_code": 124,
-          "logs": [f"line-{index}" for index in range(8)],
+            "status": "running",
+            "timed_out": True,
+            "exit_code": 124,
+            "logs": [f"line-{index}" for index in range(8)],
         }
     )
 
     assert failure == (
-        "status=running; timed_out=true; exit_code=124; "
-        "log_tail=line-3 | line-4 | line-5 | line-6 | line-7"
+        "status=running; timed_out=true; exit_code=124; log_tail=line-3 | line-4 | line-5 | line-6 | line-7"
     )
 
 

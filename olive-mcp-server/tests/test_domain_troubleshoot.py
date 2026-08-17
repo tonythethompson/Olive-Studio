@@ -1,11 +1,11 @@
 """Domain-aware troubleshoot_olive_error coverage."""
 
+from olive_mcp_server.mcp_server import _TOOL_IMPORTS, call_tool
 from olive_mcp_server.tools.troubleshooting import (
     diagnose_error,
     reset_frequency_store,
     troubleshoot_olive_error,
 )
-from olive_mcp_server.mcp_server import call_tool, _TOOL_IMPORTS
 
 
 def setup_function():

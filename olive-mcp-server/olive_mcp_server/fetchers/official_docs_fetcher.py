@@ -43,10 +43,21 @@ def fetch_official_docs(pages: list[str] | None = None) -> dict[str, Any]:
     Returns:
         Dict mapping page path to Markdown content or error info.
     """
-    target_pages = pages if pages is not None else [
-        "index", "why-olive", "getting-started", "how-to", "passes",
-        "pass-configuration", "options", "quantization", "ihv-integration",
-    ]
+    target_pages = (
+        pages
+        if pages is not None
+        else [
+            "index",
+            "why-olive",
+            "getting-started",
+            "how-to",
+            "passes",
+            "pass-configuration",
+            "options",
+            "quantization",
+            "ihv-integration",
+        ]
+    )
     result: dict[str, Any] = {
         "status": "ok",
         "source": OFFICIAL_DOCS_URL,

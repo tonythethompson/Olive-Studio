@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from olive_mcp_server.fetchers import github_scraper
-from olive_mcp_server.fetchers import _http
+
+from olive_mcp_server.fetchers import _http, github_scraper
 from olive_mcp_server.fetchers import official_docs_fetcher as docs
 from olive_mcp_server.fetchers import onnx_runtime_fetcher as ort
 
@@ -42,9 +42,11 @@ HTML = """
 
 
 def test_official_docs_resolution_and_markdown(monkeypatch):
-    session = Session({
-        "https://microsoft.github.io/Olive/index.html": [Response(HTML)],
-    })
+    session = Session(
+        {
+            "https://microsoft.github.io/Olive/index.html": [Response(HTML)],
+        }
+    )
     monkeypatch.setattr("olive_mcp_server.fetchers._http.get_session", lambda: session)
     result = docs.fetch_official_docs(pages=["index"])
     assert result["status"] == "ok"
@@ -58,10 +60,12 @@ def test_official_docs_resolution_and_markdown(monkeypatch):
 
 def test_official_docs_unknown_falls_back(monkeypatch):
     url = "https://microsoft.github.io/Olive/custom.html"
-    session = Session({
-        "https://microsoft.github.io/Olive/custom": [Response(status_code=404)],
-        url: [Response(HTML)],
-    })
+    session = Session(
+        {
+            "https://microsoft.github.io/Olive/custom": [Response(status_code=404)],
+            url: [Response(HTML)],
+        }
+    )
     monkeypatch.setattr("olive_mcp_server.fetchers._http.get_session", lambda: session)
     result = docs.fetch_official_docs(pages=["custom"])
     assert result["status"] == "ok"
@@ -69,17 +73,21 @@ def test_official_docs_unknown_falls_back(monkeypatch):
 
 
 def test_official_docs_failures_set_partial_and_error(monkeypatch):
-    session = Session({
-        "https://microsoft.github.io/Olive/index.html": [Response(status_code=404)],
-        "https://microsoft.github.io/Olive/why-olive.html": [Response(HTML)],
-    })
+    session = Session(
+        {
+            "https://microsoft.github.io/Olive/index.html": [Response(status_code=404)],
+            "https://microsoft.github.io/Olive/why-olive.html": [Response(HTML)],
+        }
+    )
     monkeypatch.setattr("olive_mcp_server.fetchers._http.get_session", lambda: session)
     one_failed = docs.fetch_official_docs(pages=["index", "why-olive"])
     assert one_failed["status"] == "partial"
     assert isinstance(one_failed["pages"]["index"], dict)
-    failed_session = Session({
-        "https://microsoft.github.io/Olive/index.html": [Response(status_code=404)],
-    })
+    failed_session = Session(
+        {
+            "https://microsoft.github.io/Olive/index.html": [Response(status_code=404)],
+        }
+    )
     monkeypatch.setattr("olive_mcp_server.fetchers._http.get_session", lambda: failed_session)
     all_failed = docs.fetch_official_docs(pages=["index"])
     assert all_failed["status"] == "error"
@@ -100,10 +108,12 @@ def test_ort_uses_case_sensitive_slugs_and_cpu_overview(monkeypatch):
 
 
 def test_ort_overview_failure_is_partial(monkeypatch):
-    session = Session({
-        "https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html": [Response(HTML)],
-        "https://onnxruntime.ai/docs/execution-providers/": [Response(status_code=503)],
-    })
+    session = Session(
+        {
+            "https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html": [Response(HTML)],
+            "https://onnxruntime.ai/docs/execution-providers/": [Response(status_code=503)],
+        }
+    )
     monkeypatch.setattr("olive_mcp_server.fetchers._http.get_session", lambda: session)
     result = ort.fetch_onnx_runtime_docs(["CUDAExecutionProvider"])
     assert result["status"] == "partial"
@@ -121,35 +131,41 @@ def test_http_retries_503_and_honors_retry_after(monkeypatch):
 
 
 def test_http_follows_same_host_redirect_and_rejects_cross_host(monkeypatch):
-    session = Session({
-        "https://example.test/page": [
-            Response(status_code=302, headers={"Location": "/final"}),
-        ],
-        "https://example.test/final": [Response(HTML)],
-    })
+    session = Session(
+        {
+            "https://example.test/page": [
+                Response(status_code=302, headers={"Location": "/final"}),
+            ],
+            "https://example.test/final": [Response(HTML)],
+        }
+    )
     monkeypatch.setattr(_http, "get_session", lambda: session)
     assert _http.fetch_html("https://example.test/page")
     assert session.urls == ["https://example.test/page", "https://example.test/final"]
 
-    cross_host = Session({
-        "https://example.test/page": [
-            Response(status_code=302, headers={"Location": "https://other.test/final"}),
-        ],
-    })
+    cross_host = Session(
+        {
+            "https://example.test/page": [
+                Response(status_code=302, headers={"Location": "https://other.test/final"}),
+            ],
+        }
+    )
     monkeypatch.setattr(_http, "get_session", lambda: cross_host)
     with pytest.raises(Exception, match="another host"):
         _http.fetch_html("https://example.test/page")
 
 
 def test_http_retry_budget_does_not_consume_redirect_budget(monkeypatch):
-    session = Session({
-        "https://example.test/page": [
-            Response(status_code=503),
-            Response(status_code=503),
-            Response(status_code=302, headers={"Location": "/final"}),
-        ],
-        "https://example.test/final": [Response(status_code=503), Response(HTML)],
-    })
+    session = Session(
+        {
+            "https://example.test/page": [
+                Response(status_code=503),
+                Response(status_code=503),
+                Response(status_code=302, headers={"Location": "/final"}),
+            ],
+            "https://example.test/final": [Response(status_code=503), Response(HTML)],
+        }
+    )
     monkeypatch.setattr(_http, "get_session", lambda: session)
     monkeypatch.setattr(_http.time, "sleep", lambda _seconds: None)
     assert _http.fetch_html("https://example.test/page")

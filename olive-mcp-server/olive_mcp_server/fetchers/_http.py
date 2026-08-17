@@ -25,9 +25,11 @@ def get_session() -> requests.Session:
     global _session
     if _session is None:
         _session = requests.Session()
-        _session.headers.update({
-            "User-Agent": f"olive-mcp-server/{__version__} (knowledge-base refresh)",
-        })
+        _session.headers.update(
+            {
+                "User-Agent": f"olive-mcp-server/{__version__} (knowledge-base refresh)",
+            }
+        )
     return _session
 
 
@@ -112,12 +114,12 @@ def markdown_from_html(html: str) -> str:
     main = soup.find("main") or soup.find(attrs={"role": "main"}) or soup.find("article") or soup
     for tag in main.find_all(["script", "style", "nav", "header", "footer", "form"]):
         tag.decompose()
+
     def is_sidebar(node: Any) -> bool:
         classes = " ".join(node.get("class", [])).lower()
         identifier = str(node.get("id", "")).lower()
         return node.name in {"aside", "div", "section"} and any(
-            token in f"{classes} {identifier}"
-            for token in ("sidebar", "toc", "table-of-contents")
+            token in f"{classes} {identifier}" for token in ("sidebar", "toc", "table-of-contents")
         )
 
     for tag in main.find_all(is_sidebar):

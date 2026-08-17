@@ -25,15 +25,19 @@ def fetch_onnx_runtime_docs(execution_providers: list[str] | None = None) -> dic
     Returns:
         Dict mapping EP name to Markdown docs content or error info.
     """
-    eps = execution_providers if execution_providers is not None else [
-        "CPUExecutionProvider",
-        "CUDAExecutionProvider",
-        "TensorrtExecutionProvider",
-        "CoreMLExecutionProvider",
-        "QNNExecutionProvider",
-        "OpenVINOExecutionProvider",
-        "DirectMLExecutionProvider",
-    ]
+    eps = (
+        execution_providers
+        if execution_providers is not None
+        else [
+            "CPUExecutionProvider",
+            "CUDAExecutionProvider",
+            "TensorrtExecutionProvider",
+            "CoreMLExecutionProvider",
+            "QNNExecutionProvider",
+            "OpenVINOExecutionProvider",
+            "DirectMLExecutionProvider",
+        ]
+    )
     result: dict[str, Any] = {
         "status": "ok",
         "source": ONNX_RUNTIME_EP_URL,

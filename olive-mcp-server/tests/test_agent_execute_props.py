@@ -18,7 +18,6 @@ from hypothesis import strategies as st
 
 from olive_mcp_server.tools.agent_execute import _clamp_timeout, execute_and_observe
 
-
 # ---------------------------------------------------------------------------
 # Feature: v0.3-agent-mcp-tools, Property 1: Timeout Clamping Invariant
 #
@@ -37,9 +36,7 @@ class TestTimeoutClampingInvariant:
     def test_clamped_timeout_within_bounds(self, timeout: int) -> None:
         """For any integer T, _clamp_timeout(T) is in [10, 1800]."""
         result = _clamp_timeout(timeout)
-        assert 10 <= result <= 1800, (
-            f"_clamp_timeout({timeout}) = {result}, expected in [10, 1800]"
-        )
+        assert 10 <= result <= 1800, f"_clamp_timeout({timeout}) = {result}, expected in [10, 1800]"
 
     def test_none_defaults_to_600(self) -> None:
         """When timeout is None, _clamp_timeout returns 600."""
@@ -123,14 +120,10 @@ class TestSideEffectFieldCorrectness:
     """Property 2: Side-effect field presence/absence."""
 
     @pytest.mark.parametrize("terminal_status", ["completed", "failed", "cancelled"])
-    def test_successful_submission_has_side_effect_true(
-        self, terminal_status: str
-    ) -> None:
+    def test_successful_submission_has_side_effect_true(self, terminal_status: str) -> None:
         """When submission succeeds and polling reaches terminal, side_effect is True."""
         mock = _make_submission_success_mock(terminal_status=terminal_status)
-        with patch(
-            "olive_mcp_server.tools.agent_execute.studio_request", side_effect=mock
-        ):
+        with patch("olive_mcp_server.tools.agent_execute.studio_request", side_effect=mock):
             result = execute_and_observe(recipe={"input_model": {"type": "onnx"}}, timeout=10)
 
         assert "side_effect" in result, (
@@ -141,20 +134,15 @@ class TestSideEffectFieldCorrectness:
         # JSON round-trip (Property 10 piggyback)
         assert json.loads(json.dumps(result)) == result
 
-    @pytest.mark.parametrize(
-        "error_code", ["invalid_recipe", "submission_denied", "studio_unavailable"]
-    )
+    @pytest.mark.parametrize("error_code", ["invalid_recipe", "submission_denied", "studio_unavailable"])
     def test_pre_submission_error_no_side_effect(self, error_code: str) -> None:
         """When submission fails (error before polling), side_effect key is absent."""
         mock = _make_submission_error_mock(error_code)
-        with patch(
-            "olive_mcp_server.tools.agent_execute.studio_request", side_effect=mock
-        ):
+        with patch("olive_mcp_server.tools.agent_execute.studio_request", side_effect=mock):
             result = execute_and_observe(recipe={"input_model": {"type": "onnx"}}, timeout=10)
 
         assert "side_effect" not in result, (
-            f"Expected no 'side_effect' key in error result for {error_code}, "
-            f"got keys: {list(result.keys())}"
+            f"Expected no 'side_effect' key in error result for {error_code}, got keys: {list(result.keys())}"
         )
 
         # JSON round-trip (Property 10 piggyback)

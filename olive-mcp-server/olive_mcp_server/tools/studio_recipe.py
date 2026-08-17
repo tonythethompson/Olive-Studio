@@ -12,9 +12,11 @@ from typing import Any
 from .studio_loopback import (
     DEFAULT_TIMEOUT_SECONDS,
     ENV_API_URL,
-    err as _err,
     resolve_studio_base,
     studio_request,
+)
+from .studio_loopback import (
+    err as _err,
 )
 
 BRIDGE_PATH = "/api/mcp/studio-recipe"
@@ -96,9 +98,7 @@ def _check_success_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
         missing = [
             k
             for k in _REQUIRED_SUCCESS
-            if _get(payload, k) is None
-            and k not in payload
-            and _FIELD_ALIASES.get(k, k) not in payload
+            if _get(payload, k) is None and k not in payload and _FIELD_ALIASES.get(k, k) not in payload
         ]
         return _err(
             "invalid_bridge_response",

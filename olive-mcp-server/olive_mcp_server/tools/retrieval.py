@@ -43,12 +43,12 @@ _INFLIGHT_FUTURE: concurrent.futures.Future[Any] | None = None
 def get_retrieval_mode(override: str | None = None) -> str:
     """
     Determine the effective retrieval mode from an override or environment setting.
-    
+
     Parameters:
-    	override (str | None): Optional mode value that takes precedence over the environment setting.
-    
+        override (str | None): Optional mode value that takes precedence over the environment setting.
+
     Returns:
-    	str: A supported retrieval mode, or the default mode when the selected value is empty or invalid.
+        str: A supported retrieval mode, or the default mode when the selected value is empty or invalid.
     """
     if override is not None and str(override).strip():
         raw = str(override).strip().lower()
@@ -62,9 +62,10 @@ def get_retrieval_mode(override: str | None = None) -> str:
 def get_semantic_budget_ms() -> int:
     """
     Determine the time budget for cold semantic retrieval work.
-    
+
     Returns:
-    	int: A nonnegative budget in milliseconds; zero means unlimited. Invalid configuration values use the default budget.
+        int: A nonnegative budget in milliseconds; zero means unlimited. Invalid
+        configuration values use the default budget.
     """
     raw = os.environ.get("OLIVE_MCP_SEMANTIC_BUDGET_MS", str(DEFAULT_SEMANTIC_BUDGET_MS))
     try:
@@ -76,9 +77,9 @@ def get_semantic_budget_ms() -> int:
 def _clear_inflight_if_current(future: concurrent.futures.Future[Any]) -> None:
     """
     Clear the tracked in-flight future when it matches the specified future.
-    
+
     Parameters:
-    	future (concurrent.futures.Future[Any]): Future to compare with the tracked in-flight operation.
+        future (concurrent.futures.Future[Any]): Future to compare with the tracked in-flight operation.
     """
     global _INFLIGHT_FUTURE
     with _INFLIGHT_LOCK:
@@ -89,17 +90,17 @@ def _clear_inflight_if_current(future: concurrent.futures.Future[Any]) -> None:
 def run_with_budget(fn: Callable[[], T], budget_ms: int) -> tuple[T | None, BudgetOutcome]:
     """
     Run a callable synchronously or within a wall-clock time budget.
-    
+
     Parameters:
         fn (Callable[[], T]): Callable to execute.
         budget_ms (int): Maximum execution time in milliseconds; nonpositive values
             allow unlimited execution.
-    
+
     Returns:
         tuple[T | None, BudgetOutcome]: The callable result and an outcome:
         ``ok`` on success, ``timeout`` when this call's budget expires, or ``busy``
         when another budgeted callable is already in flight (single-flight).
-    
+
     Exceptions:
         Exception: Propagates exceptions raised by the callable.
     """

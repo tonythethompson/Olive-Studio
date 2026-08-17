@@ -17,8 +17,8 @@ from typing import Any
 
 import requests
 
-from .studio_loopback import err
 from .strategy_advisor import normalize_model_type
+from .studio_loopback import err
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +30,7 @@ logger = logging.getLogger(__name__)
 # Allow alphanumeric, hyphens, underscores, dots, and exactly one slash.
 # Reject path traversal (..), query strings (?), fragments (#), control chars,
 # and whitespace.
-_VALID_MODEL_ID_RE = re.compile(
-    r"^[A-Za-z0-9][\w.\-]*/[\w.\-]+$"
-)
+_VALID_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][\w.\-]*/[\w.\-]+$")
 
 
 def _is_valid_model_id(model_id: str) -> bool:
@@ -208,6 +206,7 @@ def _extract_architecture(data: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # Main tool function
 # ---------------------------------------------------------------------------
+
 
 def get_model_info(model_id: str) -> dict[str, Any]:
     """Look up model metadata by HuggingFace ID.

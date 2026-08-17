@@ -159,9 +159,7 @@ def test_credentials_in_url_rejected(monkeypatch: pytest.MonkeyPatch):
         "http://127.0.0.1:notaport",
     ],
 )
-def test_invalid_or_out_of_range_port_rejected(
-    monkeypatch: pytest.MonkeyPatch, bad_url: str
-):
+def test_invalid_or_out_of_range_port_rejected(monkeypatch: pytest.MonkeyPatch, bad_url: str):
     """Objective: malformed / out-of-range ports → studio_unavailable (not request-time crash)."""
     _set_loopback_url(monkeypatch, bad_url)
     opener = _patch_opener(monkeypatch, return_value=_mock_response(_SUCCESS_PAYLOAD))
@@ -192,9 +190,7 @@ def test_resolve_studio_base_rejects_out_of_range_port(monkeypatch: pytest.Monke
         "http://127.0.0.1:3000/path?q=1#f",
     ],
 )
-def test_resolve_studio_base_rejects_path_query_fragment(
-    monkeypatch: pytest.MonkeyPatch, bad_url: str
-):
+def test_resolve_studio_base_rejects_path_query_fragment(monkeypatch: pytest.MonkeyPatch, bad_url: str):
     """Objective: OLIVE_STUDIO_API_URL must be a bare base URL."""
     monkeypatch.setenv(ENV_API_URL, bad_url)
     base, err = studio_loopback.resolve_studio_base()
@@ -213,9 +209,7 @@ def test_resolve_studio_base_rejects_path_query_fragment(
         "https://127.0.0.1:3443",
     ],
 )
-def test_resolve_studio_base_accepts_bare_base_url(
-    monkeypatch: pytest.MonkeyPatch, ok_url: str
-):
+def test_resolve_studio_base_accepts_bare_base_url(monkeypatch: pytest.MonkeyPatch, ok_url: str):
     monkeypatch.setenv(ENV_API_URL, ok_url)
     base, err = studio_loopback.resolve_studio_base()
     assert err is None
