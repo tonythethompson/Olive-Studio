@@ -116,3 +116,4 @@ src-tauri/gen/
 infra/terraform/terraform.tfstate*
 infra/terraform/.terraform/
 .kiro/specs/cloudflare-env-credential-ux/.config.kiro
+/ATXDocumentation
