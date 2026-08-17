@@ -38,9 +38,9 @@ export const TOUR_STEPS: DriveStep[] = [
   {
     data: { id: "overview" },
     popover: {
-      title: "What Olive is",
+      title: "Meet Olive",
       description:
-        "Olive is Microsoft's open-source toolkit for making machine learning models smaller and faster. It converts models to ONNX and applies optimizations like quantization so they run on your CPU, GPU, or NPU. Olive Studio helps you pick a model, target your hardware, and build that recipe. Press Next or the right arrow to continue.",
+        "Olive is an open-source toolkit from Microsoft for optimizing machine learning models. It can convert models to ONNX and run optimizations like quantization and pruning so they run efficiently on your CPU, GPU, or NPU. Olive Studio is where you pick a model, choose your target hardware, and build that recipe.",
       align: "center",
     },
   },
@@ -51,7 +51,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Your pipeline",
       description:
-        "These four steps are the whole workflow: pick a model, target your hardware, build and run an optimization recipe, then try the result. Click a step to jump to it, or press Next or the arrow keys.",
+        "Your pipeline has four steps: pick a model, choose your target hardware, build and run a recipe, then try the result. Select the first step, Model source, to continue.",
       side: "right",
       align: "start",
     },
@@ -62,7 +62,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Model source",
       description:
-        "Apply the sample recipe if you do not have a model yet, or apply any other recipe. If a model is already loaded, press Next or the arrow keys. Applying a recipe also moves the tour forward.",
+        "Select a recipe to load the model you want to optimize. We'll auto-fill the Hugging Face URL so it downloads during the Olive run. You can also point to a different HF repo, use local weights, or reference an Azure ML asset.",
       side: "bottom",
       align: "start",
     },
@@ -75,7 +75,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Hardware",
       description:
-        "Click a provider card to choose where the optimized model will run (CPU, GPU, or NPU). Next or the arrow keys also work and keep the current provider.",
+        "Select your target to set where the optimized model will run: CPU, GPU, or NPU.",
       side: "bottom",
       align: "start",
     },
@@ -88,7 +88,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Recipe and run",
       description:
-        "This graph is the Olive recipe. Click a node to inspect it, or press Next or the arrow keys.",
+        "This graph is your Olive recipe. Select a node to see its details, then hit Run to execute the pipeline.",
       side: "bottom",
       align: "start",
     },
@@ -99,7 +99,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Playground",
       description:
-        "Try the optimized model in the browser: in-browser inference, WebGPU benchmarks, and the model Arena. Press Next or the arrow keys to continue.",
+        "Try the optimized model here: in-browser inference, WebGPU benchmarks, and side-by-side model comparison in the Arena.",
       side: "top",
       align: "start",
     },
@@ -111,7 +111,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "The Assistant",
       description:
-        "Click Open Assistant to ask questions about Olive and get help building your recipe. Next or the arrow keys also work.",
+        "Select Open Assistant to ask questions about Olive and get help building your recipe.",
       side: "bottom",
       align: "end",
     },
@@ -122,7 +122,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Replay this tour anytime",
       description:
-        "That is the tour. Run it again whenever you like from Settings, Take the tour.",
+        "You're all set. Replay this tour anytime from Settings by selecting Take the tour.",
       side: "bottom",
       align: "end",
     },

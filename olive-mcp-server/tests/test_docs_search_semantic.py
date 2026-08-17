@@ -7,6 +7,7 @@ import pytest
 
 from olive_mcp_server.tools import docs_search
 from olive_mcp_server.tools.docs_search import search_olive_documentation
+from olive_mcp_server.tools.index_store import content_hash_pairs
 
 
 @pytest.fixture(autouse=True)
@@ -397,7 +398,43 @@ def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(tmp_path, monkeyp
     assert "bad_utf8" not in sources
 
 
-def test_iter_kb_json_files_rejects_symlinks_outside_kb_dir(tmp_path, monkeypatch: pytest.MonkeyPatch):
+def test_generator_sidecars_excluded_from_kb_hash(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Generator-written sidecars must not change the searchable KB content.
+
+    update_kb.py / expand_kb.py write ``refresh_metadata.json`` (plus the
+    already-excluded report files) into the KB directory at refresh time.
+    If any of them leak into ``_load_kb_text()``, the content hash drifts
+    from the shipped index and semantic search rebuilds on every run.
+    """
+    (tmp_path / "passes.json").write_text('{"pass": "OnnxQuantization"}', encoding="utf-8")
+
+    monkeypatch.setattr(docs_search, "KB_DIR", tmp_path)
+    baseline_pairs = docs_search._load_kb_text()
+    baseline_hash = content_hash_pairs(baseline_pairs)
+
+    # Simulate a KB refresh run dropping its sidecars next to the KB files.
+    # String leaves mirror the real refresh_metadata.json (generator, timestamps,
+    # fingerprints) so the content hash would drift if the file were indexed.
+    (tmp_path / "refresh_metadata.json").write_text(
+        '{"schema_version": 1, "generator_version": "0.5.0",'
+        ' "source_timestamp": "2026-08-12T21:00:51Z",'
+        ' "runs": {"update_kb": {"generator": "update_kb", "success": true}}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "update_report.json").write_text('{"generator": "update_kb"}', encoding="utf-8")
+    (tmp_path / "candidate_quirks.json").write_text('[{"title": "candidate"}]', encoding="utf-8")
+
+    after_pairs = docs_search._load_kb_text()
+    assert content_hash_pairs(after_pairs) == baseline_hash
+    sources = " ".join(path for path, _ in after_pairs)
+    assert "refresh_metadata" not in sources
+    assert "update_report" not in sources
+    assert "candidate_quirks" not in sources
+
+
+def test_iter_kb_json_files_rejects_symlinks_outside_kb_dir(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
     """Path traversal guard: symlinks resolving outside KB_DIR are rejected."""
     import os
 

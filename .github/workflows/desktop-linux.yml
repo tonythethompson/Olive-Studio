@@ -1,27 +1,7 @@
 name: Linux Desktop Package
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/desktop-linux.yml"
-      - ".github/workflows/desktop-release.yml"
-      - "src-tauri/**"
-      - "src-tauri/tauri.conf.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "server.ts"
-      - "src/**"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/desktop-linux.yml"
-      - ".github/workflows/desktop-release.yml"
-      - "src-tauri/**"
-      - "src-tauri/tauri.conf.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "server.ts"
-      - "src/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -134,3 +114,18 @@ jobs:
           test -x "$APPIMAGE_NODE"
           APPIMAGE_SERVER_ROOT="$(dirname "$(dirname "$APPIMAGE_SERVER_MJS")")"
           smoke_server "$APPIMAGE_SERVER_ROOT" "$APPIMAGE_NODE" "AppImage" 31416
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: olive-studio-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: olive-studio-appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
