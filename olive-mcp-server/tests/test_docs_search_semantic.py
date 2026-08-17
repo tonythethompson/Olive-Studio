@@ -432,9 +432,7 @@ def test_generator_sidecars_excluded_from_kb_hash(tmp_path, monkeypatch: pytest.
     assert "candidate_quirks" not in sources
 
 
-def test_iter_kb_json_files_rejects_symlinks_outside_kb_dir(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-):
+def test_iter_kb_json_files_rejects_symlinks_outside_kb_dir(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """Path traversal guard: symlinks resolving outside KB_DIR are rejected."""
     import os
 
