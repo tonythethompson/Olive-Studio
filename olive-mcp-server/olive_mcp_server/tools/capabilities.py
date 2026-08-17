@@ -21,14 +21,13 @@ from olive_mcp_server.tools.studio_loopback import _is_loopback_host
 TOOLSET_VERSION = "2026.08.0-phase3"
 
 
-
 def _kb_version() -> str:
     """
     Report a version marker for the knowledge-base JSON files.
-    
+
     Returns:
-    	str: A modification-time marker, ``"empty"`` when no JSON files exist, or
-    		``"unknown"`` when the directory cannot be accessed.
+        str: A modification-time marker, ``"empty"`` when no JSON files exist, or
+                ``"unknown"`` when the directory cannot be accessed.
     """
     mtimes: list[float] = []
     try:
@@ -59,9 +58,9 @@ def _semantic_available() -> bool:
 def _studio_url_status() -> tuple[bool, str | None]:
     """
     Validate the configured Studio API URL for supported schemes, loopback hosts, and absent credentials.
-    
+
     Returns:
-    	tuple[bool, str | None]: A validity flag and an explanatory reason when the URL is invalid.
+        tuple[bool, str | None]: A validity flag and an explanatory reason when the URL is invalid.
     """
     raw = (os.environ.get("OLIVE_STUDIO_API_URL") or "").strip()
     if not raw:
@@ -200,10 +199,10 @@ def get_mcp_capabilities(probe_studio: bool = False) -> dict[str, Any]:
 def _probe_studio(timeout_s: float = 2.0) -> bool:
     """
     Check whether the configured Studio endpoint is reachable.
-    
+
     Parameters:
         timeout_s (float): Maximum time in seconds allowed for the health check.
-    
+
     Returns:
         bool: `True` if Studio responds successfully, `False` if it is unavailable or unreachable.
     """
@@ -222,9 +221,9 @@ def _probe_studio(timeout_s: float = 2.0) -> bool:
 def _fetch_studio_policy() -> dict[str, Any] | None:
     """
     Retrieve Studio's agent-access policy when available.
-    
+
     Returns:
-    	dict[str, Any] | None: The agent-access policy, or `None` if Studio is unavailable or the response is invalid.
+        dict[str, Any] | None: The agent-access policy, or `None` if Studio is unavailable or the response is invalid.
     """
     try:
         from .studio_loopback import studio_request

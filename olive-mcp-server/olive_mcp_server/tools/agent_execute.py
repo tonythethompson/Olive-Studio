@@ -313,17 +313,21 @@ def execute_and_observe(
         if not isinstance(job_id, str) or not job_id:
             # The recipe was submitted but we cannot determine the job_id.
             # This is an uncertain side effect — the job may be running.
-            return finish(err(
-                "invalid_bridge_response",
-                "Olive Studio submission response missing job_id.",
-                side_effect=True,
-            ))
+            return finish(
+                err(
+                    "invalid_bridge_response",
+                    "Olive Studio submission response missing job_id.",
+                    side_effect=True,
+                )
+            )
         if not _JOB_ID_PATTERN.match(job_id):
-            return finish(err(
-                "invalid_bridge_response",
-                "Olive Studio submission response returned a malformed job_id.",
-                side_effect=True,
-            ))
+            return finish(
+                err(
+                    "invalid_bridge_response",
+                    "Olive Studio submission response returned a malformed job_id.",
+                    side_effect=True,
+                )
+            )
 
         state, timed_out, poll_error = _poll_until_terminal(quote(job_id, safe=""), effective_timeout)
         return finish(_observation_result(job_id, state, timed_out, poll_error))

@@ -80,9 +80,9 @@ def test_get_results_metadata_only(monkeypatch: pytest.MonkeyPatch):
     def fake_request(method, path, **_kw):
         """
         Provide a completed optimization job fixture for request tests.
-        
+
         Returns:
-        	dict: A completed job with logs and no latest metrics.
+                dict: A completed job with logs and no latest metrics.
         """
         return {
             "id": "jid-2",
@@ -103,6 +103,7 @@ def test_get_results_metadata_only(monkeypatch: pytest.MonkeyPatch):
     assert result["artifact_paths_absolute"] is False
     assert "Metadata only" in result["note"]
     assert result["side_effect"] is False
+
 
 def test_results_strips_absolute_paths_to_basenames(monkeypatch: pytest.MonkeyPatch):
     def fake_request(method, path, **kw):
@@ -176,6 +177,7 @@ def test_get_results_absolute_paths_require_env_opt_in(monkeypatch: pytest.Monke
 def test_get_job_empty_id():
     result = studio_jobs.get_optimization_job("  ")
     assert result["error"] == "invalid_job_id"
+
 
 def test_call_tool_list_jobs_unavailable(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OLIVE_STUDIO_API_URL", raising=False)

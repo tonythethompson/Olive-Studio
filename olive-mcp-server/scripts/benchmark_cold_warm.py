@@ -18,11 +18,11 @@ if str(SERVER_DIR) not in sys.path:
 
 def _ms(t0: float, t1: float) -> int:
     """Convert an elapsed time interval from seconds to integer milliseconds.
-    
+
     Parameters:
         t0 (float): Start time in seconds.
         t1 (float): End time in seconds.
-    
+
     Returns:
         int: The elapsed interval in milliseconds, truncated to an integer.
     """
@@ -32,9 +32,9 @@ def _ms(t0: float, t1: float) -> int:
 def main() -> int:
     """
     Run cold and warm in-process benchmarks for Olive MCP tools and print the results as formatted JSON.
-    
+
     Returns:
-    	int: Zero after the benchmark results are printed.
+        int: Zero after the benchmark results are printed.
     """
     from olive_mcp_server.mcp_server import call_tool
     from olive_mcp_server.tools import embeddings as emb
@@ -96,12 +96,8 @@ def main() -> int:
             "mode": "auto",
             "budget_ms": 50,
             "cold_ms": _ms(t0, t1),
-            "degraded": bool((r or {}).get("retrieval", {}).get("degraded"))
-            if isinstance(r, dict)
-            else None,
-            "effective": (r or {}).get("retrieval", {}).get("effective")
-            if isinstance(r, dict)
-            else None,
+            "degraded": bool((r or {}).get("retrieval", {}).get("degraded")) if isinstance(r, dict) else None,
+            "effective": (r or {}).get("retrieval", {}).get("effective") if isinstance(r, dict) else None,
             "scope": "tool_execution",
         }
     )

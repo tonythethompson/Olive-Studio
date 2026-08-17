@@ -22,7 +22,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -42,9 +41,7 @@ def assert_valid_error_structure(result: dict[str, Any]) -> None:
     error_code = result["error"]
     assert isinstance(error_code, str), f"'error' must be a string, got {type(error_code)}"
     assert len(error_code) > 0, "'error' must be non-empty"
-    assert _ERROR_CODE_PATTERN.match(error_code), (
-        f"'error' must match ^[a-z][a-z0-9_]*$, got: {error_code!r}"
-    )
+    assert _ERROR_CODE_PATTERN.match(error_code), f"'error' must match ^[a-z][a-z0-9_]*$, got: {error_code!r}"
 
     message = result["message"]
     assert isinstance(message, str), f"'message' must be a string, got {type(message)}"
@@ -59,14 +56,13 @@ def assert_json_round_trip(result: dict[str, Any]) -> None:
     """
     serialized = json.dumps(result, allow_nan=False)
     deserialized = json.loads(serialized)
-    assert deserialized == result, (
-        f"JSON round-trip failed:\n  original: {result}\n  after: {deserialized}"
-    )
+    assert deserialized == result, f"JSON round-trip failed:\n  original: {result}\n  after: {deserialized}"
 
 
 # ---------------------------------------------------------------------------
 # Mock helpers
 # ---------------------------------------------------------------------------
+
 
 def _studio_unavailable_mock(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Mock studio_request that always returns studio_unavailable."""
@@ -88,15 +84,18 @@ def _troubleshoot_mock(*args: Any, **kwargs: Any) -> dict[str, Any]:
 
 # We use lazy parametrize IDs and callables to avoid importing missing modules at collection time.
 
+
 def _case_model_info_empty_id() -> dict[str, Any]:
     """get_model_info('') -> invalid_model_id"""
     from olive_mcp_server.tools.agent_model_info import get_model_info
+
     return get_model_info("")
 
 
 def _case_execute_studio_unavailable() -> dict[str, Any]:
     """execute_and_observe({}, timeout=10) with studio_unavailable mock -> studio_unavailable"""
     from olive_mcp_server.tools.agent_execute import execute_and_observe
+
     with patch(
         "olive_mcp_server.tools.agent_execute.studio_request",
         side_effect=_studio_unavailable_mock,
@@ -106,31 +105,38 @@ def _case_execute_studio_unavailable() -> dict[str, Any]:
 
 def _case_plan_optimization_empty() -> dict[str, Any]:
     """plan_optimization('') -> invalid_input"""
-    from olive_mcp_server.tools.agent_planner import plan_optimization
+    from olive_mcp_server.tools.agent_planner import plan_optimization  # noqa: F811
+
     return plan_optimization("")
 
 
 def _case_plan_optimization_unparseable() -> dict[str, Any]:
     """plan_optimization('hello world no keywords') -> unparseable_intent"""
-    from olive_mcp_server.tools.agent_planner import plan_optimization
+    from olive_mcp_server.tools.agent_planner import plan_optimization  # noqa: F811
+
     return plan_optimization("hello world no keywords")
 
 
 def _case_diagnose_empty_error() -> dict[str, Any]:
     """diagnose_and_fix('', {}) -> invalid_input"""
     from olive_mcp_server.tools.agent_diagnosis import diagnose_and_fix
+
     return diagnose_and_fix("", {})
 
 
 def _case_diagnose_oversized_error() -> dict[str, Any]:
     """diagnose_and_fix('x' * 5000, {}) -> invalid_input"""
     from olive_mcp_server.tools.agent_diagnosis import diagnose_and_fix
-    with patch(
-        "olive_mcp_server.tools.agent_diagnosis.studio_request",
-        side_effect=_studio_unavailable_mock,
-    ), patch(
-        "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
-        side_effect=_troubleshoot_mock,
+
+    with (
+        patch(
+            "olive_mcp_server.tools.agent_diagnosis.studio_request",
+            side_effect=_studio_unavailable_mock,
+        ),
+        patch(
+            "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
+            side_effect=_troubleshoot_mock,
+        ),
     ):
         return diagnose_and_fix("x" * 5000, {})
 
@@ -138,12 +144,14 @@ def _case_diagnose_oversized_error() -> dict[str, Any]:
 def _case_compare_too_few_jobs() -> dict[str, Any]:
     """compare_results(['a']) -> invalid_job_count"""
     from olive_mcp_server.tools.agent_compare import compare_results
+
     return compare_results(["a"])
 
 
 def _case_compare_invalid_job_id() -> dict[str, Any]:
     """compare_results(['a!!!', 'b!!!']) -> invalid_job_id"""
     from olive_mcp_server.tools.agent_compare import compare_results
+
     return compare_results(["a!!!", "b!!!"])
 
 
@@ -186,7 +194,7 @@ _IMPLEMENTED_ERROR_CASES = [
 ]
 
 # Cases that require plan_optimization (agent_planner.py)
-from olive_mcp_server.tools.agent_planner import plan_optimization  # noqa: F401
+from olive_mcp_server.tools.agent_planner import plan_optimization  # noqa: F401, E402
 
 _PLANNER_ERROR_CASES = [
     pytest.param(
@@ -223,9 +231,7 @@ class TestErrorStructureInvariant:
         """Each error response satisfies the universal error structure contract."""
         result = trigger_fn()
         assert_valid_error_structure(result)
-        assert result["error"] == expected_code, (
-            f"Expected error code {expected_code!r}, got {result['error']!r}"
-        )
+        assert result["error"] == expected_code, f"Expected error code {expected_code!r}, got {result['error']!r}"
 
     @pytest.mark.parametrize("trigger_fn, expected_code", _ALL_ERROR_CASES)
     def test_error_json_round_trip(
@@ -298,16 +304,19 @@ class TestJsonRoundTripForNonErrors:
         """diagnose_and_fix with no KB match produces round-trippable output."""
         from olive_mcp_server.tools.agent_diagnosis import diagnose_and_fix
 
-        with patch(
-            "olive_mcp_server.tools.agent_diagnosis.studio_request",
-            side_effect=_studio_unavailable_mock,
-        ), patch(
-            "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
-            return_value={
-                "matched_entry": None,
-                "root_cause": "",
-                "workaround": "",
-            },
+        with (
+            patch(
+                "olive_mcp_server.tools.agent_diagnosis.studio_request",
+                side_effect=_studio_unavailable_mock,
+            ),
+            patch(
+                "olive_mcp_server.tools.agent_diagnosis.troubleshoot_olive_error",
+                return_value={
+                    "matched_entry": None,
+                    "root_cause": "",
+                    "workaround": "",
+                },
+            ),
         ):
             result = diagnose_and_fix("RuntimeError: CUDA OOM", {"passes": {}})
 

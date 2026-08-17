@@ -14,11 +14,11 @@ import os
 import re
 from typing import Any
 
+from .agent_model_info import _is_valid_model_id
+from .normalization import parse_hardware_target
 from .strategy_advisor import get_quantization_strategy, normalize_model_type
 from .studio_loopback import err
-from .agent_model_info import _is_valid_model_id
 from .studio_recipe import validate_ui_state_recipe
-from .normalization import parse_hardware_target
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,23 @@ _MODEL_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 # Short slash-separated tokens that should not be treated as model references.
-_MODEL_REF_STOPWORDS = frozenset({
-    "and/or", "input/output", "int4/int8", "int8/int4", "fp16/fp32",
-    "fp32/fp16", "cpu/gpu", "gpu/cpu", "train/eval", "eval/train",
-    "onnx/pt", "pt/onnx", "pytorch/torch",
-})
+_MODEL_REF_STOPWORDS = frozenset(
+    {
+        "and/or",
+        "input/output",
+        "int4/int8",
+        "int8/int4",
+        "fp16/fp32",
+        "fp32/fp16",
+        "cpu/gpu",
+        "gpu/cpu",
+        "train/eval",
+        "eval/train",
+        "onnx/pt",
+        "pt/onnx",
+        "pytorch/torch",
+    }
+)
 
 _OPTIMIZATION_KEYWORDS = re.compile(
     r"\b(?:quantiz(?:e|ation)|compress|optimi[sz]e|speed|latency|smaller|"
@@ -78,25 +90,27 @@ _OPTIMIZATION_KEYWORDS = re.compile(
 # Canonical ONNX Runtime execution-provider IDs accepted by the UI's
 # ihvProvider field (see src/types.ts IHVProvider). Used to gate
 # _normalize_provider so unknown values do not pass through.
-_UI_PROVIDER_IDS = frozenset({
-    "CUDAExecutionProvider",
-    "TensorrtExecutionProvider",
-    "NvTensorRTRTXExecutionProvider",
-    "DmlExecutionProvider",
-    "OpenVINOExecutionProvider",
-    "QNNExecutionProvider",
-    "QnnAbiExecutionProvider",
-    "ROCMExecutionProvider",
-    "WebGpuExecutionProvider",
-    "CoreMLExecutionProvider",
-    "NNAPIExecutionProvider",
-    "VitisAIExecutionProvider",
-    "SNPEExecutionProvider",
-    "TensorflowLiteExecutionProvider",
-    "XnnpackExecutionProvider",
-    "WasmExecutionProvider",
-    "CPUExecutionProvider",
-})
+_UI_PROVIDER_IDS = frozenset(
+    {
+        "CUDAExecutionProvider",
+        "TensorrtExecutionProvider",
+        "NvTensorRTRTXExecutionProvider",
+        "DmlExecutionProvider",
+        "OpenVINOExecutionProvider",
+        "QNNExecutionProvider",
+        "QnnAbiExecutionProvider",
+        "ROCMExecutionProvider",
+        "WebGpuExecutionProvider",
+        "CoreMLExecutionProvider",
+        "NNAPIExecutionProvider",
+        "VitisAIExecutionProvider",
+        "SNPEExecutionProvider",
+        "TensorflowLiteExecutionProvider",
+        "XnnpackExecutionProvider",
+        "WasmExecutionProvider",
+        "CPUExecutionProvider",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -202,12 +216,18 @@ def _normalize_provider(value: Any) -> str | None:
     if not isinstance(value, str) or not value:
         return None
     canonical = {
-        "nvidia": "CUDAExecutionProvider", "cuda": "CUDAExecutionProvider",
-        "tensorrt": "TensorrtExecutionProvider", "directml": "DmlExecutionProvider",
-        "amd": "ROCMExecutionProvider", "rocm": "ROCMExecutionProvider",
-        "apple": "CoreMLExecutionProvider", "coreml": "CoreMLExecutionProvider",
-        "qualcomm": "QNNExecutionProvider", "qnn": "QNNExecutionProvider",
-        "intel": "OpenVINOExecutionProvider", "openvino": "OpenVINOExecutionProvider",
+        "nvidia": "CUDAExecutionProvider",
+        "cuda": "CUDAExecutionProvider",
+        "tensorrt": "TensorrtExecutionProvider",
+        "directml": "DmlExecutionProvider",
+        "amd": "ROCMExecutionProvider",
+        "rocm": "ROCMExecutionProvider",
+        "apple": "CoreMLExecutionProvider",
+        "coreml": "CoreMLExecutionProvider",
+        "qualcomm": "QNNExecutionProvider",
+        "qnn": "QNNExecutionProvider",
+        "intel": "OpenVINOExecutionProvider",
+        "openvino": "OpenVINOExecutionProvider",
         "webgpu": "WebGpuExecutionProvider",
     }
     resolved = canonical.get(value.lower(), value)
@@ -325,54 +345,64 @@ def _generate_alternatives(
     # Alternative 1: Different precision
     if "int4" in algo:
         alt_passes: dict[str, Any] = {"quantization": True, "quantPrecision": "int8"}
-        alternatives.append({
-            "description": "INT8 quantization (higher accuracy, larger model)",
-            "ui_state_patch": {"passes": alt_passes},
-        })
+        alternatives.append(
+            {
+                "description": "INT8 quantization (higher accuracy, larger model)",
+                "ui_state_patch": {"passes": alt_passes},
+            }
+        )
     elif "int8" in algo:
         alt_passes = {"quantization": True, "quantPrecision": "int4"}
-        alternatives.append({
-            "description": "INT4 quantization (smaller model, potentially lower accuracy)",
-            "ui_state_patch": {"passes": alt_passes},
-        })
+        alternatives.append(
+            {
+                "description": "INT4 quantization (smaller model, potentially lower accuracy)",
+                "ui_state_patch": {"passes": alt_passes},
+            }
+        )
 
     # Alternative 2: FP16 only (if not already the primary)
     if "fp16" not in algo and "float16" not in algo:
-        alternatives.append({
-            "description": "FP16 conversion only (minimal accuracy loss, ~50% size reduction)",
-            "ui_state_patch": {
-                "passes": {
-                    "fp16Conversion": True,
-                    "passChain": ["OnnxConversion", "OnnxFloatToFloat16"],
+        alternatives.append(
+            {
+                "description": "FP16 conversion only (minimal accuracy loss, ~50% size reduction)",
+                "ui_state_patch": {
+                    "passes": {
+                        "fp16Conversion": True,
+                        "passChain": ["OnnxConversion", "OnnxFloatToFloat16"],
+                    },
                 },
-            },
-        })
+            }
+        )
 
     # Alternative 3: Different quant method for LLMs
     if model_type == "llm" and "awq" in algo:
-        alternatives.append({
-            "description": "GPTQ quantization (alternative to AWQ, better for some models)",
-            "ui_state_patch": {
-                "passes": {
-                    "quantization": True,
-                    "quantPrecision": "int4",
-                    "quantMethod": "gptq",
-                    "passChain": ["OnnxConversion", "GptqQuantizer"],
+        alternatives.append(
+            {
+                "description": "GPTQ quantization (alternative to AWQ, better for some models)",
+                "ui_state_patch": {
+                    "passes": {
+                        "quantization": True,
+                        "quantPrecision": "int4",
+                        "quantMethod": "gptq",
+                        "passChain": ["OnnxConversion", "GptqQuantizer"],
+                    },
                 },
-            },
-        })
+            }
+        )
     elif model_type == "llm" and "gptq" in algo:
-        alternatives.append({
-            "description": "AWQ quantization (alternative to GPTQ, faster inference)",
-            "ui_state_patch": {
-                "passes": {
-                    "quantization": True,
-                    "quantPrecision": "int4",
-                    "quantMethod": "awq",
-                    "passChain": ["OnnxConversion", "NVModelOptQuantization"],
+        alternatives.append(
+            {
+                "description": "AWQ quantization (alternative to GPTQ, faster inference)",
+                "ui_state_patch": {
+                    "passes": {
+                        "quantization": True,
+                        "quantPrecision": "int4",
+                        "quantMethod": "awq",
+                        "passChain": ["OnnxConversion", "NVModelOptQuantization"],
+                    },
                 },
-            },
-        })
+            }
+        )
 
     return alternatives[:3]
 
@@ -531,8 +561,7 @@ def plan_optimization(
         if not any((parsed["hardware_target"], model_ref, optimization_goal)):
             return err(
                 "unparseable_intent",
-                "Could not identify a hardware target, model reference, or "
-                "optimization goal in the provided intent.",
+                "Could not identify a hardware target, model reference, or optimization goal in the provided intent.",
             )
 
         model_type = normalize_model_type(model_id or model_ref) if model_id or model_ref else "generic"

@@ -118,6 +118,11 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]" "mcp<2"
 
+      - name: Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
       - name: Pytest
         run: python -m pytest tests -q --tb=short
 

@@ -16,8 +16,7 @@ _RUNTIME_PATH = "/api/env/runtime"
 _MAX_NOTES = 12
 
 _DISCLAIMER = (
-    "Hints from local Olive Studio probe/venv only. "
-    "Static MCP KB remains authoritative when Studio is unavailable."
+    "Hints from local Olive Studio probe/venv only. Static MCP KB remains authoritative when Studio is unavailable."
 )
 
 # capability key → ORT-style provider name for a compact summary
@@ -126,16 +125,9 @@ def _project_success(
     probe: dict[str, Any],
     runtime: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    providers = _str_list(
-        probe.get("onnxRuntimeProviders") or probe.get("onnx_runtime_providers")
-    )
-    detected = _str_list(
-        probe.get("detectedProviders") or probe.get("detected_providers")
-    )
-    recommended = (
-        probe.get("recommendedProvider")
-        or probe.get("recommended_provider")
-    )
+    providers = _str_list(probe.get("onnxRuntimeProviders") or probe.get("onnx_runtime_providers"))
+    detected = _str_list(probe.get("detectedProviders") or probe.get("detected_providers"))
+    recommended = probe.get("recommendedProvider") or probe.get("recommended_provider")
     notes_raw = _as_list(probe.get("notes"))
     notes = [str(n) for n in notes_raw if n is not None][:_MAX_NOTES]
 

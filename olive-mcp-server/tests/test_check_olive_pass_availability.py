@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-
 _SCRIPT = Path(__file__).parents[1] / "scripts" / "check_olive_pass_availability.py"
 _SPEC = importlib.util.spec_from_file_location("check_olive_pass_availability", _SCRIPT)
 assert _SPEC and _SPEC.loader

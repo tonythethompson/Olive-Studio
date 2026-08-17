@@ -103,9 +103,7 @@ _EXECUTION_PROVIDER_TO_TARGET = {
     "WasmExecutionProvider": "WASM (Browser)",
 }
 
-_EXECUTION_PROVIDER_TO_TARGET_LOWER = {
-    key.lower(): value for key, value in _EXECUTION_PROVIDER_TO_TARGET.items()
-}
+_EXECUTION_PROVIDER_TO_TARGET_LOWER = {key.lower(): value for key, value in _EXECUTION_PROVIDER_TO_TARGET.items()}
 
 # Exact lowercase keys only (full stripped input). Applied after EP map, before
 # profile exact/substring match. Do not use loose substrings (e.g. bare "rtx").
@@ -149,9 +147,7 @@ _OV_DEVICE_PROFILES: dict[OpenVinoDevice, str] = {
 _ARC_PROFILE = "Intel Arc A770"
 
 # OpenVINO EP / shorthand prefix + optional device separator (: + or whitespace).
-_OV_PREFIX_DEVICE_RE = re.compile(
-    r"^(openvinoexecutionprovider|openvino)(?:[:\+\s]+([a-z0-9]+))?$"
-)
+_OV_PREFIX_DEVICE_RE = re.compile(r"^(openvinoexecutionprovider|openvino)(?:[:\+\s]+([a-z0-9]+))?$")
 
 _hardware_profiles_cache: list[dict] | None = None
 
@@ -200,10 +196,7 @@ def _invalid_openvino_device(token: str) -> HardwareTarget:
     return HardwareTarget(
         profile="",
         openvino_device=None,
-        error=(
-            f"Invalid OpenVINO device '{token}'. "
-            "Expected one of: CPU, GPU, NPU."
-        ),
+        error=(f"Invalid OpenVINO device '{token}'. Expected one of: CPU, GPU, NPU."),
     )
 
 

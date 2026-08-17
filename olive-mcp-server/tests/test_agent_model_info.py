@@ -14,7 +14,6 @@ import pytest
 
 from olive_mcp_server.tools import agent_model_info
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -22,9 +21,7 @@ from olive_mcp_server.tools import agent_model_info
 
 def _patch_hf(monkeypatch: pytest.MonkeyPatch, return_value):
     """Monkeypatch _fetch_hf_metadata to return a fixed value."""
-    monkeypatch.setattr(
-        agent_model_info, "_fetch_hf_metadata", lambda _model_id: return_value
-    )
+    monkeypatch.setattr(agent_model_info, "_fetch_hf_metadata", lambda _model_id: return_value)
 
 
 def _assert_json_roundtrip(result: dict):
@@ -41,10 +38,13 @@ class TestHfApiSuccess:
     """HF API returns valid metadata with safetensors.total."""
 
     def test_params_architecture_source_confidence(self, monkeypatch: pytest.MonkeyPatch):
-        _patch_hf(monkeypatch, {
-            "safetensors": {"total": 7_000_000_000},
-            "config": {"architectures": ["LlamaForCausalLM"]},
-        })
+        _patch_hf(
+            monkeypatch,
+            {
+                "safetensors": {"total": 7_000_000_000},
+                "config": {"architectures": ["LlamaForCausalLM"]},
+            },
+        )
 
         result = agent_model_info.get_model_info("meta-llama/Llama-3-8B")
 
@@ -57,10 +57,13 @@ class TestHfApiSuccess:
         assert result["side_effect"] is False
 
     def test_json_roundtrip(self, monkeypatch: pytest.MonkeyPatch):
-        _patch_hf(monkeypatch, {
-            "safetensors": {"total": 7_000_000_000},
-            "config": {"architectures": ["LlamaForCausalLM"]},
-        })
+        _patch_hf(
+            monkeypatch,
+            {
+                "safetensors": {"total": 7_000_000_000},
+                "config": {"architectures": ["LlamaForCausalLM"]},
+            },
+        )
         result = agent_model_info.get_model_info("meta-llama/Llama-3-8B")
         _assert_json_roundtrip(result)
 
@@ -149,13 +152,13 @@ class TestInvalidModelId:
     @pytest.mark.parametrize(
         "bad_id",
         [
-            "../etc/passwd",          # path traversal
-            "org/model\nname",       # control character (newline)
-            "org/model\tname",       # control character (tab)
-            "org/model?x=1",         # query string
-            "org/model#frag",        # fragment
-            "no-slash-here",         # missing slash
-            "a" * 257,               # exceeds 256 chars
+            "../etc/passwd",  # path traversal
+            "org/model\nname",  # control character (newline)
+            "org/model\tname",  # control character (tab)
+            "org/model?x=1",  # query string
+            "org/model#frag",  # fragment
+            "no-slash-here",  # missing slash
+            "a" * 257,  # exceeds 256 chars
         ],
         ids=[
             "path_traversal",
@@ -218,28 +221,37 @@ class TestDerivedFields:
 
     def test_vram_estimate_formula(self, monkeypatch: pytest.MonkeyPatch):
         """estimated_vram_gb = params_b * 2.0"""
-        _patch_hf(monkeypatch, {
-            "safetensors": {"total": 3_000_000_000},
-            "config": {"architectures": ["PhiForCausalLM"]},
-        })
+        _patch_hf(
+            monkeypatch,
+            {
+                "safetensors": {"total": 3_000_000_000},
+                "config": {"architectures": ["PhiForCausalLM"]},
+            },
+        )
         result = agent_model_info.get_model_info("microsoft/phi-3")
         assert result["estimated_vram_gb"] == pytest.approx(result["params_b"] * 2.0)
 
     def test_recommended_quant_int4_large(self, monkeypatch: pytest.MonkeyPatch):
         """params_b >= 6.0 -> int4"""
-        _patch_hf(monkeypatch, {
-            "safetensors": {"total": 8_000_000_000},
-            "config": {"architectures": ["LlamaForCausalLM"]},
-        })
+        _patch_hf(
+            monkeypatch,
+            {
+                "safetensors": {"total": 8_000_000_000},
+                "config": {"architectures": ["LlamaForCausalLM"]},
+            },
+        )
         result = agent_model_info.get_model_info("meta-llama/Llama-3-8B")
         assert result["recommended_quant"] == "int4"
 
     def test_recommended_quant_int8_small(self, monkeypatch: pytest.MonkeyPatch):
         """params_b < 6.0 -> int8"""
-        _patch_hf(monkeypatch, {
-            "safetensors": {"total": 2_000_000_000},
-            "config": {"architectures": ["BertModel"]},
-        })
+        _patch_hf(
+            monkeypatch,
+            {
+                "safetensors": {"total": 2_000_000_000},
+                "config": {"architectures": ["BertModel"]},
+            },
+        )
         result = agent_model_info.get_model_info("google/bert-base-uncased")
         assert result["recommended_quant"] == "int8"
 
@@ -259,12 +271,15 @@ class TestHfConfigNumParameters:
     """HF API returns config.num_parameters instead of safetensors.total."""
 
     def test_params_from_config(self, monkeypatch: pytest.MonkeyPatch):
-        _patch_hf(monkeypatch, {
-            "config": {
-                "num_parameters": 1_500_000_000,
-                "architectures": ["WhisperForConditionalGeneration"],
+        _patch_hf(
+            monkeypatch,
+            {
+                "config": {
+                    "num_parameters": 1_500_000_000,
+                    "architectures": ["WhisperForConditionalGeneration"],
+                },
             },
-        })
+        )
         result = agent_model_info.get_model_info("openai/whisper-large")
         assert result["params_b"] == pytest.approx(1.5, rel=1e-3)
         assert result["architecture"] == "WhisperForConditionalGeneration"
@@ -272,12 +287,15 @@ class TestHfConfigNumParameters:
         assert result["confidence"] == "high"
 
     def test_json_roundtrip(self, monkeypatch: pytest.MonkeyPatch):
-        _patch_hf(monkeypatch, {
-            "config": {
-                "num_parameters": 1_500_000_000,
-                "architectures": ["WhisperForConditionalGeneration"],
+        _patch_hf(
+            monkeypatch,
+            {
+                "config": {
+                    "num_parameters": 1_500_000_000,
+                    "architectures": ["WhisperForConditionalGeneration"],
+                },
             },
-        })
+        )
         result = agent_model_info.get_model_info("openai/whisper-large")
         _assert_json_roundtrip(result)
 
@@ -305,12 +323,15 @@ class TestArchitectureBasedModelType:
 
     def test_whisper_architecture_classifies_speech(self, monkeypatch: pytest.MonkeyPatch):
         """An opaque model ID with WhisperForConditionalGeneration → model_type=speech."""
-        _patch_hf(monkeypatch, {
-            "config": {
-                "num_parameters": 244_000_000,
-                "architectures": ["WhisperForConditionalGeneration"],
+        _patch_hf(
+            monkeypatch,
+            {
+                "config": {
+                    "num_parameters": 244_000_000,
+                    "architectures": ["WhisperForConditionalGeneration"],
+                },
             },
-        })
+        )
         result = agent_model_info.get_model_info("some-org/random-model-name")
         assert "error" not in result
         assert result["architecture"] == "WhisperForConditionalGeneration"

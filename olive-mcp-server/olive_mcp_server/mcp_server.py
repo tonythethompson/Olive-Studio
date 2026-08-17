@@ -124,12 +124,12 @@ _resolved_tools: dict[str, Any] = {}
 
 def _resolve_tool(name: str):
     """Resolve and cache a registered tool by name.
-    
+
     Parameters:
-    	name (str): Name of the tool to resolve.
-    
+        name (str): Name of the tool to resolve.
+
     Returns:
-    	Callable or None: The resolved tool, or `None` if the name is not registered.
+        Callable or None: The resolved tool, or `None` if the name is not registered.
     """
     if name in _resolved_tools:
         return _resolved_tools[name]
@@ -160,11 +160,11 @@ def _resolve_tool(name: str):
 def call_tool(name: str, args: dict | None = None):
     """
     Invoke a registered tool with the supplied arguments.
-    
+
     Parameters:
         name (str): Name of the registered tool.
         args (dict | None): Keyword arguments to pass to the tool.
-    
+
     Returns:
         The tool's result, or an error dictionary when the tool is unknown.
     """
@@ -199,13 +199,13 @@ def _build_mcp():
 def __getattr__(name: str):
     """
     Lazily provides the module's `mcp` and `TOOLS` attributes.
-    
+
     Parameters:
         name (str): Attribute name to resolve.
-    
+
     Returns:
         The MCP server instance for `mcp`, or the resolved tool list for `TOOLS`.
-    
+
     Raises:
         AttributeError: If `name` is not a supported module attribute.
     """

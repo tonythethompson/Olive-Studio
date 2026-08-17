@@ -115,6 +115,7 @@ def _format_ts(ts: float) -> str:
 # Hybrid scoring (semantic + keyword)
 # ---------------------------------------------------------------------------
 
+
 def _entry_embed_text(entry: dict[str, Any]) -> str:
     """Build the text used to embed a troubleshooting entry."""
     parts = [
@@ -158,12 +159,14 @@ def get_troubleshooting_index(
 ) -> tuple[list[dict[str, Any]], np.ndarray]:
     """
     Prepare embeddings for troubleshooting entries and reuse compatible cached indexes.
-    
+
     Parameters:
-        entries (list[dict[str, Any]] | None): Troubleshooting entries to index. When omitted, loads the default troubleshooting entries.
-    
+        entries (list[dict[str, Any]] | None): Troubleshooting entries to index.
+        When omitted, loads the default troubleshooting entries.
+
     Returns:
-        tuple[list[dict[str, Any]], np.ndarray]: The entries used to build the index and their position-aligned embedding matrix.
+        tuple[list[dict[str, Any]], np.ndarray]: The entries used to build the index
+        and their position-aligned embedding matrix.
     """
     if entries is None:
         entries = load_troubleshooting()
@@ -179,14 +182,17 @@ def get_troubleshooting_index(
     from .index_store import load_entry_embeddings
 
     # Prefer shipped precomputed embeddings when content hash matches.
-    stem = "ts_studio" if (
-        entries_list
-        and all(str(e.get("domain") or "") == "studio" for e in entries_list)
-    ) else "ts_olive"
+    stem = (
+        "ts_studio"
+        if (entries_list and all(str(e.get("domain") or "") == "studio" for e in entries_list))
+        else "ts_olive"
+    )
     # Auto-domain pool mixes olive+studio — never use a single-domain shipped index.
-    mixed = bool(entries_list) and any(
-        str(e.get("domain") or "olive") == "studio" for e in entries_list
-    ) and any(str(e.get("domain") or "olive") != "studio" for e in entries_list)
+    mixed = (
+        bool(entries_list)
+        and any(str(e.get("domain") or "olive") == "studio" for e in entries_list)
+        and any(str(e.get("domain") or "olive") != "studio" for e in entries_list)
+    )
     shipped = None if mixed else load_entry_embeddings(stem, fingerprint)
 
     texts = [_entry_embed_text(e) for e in entries_list]
@@ -347,9 +353,7 @@ def _infer_quirk_categories(entry_id: str | None, pass_name: str, domain: str | 
 
     if not categories:
         categories = (
-            {"pass_ordering", "quantization", "studio"}
-            if domain == "studio"
-            else {"pass_ordering", "quantization"}
+            {"pass_ordering", "quantization", "studio"} if domain == "studio" else {"pass_ordering", "quantization"}
         )
 
     return categories
@@ -414,12 +418,12 @@ def _best_match(
 ) -> tuple[dict[str, Any] | None, float, dict[str, Any]]:
     """
     Select the highest-scoring troubleshooting entry for an error.
-    
+
     Parameters:
         require_keyword (bool): Require at least one matching keyword or pattern.
         mode (str | None): Retrieval mode, such as ``"auto"``, ``"keyword"``, or
             ``"semantic"``.
-    
+
     Returns:
         tuple: The selected entry, its score, and retrieval metadata. The entry is
         ``None`` with a score of ``0.0`` when no qualifying match exists.
@@ -449,7 +453,7 @@ def _best_match(
         def _load() -> tuple[list[dict[str, Any]], np.ndarray]:
             """
             Load semantic scores for the candidate entries.
-            
+
             Returns:
                 A tuple containing the candidate entries and their semantic scores.
             """
@@ -495,9 +499,7 @@ def _best_match(
     scored: list[tuple[dict[str, Any], float, int]] = []
     for i, entry in enumerate(score_entries):
         sem = float(semantic_scores[i]) if i < len(semantic_scores) else 0.0
-        hybrid = _score(
-            entry, error_message, pass_name, config_context, semantic_score=sem
-        )
+        hybrid = _score(entry, error_message, pass_name, config_context, semantic_score=sem)
         # Bounded feedback adjustment after semantic/keyword hybrid score.
         # Cap: |delta| <= FEEDBACK_MAX_ADJUSTMENT (0.05). Positive net votes
         # slightly boost / break close ties; negative slightly demote.
@@ -564,19 +566,20 @@ def _build_diagnosis_payload(
     retrieval: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Assemble a diagnosis response containing match details, troubleshooting guidance, frequency metadata, and optional retrieval metadata.
-    
+    Assemble a diagnosis response containing match details, troubleshooting
+    guidance, frequency metadata, and optional retrieval metadata.
+
     Parameters:
-    	best (dict[str, Any]): Diagnosis details used to populate the response.
-    	matched_entry (str | None): Identifier of the matched knowledge-base entry, or `None` for no match.
-    	matched_domain (str | None): Domain associated with the matched entry.
-    	applyable (bool): Whether the matched diagnosis can be applied.
-    	pass_name (str): Name of the pass associated with the diagnosis.
-    	freq (dict[str, Any]): Frequency information for the diagnosed error.
-    	retrieval (dict[str, Any] | None): Optional metadata describing how the diagnosis was retrieved.
-    
+        best (dict[str, Any]): Diagnosis details used to populate the response.
+        matched_entry (str | None): Identifier of the matched knowledge-base entry, or `None` for no match.
+        matched_domain (str | None): Domain associated with the matched entry.
+        applyable (bool): Whether the matched diagnosis can be applied.
+        pass_name (str): Name of the pass associated with the diagnosis.
+        freq (dict[str, Any]): Frequency information for the diagnosed error.
+        retrieval (dict[str, Any] | None): Optional metadata describing how the diagnosis was retrieved.
+
     Returns:
-    	dict[str, Any]: A structured diagnosis payload.
+        dict[str, Any]: A structured diagnosis payload.
     """
     updated_config = best.get("updated_config", {}) or {}
     payload: dict[str, Any] = {
@@ -614,7 +617,7 @@ def troubleshoot_olive_error(
     mode: str = "",
 ) -> dict[str, Any]:
     """Diagnose an Olive or Olive Studio error using the selected retrieval mode and knowledge base.
-    
+
     Args:
         error_message: Error message or traceback snippet to diagnose.
         pass_name: Name of the pass where the error occurred, if known.
@@ -623,7 +626,7 @@ def troubleshoot_olive_error(
             ``"studio"``. Invalid values use automatic domain selection.
         mode: Retrieval mode: ``"auto"``, ``"keyword"``, or ``"semantic"``.
             An empty value uses the configured default.
-    
+
     Returns:
         A diagnosis containing the matched entry or generic guidance, along with
         domain, applicability, troubleshooting details, frequency metadata, and
@@ -750,9 +753,7 @@ def get_error_frequency_summary(limit: int = 10) -> dict[str, Any]:
         raise ValueError("limit must be non-negative")
 
     with _lock:
-        items: list[tuple[str, dict[str, Any]]] = [
-            (key, dict(data)) for key, data in _frequency_store.items()
-        ]
+        items: list[tuple[str, dict[str, Any]]] = [(key, dict(data)) for key, data in _frequency_store.items()]
 
     items.sort(key=lambda kv: (kv[1]["occurrence_count"], kv[1]["last_seen"]), reverse=True)
 

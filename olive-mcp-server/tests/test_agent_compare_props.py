@@ -25,7 +25,6 @@ from olive_mcp_server.tools.agent_compare import (
     compare_results,
 )
 
-
 # ---------------------------------------------------------------------------
 # Independent scoring oracle (does not reuse implementation results)
 # ---------------------------------------------------------------------------
@@ -52,9 +51,7 @@ def _oracle_bounds(scoreable: list[dict[str, Any]]) -> dict[str, tuple[float, fl
             v = entry["metrics"].get(key)
             if v is not None:
                 values[key].append(v)
-    return {
-        key: (min(vs), max(vs)) for key, vs in values.items() if vs
-    }
+    return {key: (min(vs), max(vs)) for key, vs in values.items() if vs}
 
 
 def _oracle_weights(preference: str) -> dict[str, float]:
@@ -93,15 +90,18 @@ def _oracle_winner(scoreable: list[dict[str, Any]], preference: str) -> str | No
     scored = [(e["job_id"], _oracle_score(e, scoreable, preference)) for e in scoreable]
     return max(scored, key=lambda x: x[1])[0]
 
+
 # ---------------------------------------------------------------------------
 # Strategies
 # ---------------------------------------------------------------------------
 
-_metrics_strategy = st.fixed_dictionaries({
-    "latency_ms": st.floats(min_value=0.1, max_value=1000.0, allow_nan=False, allow_infinity=False),
-    "model_size_mb": st.floats(min_value=1.0, max_value=10000.0, allow_nan=False, allow_infinity=False),
-    "accuracy": st.floats(min_value=0.5, max_value=1.0, allow_nan=False, allow_infinity=False),
-})
+_metrics_strategy = st.fixed_dictionaries(
+    {
+        "latency_ms": st.floats(min_value=0.1, max_value=1000.0, allow_nan=False, allow_infinity=False),
+        "model_size_mb": st.floats(min_value=1.0, max_value=10000.0, allow_nan=False, allow_infinity=False),
+        "accuracy": st.floats(min_value=0.5, max_value=1.0, allow_nan=False, allow_infinity=False),
+    }
+)
 
 _preference_strategy = st.sampled_from(["latency", "size", "accuracy", "balanced"])
 
@@ -114,10 +114,7 @@ _job_list_strategy = st.lists(
 
 def _make_scoreable_entries(metrics_list: list[dict[str, float]]) -> list[dict[str, Any]]:
     """Create scoreable entry dicts as expected by _normalize_and_score."""
-    return [
-        {"job_id": f"job-{i}", "status": "completed", "metrics": m}
-        for i, m in enumerate(metrics_list)
-    ]
+    return [{"job_id": f"job-{i}", "status": "completed", "metrics": m} for i, m in enumerate(metrics_list)]
 
 
 def _mock_studio_request_for_jobs(
@@ -193,9 +190,7 @@ class TestPreferenceWeightedScoring:
         scored = _normalize_and_score(scoreable, preference)
 
         for entry in scored:
-            assert 0.0 <= entry["score"] <= 1.0, (
-                f"Score {entry['score']} out of [0, 1] range for job {entry['job_id']}"
-            )
+            assert 0.0 <= entry["score"] <= 1.0, f"Score {entry['score']} out of [0, 1] range for job {entry['job_id']}"
 
     @given(metrics_list=_job_list_strategy)
     @settings(max_examples=100)
@@ -222,8 +217,7 @@ class TestPreferenceWeightedScoring:
                 "balanced",
             )
             assert entry["score"] == expected, (
-                f"Balanced score mismatch for {entry['job_id']}: "
-                f"impl={entry['score']} oracle={expected}"
+                f"Balanced score mismatch for {entry['job_id']}: impl={entry['score']} oracle={expected}"
             )
 
     @given(metrics_list=_job_list_strategy)
@@ -261,8 +255,7 @@ class TestPreferenceWeightedScoring:
                     pref,
                 )
                 assert entry["score"] == expected, (
-                    f"Score mismatch for {entry['job_id']} pref={pref}: "
-                    f"impl={entry['score']} oracle={expected}"
+                    f"Score mismatch for {entry['job_id']} pref={pref}: impl={entry['score']} oracle={expected}"
                 )
 
     @given(metrics_list=_job_list_strategy, preference=_preference_strategy)
@@ -311,9 +304,7 @@ class TestPreferenceWeightedScoringIntegration:
         # Winner is the one with the highest score
         if result["winner"] is not None:
             winner_id = result["winner"]
-            winner_score = next(
-                e["score"] for e in comparison if e["job_id"] == winner_id
-            )
+            winner_score = next(e["score"] for e in comparison if e["job_id"] == winner_id)
             for entry in comparison:
                 assert entry["score"] <= winner_score
 

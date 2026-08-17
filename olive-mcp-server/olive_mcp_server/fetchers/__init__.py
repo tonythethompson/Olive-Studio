@@ -14,15 +14,15 @@ _LAZY: dict[str, tuple[str, str]] = {
 
 def __getattr__(name: str) -> Any:
     """Load and cache a lazily exported module attribute.
-    
+
     Parameters:
-    	name (str): Name of the module attribute to load.
-    
+        name (str): Name of the module attribute to load.
+
     Returns:
-    	Any: The requested exported attribute.
-    
+        Any: The requested exported attribute.
+
     Raises:
-    	AttributeError: If the requested name is not a lazily exported attribute.
+        AttributeError: If the requested name is not a lazily exported attribute.
     """
     target = _LAZY.get(name)
     if target is None:
