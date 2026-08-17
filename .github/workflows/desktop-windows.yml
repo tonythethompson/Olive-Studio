@@ -1,0 +1,133 @@
+name: Windows Desktop Package
+
+# Windows-only counterpart of desktop-linux.yml: builds the full set of
+# Windows installers (NSIS, MSI, MSIX) with the bundled Node runtime and
+# uploads them as workflow artifacts. The updater-signed release builds stay
+# in desktop-release.yml / release-dry-run.yml.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-windows.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "scripts/build-msix.ps1"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/desktop-windows.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "scripts/build-msix.ps1"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package-and-upload:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Version resolves from package.json "packageManager" — do not pin here,
+      # or pnpm/action-setup fails with "Multiple versions of pnpm specified".
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
+
+      - name: Bundle Node runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/node-runtime | Out-Null
+          Copy-Item (Get-Command node).Source src-tauri/node-runtime/node.exe -Force
+          & src-tauri/node-runtime/node.exe --version
+
+      - name: Build NSIS and MSI installers
+        shell: pwsh
+        run: pnpm exec tauri build --bundles nsis,msi --config src-tauri/tauri.ci.conf.json
+
+      - name: Build MSIX (Microsoft Store)
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          ./scripts/build-msix.ps1 `
+            -ReleaseDir "src-tauri/target/release" `
+            -Version $version `
+            -OutFile "src-tauri/target/release/bundle/msix/OliveStudio_$version.msix"
+
+      - name: Smoke test bundled server
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "src-tauri\node-runtime\node.exe" -ArgumentList "dist/server.mjs" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP\server-out.log" -RedirectStandardError "$env:RUNNER_TEMP\server-err.log"
+          try {
+            $ok = $false
+            foreach ($i in 1..20) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { break }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:3000/api/health" -TimeoutSec 2
+                if ($health) { $ok = $true; break }
+              } catch {
+                # Server not up yet — keep polling.
+              }
+            }
+            if (-not $ok) {
+              Get-Content "$env:RUNNER_TEMP\server-out.log", "$env:RUNNER_TEMP\server-err.log" -ErrorAction SilentlyContinue
+              throw "Bundled Node runtime did not start the packaged server within 20s"
+            }
+            Write-Output "Windows smoke test passed — bundled Node runtime started dist/server.mjs"
+          } finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Validate artifacts
+        shell: pwsh
+        run: |
+          $root = "src-tauri/target/release/bundle"
+          if (-not (Get-ChildItem "$root/nsis/*.exe" -ErrorAction SilentlyContinue)) { throw "Missing NSIS installer" }
+          if (-not (Get-ChildItem "$root/msi/*.msi" -ErrorAction SilentlyContinue)) { throw "Missing MSI installer" }
+          if (-not (Get-ChildItem "$root/msix/*.msix" -ErrorAction SilentlyContinue)) { throw "Missing MSIX package" }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: olive-studio-windows
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msix/*.msix

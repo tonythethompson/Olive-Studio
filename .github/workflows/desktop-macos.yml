@@ -1,0 +1,83 @@
+name: macOS Desktop Package
+
+# Mirrors desktop-linux.yml for macOS: builds the .app bundle (native
+# architecture) with the CI config and smoke-tests the packaged server using
+# the bundled universal Node runtime. The universal-apple-darwin release
+# build stays in desktop-release.yml / release-dry-run.yml.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-macos.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "scripts/bundle-macos-node.sh"
+      - "scripts/smoke-macos-app.sh"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/desktop-macos.yml"
+      - ".github/workflows/desktop-release.yml"
+      - "scripts/bundle-macos-node.sh"
+      - "scripts/smoke-macos-app.sh"
+      - "src-tauri/**"
+      - "src-tauri/tauri.conf.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "server.ts"
+      - "src/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package-and-smoke:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Version resolves from package.json "packageManager" — do not pin here,
+      # or pnpm/action-setup fails with "Multiple versions of pnpm specified".
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          OLIVE_SKIP_MCP_SETUP: "1"
+
+      - name: Bundle Node runtime (universal)
+        shell: bash
+        run: bash scripts/bundle-macos-node.sh src-tauri/node-runtime/node
+
+      - name: Build macOS app bundle
+        shell: bash
+        run: pnpm exec tauri build --bundles macos,dmg --config src-tauri/tauri.ci.conf.json
+
+      - name: Smoke test packaged app
+        shell: bash
+        run: bash scripts/smoke-macos-app.sh src-tauri/target/release/bundle 31415
