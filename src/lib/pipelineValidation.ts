@@ -975,8 +975,27 @@ export function getLocalExecutionIssues(
   return [];
 }
 
+// ─── ROCm Consumer/Datacenter Differentiation ────────────────────────────
+
+/** RDNA 1/2/3 consumer ISA families (gfx10xx, gfx103x, gfx11xx). */
+const RDNA_CONSUMER_ISA = /^gfx1[0-3]/;
+/** RDNA 4 ISA family (gfx12xx — experimental ROCm support). */
+const RDNA4_ISA = /^gfx12/;
+/** CDNA datacenter ISA family (gfx9xx — full vendor ROCm stack). */
+const CDNA_ISA = /^gfx9/;
+
 /**
- * Removes duplicate pipeline issues, retaining the critical issue when duplicate severities differ.
+ * Determines whether a GPU ISA belongs to a consumer RDNA architecture
+ * (as opposed to datacenter CDNA Instinct cards with full ROCm support).
+ */
+function isConsumerRdna(isaFamily: string): boolean {
+  return RDNA_CONSUMER_ISA.test(isaFamily) || RDNA4_ISA.test(isaFamily);
+}
+
+/**
+ * Validates ROCm-specific hardware differentiation between consumer Radeon
+ * (RDNA) and datacenter Instinct (CDNA) GPUs. Produces PipelineIssues for
+ * known limitations of consumer RDNA architectures under ROCm.
  *
  * @param issues - The pipeline issues to deduplicate
  * @returns The deduplicated pipeline issues
