@@ -62,9 +62,7 @@ def main() -> int:
         jc = caps.get("job_control") or {}
         check(
             "job_control inspection only",
-            jc.get("supported") is True
-            and jc.get("inspection") is True
-            and jc.get("submission") is False,
+            jc.get("supported") is True and jc.get("inspection") is True and jc.get("submission") is False,
             str(jc.get("reason")),
         )
 
@@ -108,8 +106,7 @@ def main() -> int:
     check(
         "troubleshoot keyword",
         isinstance(diag, dict) and "title" in diag and (diag.get("retrieval") or {}).get("effective") == "keyword",
-        f"entry={diag.get('matched_entry') if isinstance(diag, dict) else None} "
-        f"ms={int((t4 - t3) * 1000)}",
+        f"entry={diag.get('matched_entry') if isinstance(diag, dict) else None} ms={int((t4 - t3) * 1000)}",
     )
 
     print(

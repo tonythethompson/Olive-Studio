@@ -16,8 +16,9 @@ import importlib
 import json
 import logging
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 _LOG = logging.getLogger(__name__)
 
@@ -42,9 +43,7 @@ _CLOUD_ONLY_PASSES = frozenset({"azuremlquantization"})
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _MCP_ROOT = _SCRIPT_DIR.parent
-_DEFAULT_MATRIX = (
-    _MCP_ROOT / "olive_mcp_server" / "knowledge_base" / "compatibility_matrix.json"
-)
+_DEFAULT_MATRIX = _MCP_ROOT / "olive_mcp_server" / "knowledge_base" / "compatibility_matrix.json"
 
 
 def _load_matrix(path: Path) -> dict[str, Any]:
@@ -147,7 +146,7 @@ def _names_from_pass_registry_class() -> set[str] | None:
         except Exception:  # noqa: BLE001
             return None
         if isinstance(names, dict):
-            return {str(k) for k in names.keys()}
+            return {str(k) for k in names}
         if isinstance(names, (set, list, tuple)):
             out = {str(x) for x in names}
             return out or None
@@ -161,7 +160,7 @@ def _names_from_pass_registry_module() -> set[str] | None:
     except ImportError:
         return None
     if isinstance(REGISTRY, dict) and REGISTRY:
-        return {str(k) for k in REGISTRY.keys()}
+        return {str(k) for k in REGISTRY}
     return None
 
 
@@ -191,14 +190,14 @@ def _names_from_package_config() -> set[str] | None:
 
     passes = getattr(cfg, "passes", None)
     if isinstance(passes, dict):
-        return {str(k) for k in passes.keys()}
+        return {str(k) for k in passes}
     return None
 
 
 def _pass_keys_from_mapping(passes: Any) -> set[str] | None:
     if not isinstance(passes, dict) or not passes:
         return None
-    return {str(k) for k in passes.keys()}
+    return {str(k) for k in passes}
 
 
 def _names_from_olive_config_json() -> set[str] | None:
@@ -243,7 +242,7 @@ def _names_from_registry_attrs() -> set[str] | None:
         for attr in attr_candidates:
             reg = getattr(mod, attr, None)
             if isinstance(reg, dict) and reg:
-                return {str(k) for k in reg.keys()}
+                return {str(k) for k in reg}
             if isinstance(reg, (set, list, tuple)) and reg:
                 return {str(x) for x in reg}
     return None
@@ -276,10 +275,7 @@ def _claim_in_registry(claimed_name: str, available_lower: set[str]) -> bool:
     # Check registry first — if Olive exposes the pass, trust the real probe.
     if lowered in available_lower:
         return True
-    for alias in _PASS_REGISTRY_ALIASES.get(lowered, ()):
-        if alias in available_lower:
-            return True
-    return False
+    return any(alias in available_lower for alias in _PASS_REGISTRY_ALIASES.get(lowered, ()))
 
 
 def olive_version_string() -> str:
@@ -328,8 +324,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             levels = ", ".join(sorted(claimed[name]))
             print(f"  - {name} (matrix support: {levels})", file=sys.stderr)
         print(
-            "\nThese names must exist in the pinned Olive pass registry "
-            "(enumeration only — no optimization was run).",
+            "\nThese names must exist in the pinned Olive pass registry (enumeration only — no optimization was run).",
             file=sys.stderr,
         )
         return 1

@@ -23,7 +23,7 @@ _LOOPBACK_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 class _NoRedirect(HTTPRedirectHandler):
     """Refuse redirects so a loopback URL cannot bounce off-host (SSRF)."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+    def redirect_request(self, req, fp, code, msg, headers, newurl) -> None:  # noqa: ANN001
         return None
 
 
@@ -104,8 +104,7 @@ def resolve_studio_base() -> tuple[str | None, dict[str, Any] | None]:
         )
     if not _is_loopback_host(parsed.hostname):
         return None, studio_unavailable(
-            f"{ENV_API_URL} must target a loopback host "
-            "(127.0.0.1, localhost, or ::1).",
+            f"{ENV_API_URL} must target a loopback host (127.0.0.1, localhost, or ::1).",
             detail=f"host={parsed.hostname!r}",
         )
     try:
@@ -120,11 +119,9 @@ def resolve_studio_base() -> tuple[str | None, dict[str, Any] | None]:
     # Base URL only: reject path/query/fragment so `{base}{path}` stays correct.
     if parsed.path not in ("", "/") or parsed.params or parsed.query or parsed.fragment:
         return None, studio_unavailable(
-            f"{ENV_API_URL} must be a loopback base URL without path, query, or fragment "
-            "(e.g. http://127.0.0.1:3000).",
+            f"{ENV_API_URL} must be a loopback base URL without path, query, or fragment (e.g. http://127.0.0.1:3000).",
             detail=(
-                f"path={parsed.path!r} params={parsed.params!r} "
-                f"query={parsed.query!r} fragment={parsed.fragment!r}"
+                f"path={parsed.path!r} params={parsed.params!r} query={parsed.query!r} fragment={parsed.fragment!r}"
             ),
         )
     return f"{parsed.scheme}://{parsed.netloc}", None
@@ -153,13 +150,13 @@ def studio_request(
 ) -> dict[str, Any]:
     """
     Send a JSON request to a path under the validated Olive Studio base URL.
-    
+
     Parameters:
         method (str): HTTP method to use.
         path (str): Studio path, with or without a leading slash.
         body (dict[str, Any] | None): Optional JSON object to include in the request.
         timeout (float): Request timeout in seconds.
-    
+
     Returns:
         dict[str, Any]: Parsed JSON object on success, or a structured error dictionary.
     """
@@ -200,11 +197,7 @@ def studio_request(
         parsed = _parse_json_body(err_body)
         # Only forward structured error payloads; never treat an HTTP >=400
         # success-shaped body as a successful bridge response.
-        if (
-            isinstance(parsed, dict)
-            and isinstance(parsed.get("error"), str)
-            and parsed["error"]
-        ):
+        if isinstance(parsed, dict) and isinstance(parsed.get("error"), str) and parsed["error"]:
             return parsed
         return studio_unavailable(
             "Olive Studio bridge returned an HTTP error.",

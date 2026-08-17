@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
-from olive_mcp_server.tools import docs_search
-from olive_mcp_server.tools import load_troubleshooting
+from olive_mcp_server.tools import docs_search, load_troubleshooting
 from olive_mcp_server.tools import troubleshooting as ts
 from olive_mcp_server.tools.capabilities import get_mcp_capabilities
 from olive_mcp_server.tools.index_store import (

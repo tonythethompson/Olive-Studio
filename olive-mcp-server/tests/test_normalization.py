@@ -135,9 +135,7 @@ def test_normalize_hardware_invalid_ov_device_returns_stripped_input() -> None:
         ("WebGpuExecutionProvider", "WebGPU (Browser)", None),
     ],
 )
-def test_parse_hardware_target_acceptance(
-    raw: str, profile: str, openvino_device: str | None
-) -> None:
+def test_parse_hardware_target_acceptance(raw: str, profile: str, openvino_device: str | None) -> None:
     target = parse_hardware_target(raw)
     assert target.error is None
     assert target.profile == profile

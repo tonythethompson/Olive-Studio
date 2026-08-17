@@ -13,9 +13,10 @@ import os
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any, Final, Iterator, Literal
+from typing import Any, Final, Literal
 
 from . import load_studio_troubleshooting, load_troubleshooting
 
@@ -117,9 +118,8 @@ def _interprocess_store_lock(path: Path) -> Iterator[None]:
 @contextmanager
 def _store_lock(path: Path) -> Iterator[None]:
     """Hold both the cross-process file lock and the in-process threading lock."""
-    with _interprocess_store_lock(path):
-        with _lock:
-            yield
+    with _interprocess_store_lock(path), _lock:
+        yield
 
 
 def set_feedback_path(path: str | Path | None) -> None:
@@ -226,7 +226,7 @@ def _load_store_unlocked(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return _empty_store()
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("Corrupt or unreadable feedback store %s: %s", path, exc)
@@ -273,10 +273,8 @@ def _atomic_write_unlocked(path: Path, store: dict[str, Any]) -> None:
             os.fsync(fh.fileno())
         os.replace(tmp_name, path)
     except Exception:
-        try:
+        with suppress(OSError):
             os.unlink(tmp_name)
-        except OSError:
-            pass
         raise
 
 
@@ -413,8 +411,7 @@ def record_troubleshoot_feedback(
                     "status": "error",
                     "error": "entry_cap_reached",
                     "message": (
-                        f"Feedback store already tracks {MAX_TRACKED_ENTRIES} entries; "
-                        "cannot add a new matched_entry."
+                        f"Feedback store already tracks {MAX_TRACKED_ENTRIES} entries; cannot add a new matched_entry."
                     ),
                     "max_tracked_entries": MAX_TRACKED_ENTRIES,
                 }

@@ -29,9 +29,7 @@ def _fake_build_kb_index(_texts):
 
 
 def test_skips_build_when_indexes_up_to_date(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        "olive_mcp_server.tools.embeddings.build_kb_index", _fake_build_kb_index
-    )
+    monkeypatch.setattr("olive_mcp_server.tools.embeddings.build_kb_index", _fake_build_kb_index)
     assert _load_builder().main() == 0
 
 
@@ -40,23 +38,16 @@ def test_rebuilds_when_manifest_hash_is_stale(monkeypatch: pytest.MonkeyPatch):
     assert manifest is not None
     stale = {
         **manifest,
-        "indexes": {
-            stem: {**meta, "content_hash": "stale"}
-            for stem, meta in (manifest.get("indexes") or {}).items()
-        },
+        "indexes": {stem: {**meta, "content_hash": "stale"} for stem, meta in (manifest.get("indexes") or {}).items()},
     }
     monkeypatch.setattr("olive_mcp_server.tools.index_store.read_manifest", lambda: stale)
-    monkeypatch.setattr(
-        "olive_mcp_server.tools.embeddings.build_kb_index", _fake_build_kb_index
-    )
+    monkeypatch.setattr("olive_mcp_server.tools.embeddings.build_kb_index", _fake_build_kb_index)
     with pytest.raises(_EncodeAttempted):
         _load_builder().main()
 
 
 def test_force_rebuild_env_overrides_fresh_indexes(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OLIVE_MCP_REBUILD_INDEX", "1")
-    monkeypatch.setattr(
-        "olive_mcp_server.tools.embeddings.build_kb_index", _fake_build_kb_index
-    )
+    monkeypatch.setattr("olive_mcp_server.tools.embeddings.build_kb_index", _fake_build_kb_index)
     with pytest.raises(_EncodeAttempted):
         _load_builder().main()

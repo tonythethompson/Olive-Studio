@@ -77,11 +77,15 @@ def evaluate_optimization_tradeoff(
             size *= compression if compression is not None else 0.25
             latency *= 0.35
             accuracy -= 1.5
-            risks.append(f"{name}: {gotchas[0] if gotchas else 'quantization can drop accuracy if calibration data is poor.'}")
+            risks.append(
+                f"{name}: {gotchas[0] if gotchas else 'quantization can drop accuracy if calibration data is poor.'}"
+            )
         elif ptype == "graph_optimization":
             size *= compression if compression is not None else 0.95
             latency *= 0.85
-            risks.append(f"{name}: {gotchas[0] if gotchas else 'graph optimization is usually safe but can change numerics.'}")
+            risks.append(
+                f"{name}: {gotchas[0] if gotchas else 'graph optimization is usually safe but can change numerics.'}"
+            )
         elif ptype == "conversion":
             size *= compression if compression is not None else 1.0
             latency *= 1.05
@@ -89,7 +93,9 @@ def evaluate_optimization_tradeoff(
             size *= compression if compression is not None else 0.7
             latency *= 0.8
             accuracy -= 2.0
-            risks.append(f"{name}: {gotchas[0] if gotchas else 'pruning accuracy loss often requires fine-tuning to recover.'}")
+            risks.append(
+                f"{name}: {gotchas[0] if gotchas else 'pruning accuracy loss often requires fine-tuning to recover.'}"
+            )
         elif ptype == "finetuning":
             size *= compression if compression is not None else 1.05
             latency *= 1.05
