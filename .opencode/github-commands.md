@@ -77,48 +77,59 @@ behavior below applies whether the review is triggered by `/oc review` or by PR 
    (preinstalled in GitHub Actions; the `GITHUB_TOKEN` env var is available, no login
    needed). Fall back down this ladder until the finding is posted:
 
-   a. **Inline line comment** (preferred) — pins the finding to a line in the PR diff and
-      creates a resolvable thread. Use the PR head SHA (`Head: { Sha: ... }` in the
-      `<pull_request>` context) as `commit_id`, plus the file and line the finding is
-      about:
+    > **CRITICAL — the comment body must be the finding CONTENT, never a file path.**
+    > Do NOT post the literal string `@…/finding.md` (or any `@path` token) as the body.
+    > The `@file` shorthand only works when the `gh` CLI itself expands it; opencode's
+    > review posting path does not, so an `@path` value leaks the path into the comment.
+    > Always ground the comment in the actual finding text.
 
-      ```bash
-      gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
-        -f body=@finding.md \
-        -f path="src/example.ts" \
-        -F line=42 \
-        -f commit_id="$HEAD_SHA"
-      ```
+    a. **Inline line comment** (preferred) — pins the finding to a line in the PR diff and
+       creates a resolvable thread. Use the PR head SHA (`Head: { Sha: ... }` in the
+       `<pull_request>` context) as `commit_id`, plus the file and line the finding is
+       about. Use `gh` CLI with the `@` form ONLY when you are directly invoking `gh` in a
+       shell (the `@` must immediately follow `=`, with no surrounding quotes/spaces, so gh
+       reads the file):
 
-      For a finding spanning a line range, add `-F start_line=<first line>` (and, for a
-      deletion, `-f start_side=LEFT`).
+       ```bash
+       gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
+         -f body=@finding.md \
+         -f path="src/example.ts" \
+         -F line=42 \
+         -f commit_id="$HEAD_SHA"
+       ```
 
-   b. **File-level comment** — if the line is not part of the diff (the call above returns a
-      422), retry against the file without a line number:
+       If you are posting through opencode's built-in review tooling instead, READ the
+       `finding.md` file and pass its full contents as the `body` value — never the path.
 
-      ```bash
-      gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
-        -f body=@finding.md \
-        -f path="src/example.ts" \
-        -f subject_type=file
-      ```
+       For a finding spanning a line range, add `-F start_line=<first line>` (and, for a
+       deletion, `-f start_side=LEFT`).
 
-   c. **Issue comment** (last resort) — if the file is not in the PR diff either, post to
-      the timeline (not a resolvable thread) and flag it in the "Out of diff" section of
-      the summary:
+    b. **File-level comment** — if the line is not part of the diff (the call above returns a
+       422), retry against the file without a line number (same `body` rule applies):
 
-      ```bash
-      gh api repos/{owner}/{repo}/issues/{pr_number}/comments -F body=@finding.md
-      ```
+       ```bash
+       gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
+         -f body=@finding.md \
+         -f path="src/example.ts" \
+         -f subject_type=file
+       ```
 
-   Derive `owner`/`repo` from `baseRepository.nameWithOwner` in the `<pull_request>`
-   context (split on `/`), `pr_number` from `Number:`, and `HEAD_SHA` from
-   `Head: { Sha: ... }`. Write the finding body to a temp file (`finding.md`) rather than
-   passing a giant `-f body=` string, so multiline Markdown and code blocks survive intact.
-   Post threads one at a time — this endpoint is secondary-rate-limited if you post too
-   fast — and keep a list of the posted comment IDs/URLs and of which findings fell back to
-   an issue comment. If a `gh` call fails at every level, do not stop the review — record
-   the finding in the "Out of diff" section of the summary instead.
+    c. **Issue comment** (last resort) — if the file is not in the PR diff either, post to
+       the timeline (not a resolvable thread) and flag it in the "Out of diff" section of
+       the summary:
+
+       ```bash
+       gh api repos/{owner}/{repo}/issues/{pr_number}/comments -f body=@finding.md
+       ```
+
+    Derive `owner`/`repo` from `baseRepository.nameWithOwner` in the `<pull_request>`
+    context (split on `/`), `pr_number` from `Number:`, and `HEAD_SHA` from
+    `Head: { Sha: ... }`. Writing the finding body to a temp file (`finding.md`) is a useful
+    drafting aid, but the posted `body` must be that file's **contents**, not its name. Post
+    threads one at a time — this endpoint is secondary-rate-limited if you post too
+    fast — and keep a list of the posted comment IDs/URLs and of which findings fell back to
+    an issue comment. If a `gh` call fails at every level, do not stop the review — record
+    the finding in the "Out of diff" section of the summary instead.
 3. **Your final reply text** (what the action posts as the single reply comment) must be a
    **short summary index**: overall assessment; one line per threaded finding with its
    file:line, severity, and a link to that finding's comment (both endpoint responses
@@ -227,9 +238,13 @@ the current pull request.
    gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -F id=THREAD_ID
    ```
 
-   Write the reason to a temp file (`thread.md`) and pass `-f body=@thread.md` when it is
-   long, so multiline Markdown survives intact. Only leave open a thread you genuinely could
-   not address — no fix and no justification — and say why in the summary.
+    Write the reason to a temp file (`thread.md`) and pass `-f body=@thread.md` when it is
+    long, so multiline Markdown survives intact. **The `@` form is only valid when you invoke
+    the `gh` CLI directly in a shell** (the `@` must immediately follow `=` with no
+    surrounding quotes/spaces). If you post through opencode's built-in review tooling, READ
+    the file and pass its contents as the `body` — never the literal `@path` string, which
+    would leak the path into the reply. Only leave open a thread you genuinely could
+    not address — no fix and no justification — and say why in the summary.
 4. **Your final reply text IS the single summary comment** (the action posts it). Do NOT post
    extra per-finding comments. The summary must cover **everything**:
    - **Fixed** — for each addressed item: the change made (file:line) and whether its thread
