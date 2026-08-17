@@ -11,8 +11,8 @@ The workflow probes and selects the agent model per command (see `.github/workfl
 
 | Command      | Primary model                          | Fallback chain                                                                                |
 | ------------ | -------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `/oc review` | `opencode/gpt-5.6-luna` (`variant: max`) | `opencode/big-pickle` → `opencode/nemotron-3-ultra-free` → `opencode/nemotron-3.5-lightning-free` → `opencode/deepseek-v4-flash` → `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max` → `opencode/nemotron-3-ultra` |
-| `/oc fix`    | `opencode/big-pickle`                  | `opencode/nemotron-3-ultra-free` → `opencode/nemotron-3.5-lightning-free` → `opencode/deepseek-v4-flash` → `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max` → `opencode/nemotron-3-ultra` |
+| `/oc review` | `cloudflare-workers-ai/@cf/zai-org/glm-5.2` (CF-first) | `opencode/gpt-5.6-luna` (`variant: max`) → `opencode/big-pickle` → `opencode/nemotron-3-ultra-free` → `opencode/nemotron-3.5-lightning-free` → `opencode/deepseek-v4-flash` → `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max` → `opencode/nemotron-3-ultra` |
+| `/oc fix`    | `cloudflare-workers-ai/@cf/deepseek-ai/deepseek-v4-flash-0731` (CF-first) | `opencode/big-pickle` → `opencode/nemotron-3-ultra-free` → `opencode/nemotron-3.5-lightning-free` → `opencode/deepseek-v4-flash` → `alibaba-token-plan/qwen3.8-max` → `alibaba/qwen3.8-max` → `opencode/nemotron-3-ultra` |
 
 Each model is probed with a minimal request before the run; a disabled or unavailable model
 falls through to the next in the chain. The `opencode/*` models are probed through the
@@ -186,6 +186,42 @@ When a user message is exactly `/oc fix` or begins with `/oc fix`, fix the revie
 the current pull request.
 
 ### Behavior
+
+0. **If the request mentions CI, tests, checks, build, lint, "failing", "red", or a workflow,
+   check the ACTUAL GitHub Actions run — do not guess from the diff or from a local test run.**
+   The `<pull_request>` context contains review comments only; it does NOT contain CI results, so
+   "no review comments" is NOT "no failures". `gh` is preinstalled and `GITHUB_TOKEN` is set, so
+   query the run directly:
+
+   - Derive `owner`/`repo` from `baseRepository.nameWithOwner` (split on `/`), `HEAD_SHA` from
+     `Head: { Sha: ... }`, and the PR branch from `Head: { ref }` / `headRefName`.
+   - List every check on the head commit and surface the ones that are not green:
+
+     ```bash
+     gh api repos/{owner}/{repo}/commits/{HEAD_SHA}/check-runs \
+       --jq '.check_runs[] | select(.status!="completed" or .conclusion!="success") |
+             "\(.name) status=\(.status) conclusion=\(.conclusion) app=\(.app.slug)"'
+     ```
+
+   - Find the failing workflow run(s) and read the failed-step logs:
+
+     ```bash
+     gh run list --repo {owner}/{repo} --branch {branch} --limit 5
+     gh run view {run_id} --repo {owner}/{repo} --log-failed
+     ```
+
+     If `--log-failed` is empty, use `gh run view {run_id} --repo {owner}/{repo} --log` (or
+     `gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` → failed job → its steps) to locate
+     the error.
+   - **Do NOT report "there are no failing tests" / "nothing to do" unless the commands above show
+     every check green.** Local `pnpm test` can pass while CI still fails (lint, tsc typecheck,
+     build, integration, component suites all run in CI and may not run locally). Treat the CI log
+     as the source of truth: it gives the exact `file:line` and error message. Reproduce with the
+     project script if helpful (`pnpm lint`, `pnpm test`, etc.), fix the real failure, then re-check
+     with `gh run view --log-failed` that the check is now green.
+   - When the request is purely about CI (not review comments), you may skip the review-thread
+     enumeration in step 1 and go straight to fixing the CI failures — but still enumerate ALL
+     failing checks, not just one.
 
 1. **Collect ALL review feedback** — do not rely on the `<pull_request>` context alone; it may
    be partial, out of order, or missing threads you'd otherwise need to resolve. You MUST
