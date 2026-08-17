@@ -32,21 +32,21 @@ start-server.bat
 /blob-report/
 /playwright/
 /.freebuff/
-/~/.cache/
-/.agents/skills/studio
 
-# Runtime caches (GenAI model cache, S3 pull staging)
+# Runtime caches (GenAI model cache, S3 pull staging, accidental ~/  dir)
 /.cache/
+/~/
 
 # Local agent/tool state
 /.ocx/
-/.opencode/
-!.opencode/
+/.opencode/*
 !.opencode/github-commands.md
-/.remember/logs/
+!.opencode/opencode.json
+/.remember/
 /.cursor/hooks/state/
 /.devin/
 /.claude/
+/.crush/
 .review-threads.json
 /dogfood-output/
 
@@ -70,6 +70,7 @@ bun.lock
 .agents/
 .commandcode/
 .amazonq/
+.idea/
 
 # Agent artifacts (generated, not source)
 semantic-review/
@@ -79,14 +80,9 @@ skills-lock.json
 /.air/
 /.playwright-mcp
 /.cursor/worktrees
-/.cursor/hooks/state/
-/.cursor/hooks/state/continual-learning.json
-/.cursor/hooks/state/continual-learning-index.json
-.review-threads.json
 .bobignore
 .clineignore
 .devinignore
-/dogfood-output/
 /node_modules.stale-body-guard
 install.sh
 
@@ -99,6 +95,22 @@ install.sh
 QWEN.md
 .superdesign/design_iterations/default_ui_darkmode.css
 Assets/logo_large.png
+
+# Python caches (hypothesis, ruff)
+.hypothesis/
+.ruff_cache/
+
+# Olive local optimization run outputs
+.olive-runs/
+
+# Tauri auto-generated code (regenerated on build)
+src-tauri/gen/
+
+# Husky (legacy, no longer in deps)
+.husky/
+
+# Kiro local agent state
+.kiro/agents/
 
 # Terraform: live state must never be committed (contains account/region/credentials)
 infra/terraform/terraform.tfstate*
