@@ -84,7 +84,7 @@
     "react-dom": "^19.2.8",
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.1",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.15"
   },
   "optionalDependencies": {
     "@openai/codex-sdk": "^0.147.0"
@@ -99,7 +99,7 @@
     "@storybook/test": "^8.6.18",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.3",
+    "@testing-library/user-event": "^14.6.4",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
@@ -110,7 +110,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "@webgpu/types": "^0.1.71",
     "autoprefixer": "^10.5.4",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -121,7 +121,7 @@
     "rollup-plugin-visualizer": "^7.0.1",
     "storybook": "^8.6.18",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.23.10",
+    "tsx": "^4.23.12",
     "typegpu": "^0.11.9",
     "typescript": "~6.0.3",
     "unplugin-typegpu": "^0.11.6",
