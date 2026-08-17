@@ -116,3 +116,128 @@ describe("getCellCompatibility (pure function)", () => {
     expect(result.status).toBe("unsupported");
   });
 });
+
+describe("QNN ABI coercion notice transitions", () => {
+  useFetchRoutesMock({
+    "hardware-probe": {
+      probedAt: "now",
+      platform: { cpuModel: "Test CPU", cpuCores: 8, os: "win", arch: "x64" },
+      detectedProviders: ["CPUExecutionProvider"],
+      recommendedProvider: "CPUExecutionProvider",
+      notes: [],
+    },
+  });
+
+  /** Helper: build a passes object with sensible defaults + per-test overrides. */
+  function makePasses(overrides: Record<string, unknown> = {}) {
+    return {
+      conversion: true,
+      conversionFormat: "onnx",
+      conversionSourceFormat: "pytorch",
+      quantization: false,
+      quantizationMethod: "gptq",
+      pruning: false,
+      lora: false,
+      ortTransformers: false,
+      outputName: "model",
+      trustRemoteCode: false,
+      ...overrides,
+    };
+  }
+
+  it("shows coercion notice when switching to QnnAbiExecutionProvider", async () => {
+    // Start on CPU with conversion enabled
+    const cpuState = createMockUIState({
+      ihvProvider: "CPUExecutionProvider",
+      passes: makePasses({ conversion: true }),
+    });
+    const { rerender } = render(
+      <IHVIntegrationPanel state={cpuState} setState={mockSetState} />,
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+
+    // Switch to QNN ABI — conversion gets coerced off
+    const qnnState = createMockUIState({
+      ihvProvider: "QnnAbiExecutionProvider",
+      passes: makePasses({ conversion: false }),
+    });
+    await act(async () => {
+      rerender(<IHVIntegrationPanel state={qnnState} setState={mockSetState} />);
+    });
+
+    expect(screen.getByRole("status").textContent).toMatch(/OnnxConversion.*disabled/i);
+  });
+
+  it("clears coercion notice when leaving QNN provider", async () => {
+    // Start on CPU with conversion enabled
+    const cpuState = createMockUIState({
+      ihvProvider: "CPUExecutionProvider",
+      passes: makePasses({ conversion: true }),
+    });
+    const { rerender } = render(
+      <IHVIntegrationPanel state={cpuState} setState={mockSetState} />,
+    );
+
+    // Switch to QNN ABI — notice appears
+    const qnnState = createMockUIState({
+      ihvProvider: "QnnAbiExecutionProvider",
+      passes: makePasses({ conversion: false }),
+    });
+    await act(async () => {
+      rerender(<IHVIntegrationPanel state={qnnState} setState={mockSetState} />);
+    });
+    expect(screen.getByRole("status")).toBeTruthy();
+
+    // Switch back to CPU — notice must be cleared (stale-state fix)
+    const backToCpu = createMockUIState({
+      ihvProvider: "CPUExecutionProvider",
+      passes: makePasses({ conversion: false }),
+    });
+    await act(async () => {
+      rerender(<IHVIntegrationPanel state={backToCpu} setState={mockSetState} />);
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("does not resurface stale passes when switching back to QNN without new coercions", async () => {
+    // CPU → QNN (coercion) → CPU (clear) → QNN again (no new coercion → no notice)
+    const cpuState = createMockUIState({
+      ihvProvider: "CPUExecutionProvider",
+      passes: makePasses({ conversion: true }),
+    });
+    const { rerender } = render(
+      <IHVIntegrationPanel state={cpuState} setState={mockSetState} />,
+    );
+
+    // CPU → QNN with coercion
+    const qnnState1 = createMockUIState({
+      ihvProvider: "QnnAbiExecutionProvider",
+      passes: makePasses({ conversion: false }),
+    });
+    await act(async () => {
+      rerender(<IHVIntegrationPanel state={qnnState1} setState={mockSetState} />);
+    });
+    expect(screen.getByRole("status")).toBeTruthy();
+
+    // QNN → CPU (clears notice)
+    const cpuState2 = createMockUIState({
+      ihvProvider: "CPUExecutionProvider",
+      passes: makePasses({ conversion: false }),
+    });
+    await act(async () => {
+      rerender(<IHVIntegrationPanel state={cpuState2} setState={mockSetState} />);
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+
+    // CPU → QNN again, same passes (no new coercion)
+    const qnnState2 = createMockUIState({
+      ihvProvider: "QnnAbiExecutionProvider",
+      passes: makePasses({ conversion: false }),
+    });
+    await act(async () => {
+      rerender(<IHVIntegrationPanel state={qnnState2} setState={mockSetState} />);
+    });
+    // No new coercion → no notice
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
