@@ -487,3 +487,43 @@ describe("POST /api/mcp/settings", () => {
     }
   });
 });
+
+describe("GET /api/mcp/health", () => {
+  beforeEach(() => {
+    mcpToolMocks.callOliveMcpToolImpl = async () => ({ ok: true, capabilities: {} });
+  });
+
+  afterEach(() => {
+    mcpToolMocks.callOliveMcpToolImpl = null;
+  });
+
+  it("reports local health with venvExists when in local mode", async () => {
+    const res = await fetch(`${baseUrl}/api/mcp/health`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok?: boolean; available?: boolean; isRemote?: boolean; venvExists?: boolean };
+    expect(body.ok).toBe(true);
+    expect(body.available).toBe(true);
+    expect(body.isRemote).toBe(false);
+    expect(typeof body.venvExists).toBe("boolean");
+  });
+
+  it("omits local venvExists check when OLIVE_MCP_URL is configured (remote mode)", async () => {
+    const originalUrl = process.env.OLIVE_MCP_URL;
+    process.env.OLIVE_MCP_URL = "http://localhost:8080/sse";
+    try {
+      const res = await fetch(`${baseUrl}/api/mcp/health`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok?: boolean; available?: boolean; isRemote?: boolean; venvExists?: boolean };
+      expect(body.ok).toBe(true);
+      expect(body.available).toBe(true);
+      expect(body.isRemote).toBe(true);
+      expect(body.venvExists).toBeUndefined();
+    } finally {
+      if (originalUrl !== undefined) {
+        process.env.OLIVE_MCP_URL = originalUrl;
+      } else {
+        delete process.env.OLIVE_MCP_URL;
+      }
+    }
+  });
+});

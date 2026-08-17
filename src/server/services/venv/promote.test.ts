@@ -25,7 +25,7 @@ describe("promoteBuildingToLive", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("promotes building → live when live is missing", () => {
+  it("promotes building → live when live is missing", async () => {
     const building = getFamilyBuildingRoot("default");
     fs.mkdirSync(building, { recursive: true });
     fs.writeFileSync(path.join(building, "marker"), "new");
@@ -36,14 +36,14 @@ describe("promoteBuildingToLive", () => {
       createdAt: new Date().toISOString(),
     });
 
-    const result = promoteBuildingToLive("default");
+    const result = await promoteBuildingToLive("default");
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.backupPath).toBeUndefined();
     expect(fs.existsSync(path.join(getFamilyRoot("default"), "marker"))).toBe(true);
     expect(fs.existsSync(building)).toBe(false);
   });
 
-  it("backs up live then promotes when live already exists", () => {
+  it("backs up live then promotes when live already exists", async () => {
     const live = getFamilyRoot("default");
     const building = getFamilyBuildingRoot("default");
     fs.mkdirSync(live, { recursive: true });
@@ -51,7 +51,7 @@ describe("promoteBuildingToLive", () => {
     fs.mkdirSync(building, { recursive: true });
     fs.writeFileSync(path.join(building, "new"), "2");
 
-    const result = promoteBuildingToLive("default");
+    const result = await promoteBuildingToLive("default");
     expect(result.ok).toBe(true);
     expect(fs.existsSync(path.join(live, "new"))).toBe(true);
     // Backup retained under .venv.backup-*
@@ -61,7 +61,7 @@ describe("promoteBuildingToLive", () => {
     if (result.ok) expect(result.backupPath).toBe(path.join(tmp, backups[0]!));
   });
 
-  it("rollbackPromotedFamily restores backup when present", () => {
+  it("rollbackPromotedFamily restores backup when present", async () => {
     const live = getFamilyRoot("cuda");
     const building = getFamilyBuildingRoot("cuda");
     fs.mkdirSync(live, { recursive: true });
@@ -69,34 +69,34 @@ describe("promoteBuildingToLive", () => {
     fs.mkdirSync(building, { recursive: true });
     fs.writeFileSync(path.join(building, "new-cuda"), "2");
 
-    const promoted = promoteBuildingToLive("cuda");
+    const promoted = await promoteBuildingToLive("cuda");
     expect(promoted.ok).toBe(true);
     expect(fs.existsSync(path.join(live, "new-cuda"))).toBe(true);
 
-    const rolled = rollbackPromotedFamily("cuda", promoted.ok ? promoted.backupPath : undefined);
+    const rolled = await rollbackPromotedFamily("cuda", promoted.ok ? promoted.backupPath : undefined);
     expect(rolled.ok).toBe(true);
     expect(fs.existsSync(path.join(live, "old-cuda"))).toBe(true);
     expect(fs.existsSync(path.join(live, "new-cuda"))).toBe(false);
   });
 
-  it("rollbackPromotedFamily removes newly created live when no backup", () => {
+  it("rollbackPromotedFamily removes newly created live when no backup", async () => {
     const live = getFamilyRoot("cuda");
     const building = getFamilyBuildingRoot("cuda");
     fs.mkdirSync(building, { recursive: true });
     fs.writeFileSync(path.join(building, "fresh"), "1");
-    const promoted = promoteBuildingToLive("cuda");
+    const promoted = await promoteBuildingToLive("cuda");
     expect(promoted.ok).toBe(true);
     expect(fs.existsSync(live)).toBe(true);
 
-    const rolled = rollbackPromotedFamily("cuda", undefined);
+    const rolled = await rollbackPromotedFamily("cuda", undefined);
     expect(rolled.ok).toBe(true);
     expect(fs.existsSync(live)).toBe(false);
   });
 
-  it("clearBuildingRoot removes building tree", () => {
+  it("clearBuildingRoot removes building tree", async () => {
     const building = getFamilyBuildingRoot("cuda");
     fs.mkdirSync(building, { recursive: true });
-    clearBuildingRoot("cuda");
+    await clearBuildingRoot("cuda");
     expect(fs.existsSync(building)).toBe(false);
   });
 });

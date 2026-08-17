@@ -162,7 +162,7 @@ async function buildFamilyTree(
       qnnNumpyPin = gate.numpyPin;
     }
 
-    clearBuildingRoot(family);
+    await clearBuildingRoot(family);
     await createVenvAt(getFamilyBuildingRoot(family), systemPython, onLine);
     const py = buildingPython(family);
     const spec = getFamilySpec(family);
@@ -237,7 +237,7 @@ async function buildFamilyIsolated(
 ): Promise<{ ok: boolean; error?: string }> {
   const built = await buildFamilyTree(family, systemPython, onLine);
   if (!built.ok) return built;
-  const promoted = promoteBuildingToLive(family);
+  const promoted = await promoteBuildingToLive(family);
   if (!promoted.ok) return { ok: false, error: promoted.error };
   onLine(`[setup] ${family} runtime ready at ${getFamilyRoot(family)}`);
   invalidateRuntimeStatusCache();
@@ -320,7 +320,7 @@ async function migrateGpuContaminatedVenv(
         const cudaBuild = await buildFamilyTree("cuda", systemPython, onLine);
         if (!cudaBuild.ok) {
           writeMigrationJournal("building", cudaBuild.error);
-          clearBuildingRoot("cuda");
+          await clearBuildingRoot("cuda");
           return cudaBuild;
         }
         writeMigrationJournal("cuda_built");
@@ -332,18 +332,18 @@ async function migrateGpuContaminatedVenv(
       const defBuild = await buildFamilyTree("default", systemPython, onLine);
       if (!defBuild.ok) {
         writeMigrationJournal("building", defBuild.error);
-        clearBuildingRoot("default");
-        if (cudaNeedsBuild) clearBuildingRoot("cuda");
+        await clearBuildingRoot("default");
+        if (cudaNeedsBuild) await clearBuildingRoot("cuda");
         return defBuild;
       }
       writeMigrationJournal("default_built");
 
       if (cudaNeedsBuild) {
-        const cudaPromote = promoteBuildingToLive("cuda");
+        const cudaPromote = await promoteBuildingToLive("cuda");
         if (!cudaPromote.ok) {
           writeMigrationJournal("cuda_promoted", cudaPromote.error);
-          clearBuildingRoot("default");
-          clearBuildingRoot("cuda");
+          await clearBuildingRoot("default");
+          await clearBuildingRoot("cuda");
           return { ok: false, error: cudaPromote.error };
         }
         cudaBackupPath = cudaPromote.backupPath;
@@ -351,7 +351,7 @@ async function migrateGpuContaminatedVenv(
         writeMigrationJournal("cuda_promoted");
       }
 
-      const defPromote = promoteBuildingToLive("default");
+      const defPromote = await promoteBuildingToLive("default");
       if (!defPromote.ok) {
         // Do not write "default_promoted" on failure — that phase means success.
         // If CUDA was already live and rollback fails, leave journal at
@@ -359,7 +359,7 @@ async function migrateGpuContaminatedVenv(
         // return to "building" so recovery knows neither promote finished.
         if (cudaPromoted) {
           onLine("[migrate] Default promote failed — rolling back CUDA promotion...");
-          const rolled = rollbackPromotedFamily("cuda", cudaBackupPath);
+          const rolled = await rollbackPromotedFamily("cuda", cudaBackupPath);
           if (!rolled.ok) {
             const err = `${defPromote.error}; CUDA rollback also failed: ${rolled.error}`;
             writeMigrationJournal("cuda_promoted", err);
@@ -367,7 +367,7 @@ async function migrateGpuContaminatedVenv(
           }
         }
         writeMigrationJournal("building", defPromote.error);
-        clearBuildingRoot("default");
+        await clearBuildingRoot("default");
         return { ok: false, error: defPromote.error };
       }
       writeMigrationJournal("default_promoted");
@@ -403,7 +403,7 @@ async function migrateGpuContaminatedVenv(
       const msg = err instanceof Error ? err.message : String(err);
       if (cudaPromoted) {
         onLine("[migrate] Migration failed — rolling back CUDA promotion...");
-        const rolled = rollbackPromotedFamily("cuda", cudaBackupPath);
+        const rolled = await rollbackPromotedFamily("cuda", cudaBackupPath);
         if (!rolled.ok) {
           writeMigrationJournal("cuda_promoted", `${msg}; CUDA rollback also failed: ${rolled.error}`);
           return {
@@ -412,8 +412,8 @@ async function migrateGpuContaminatedVenv(
           };
         }
       }
-      clearBuildingRoot("default");
-      clearBuildingRoot("cuda");
+      await clearBuildingRoot("default");
+      await clearBuildingRoot("cuda");
       writeMigrationJournal("building", msg);
       return { ok: false, error: msg };
     }

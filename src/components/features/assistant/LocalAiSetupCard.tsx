@@ -1,4 +1,4 @@
-import { Download, RefreshCw } from "lucide-react";
+import { CheckCircle, Download, RefreshCw } from "lucide-react";
 import { openExternal } from "@/lib/openExternal";
 import { formatBytes } from "@/lib/utils";
 import { LocalModelManager } from "./LocalModelManager";
@@ -7,6 +7,7 @@ import {
   MODEL_ID_FUZZY_MIN_LEN,
   OLLAMA_STARTER_MODELS,
   findInstalledStarterId,
+  stemsLooselyMatch,
   type LocalEngine,
   type LocalStarterModel,
 } from "./aiProviderCatalog";
@@ -39,22 +40,20 @@ function EngineToggle({ preferredEngine, onSelect }: EngineToggleProps) {
       <button
         type="button"
         onClick={() => onSelect("lms")}
-        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-          preferredEngine === "lms"
-            ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30"
-            : "text-slate-500 hover:text-slate-300 border border-transparent"
-        }`}
+        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${preferredEngine === "lms"
+          ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30"
+          : "text-slate-500 hover:text-slate-300 border border-transparent"
+          }`}
       >
         LM Studio
       </button>
       <button
         type="button"
         onClick={() => onSelect("ollama")}
-        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-          preferredEngine === "ollama"
-            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-            : "text-slate-500 hover:text-slate-300 border border-transparent"
-        }`}
+        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${preferredEngine === "ollama"
+          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+          : "text-slate-500 hover:text-slate-300 border border-transparent"
+          }`}
       >
         Ollama
       </button>
@@ -126,6 +125,7 @@ interface StarterModelCardProps {
   /** True while any starter pull is in flight (disables sibling cards). */
   pullBusy?: boolean;
   installedId: string | null;
+  isActive?: boolean;
   onPull: () => void;
   onEnable: () => void;
 }
@@ -139,6 +139,7 @@ interface StarterModelCardProps {
  * @param isPulling - Whether this model is currently being downloaded and activated
  * @param pullBusy - Whether any starter pull is in progress
  * @param installedId - Installed engine model id when already present locally
+ * @param isActive - Whether this model is the currently active local model
  * @param onPull - Called when the download action is selected
  * @param onEnable - Called when enabling an already-installed starter
  */
@@ -149,11 +150,18 @@ function StarterModelCard({
   isPulling,
   pullBusy,
   installedId,
+  isActive = false,
   onPull,
   onEnable,
 }: StarterModelCardProps) {
   const installed = Boolean(installedId);
-  const disabled = isPulling || Boolean(pullBusy);
+  const disabled = isPulling || Boolean(pullBusy) || isActive;
+  const buttonStyle = isActive
+    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-bold cursor-default"
+    : installed
+      ? "bg-slate-900 border-slate-700 text-slate-300 hover:border-electric-blue hover:text-electric-blue cursor-pointer"
+      : accentBg;
+
   return (
     <div className="p-2.5 rounded-lg border border-slate-800 bg-slate-950/60 flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -170,15 +178,19 @@ function StarterModelCard({
       ) : null}
       <button
         type="button"
-        onClick={installed ? onEnable : onPull}
+        onClick={installed ? (isActive ? undefined : onEnable) : onPull}
         disabled={disabled}
-        className={`mt-1 w-full h-7 border rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${accentBg}`}
+        className={`mt-1 w-full h-7 border rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-75 ${buttonStyle}`}
       >
         {isPulling ? (
           <>
             <RefreshCw className="h-3 w-3 animate-spin" />
             <span>Pulling & Activating...</span>
           </>
+        ) : isActive ? (
+          <span className="flex items-center gap-1">
+            <CheckCircle className="h-3 w-3 text-emerald-400" /> Active
+          </span>
         ) : installed ? (
           <span>Enable</span>
         ) : (
@@ -293,9 +305,8 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
           engine).
         </p>
         <span
-          className={`inline-block w-2 h-2 shrink-0 rounded-full ${
-            healthy === true ? "bg-emerald-400" : healthy === false ? "bg-rose-400" : "bg-slate-500"
-          }`}
+          className={`inline-block w-2 h-2 shrink-0 rounded-full ${healthy === true ? "bg-emerald-400" : healthy === false ? "bg-rose-400" : "bg-slate-500"
+            }`}
           title={
             healthy === true
               ? `${engineName} ready`
@@ -353,6 +364,12 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
       <div className="space-y-2">
         {models.map((m) => {
           const installedId = findInstalledStarterId(m, local.installedModels);
+          const isStarterActive = Boolean(
+            installedId &&
+            activeModel &&
+            (installedId === activeModel ||
+              stemsLooselyMatch(activeModel.toLowerCase(), installedId.toLowerCase())),
+          );
           return (
             <StarterModelCard
               key={m.tag}
@@ -362,6 +379,7 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
               isPulling={local.pullingModel === m.tag}
               pullBusy={Boolean(local.pullingModel)}
               installedId={installedId}
+              isActive={isStarterActive}
               onPull={() => void local.pullLocalModel(m.tag, local.preferredEngine)}
               onEnable={() => {
                 if (!installedId || local.pullingModel) return;

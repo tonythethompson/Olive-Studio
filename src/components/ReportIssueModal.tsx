@@ -61,6 +61,7 @@ export function ReportIssueModal({
   );
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   // Reset state only when the modal transitions from closed → open.
   // Keeping defaultArea/defaultDescription out of the dep array prevents a
@@ -78,6 +79,7 @@ export function ReportIssueModal({
       setSelectedTelemetry(new Set<TelemetryOptionId>(["platform", "hardware"]));
       setShowPreview(false);
       setCopied(false);
+      setOpenError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only depend on open
   }, [open]);
@@ -115,11 +117,11 @@ export function ReportIssueModal({
       }),
       frequencyInfo: frequencyInfo
         ? {
-            count: frequencyInfo.count,
-            firstOccurrenceAgo: frequencyInfo.firstOccurrenceAgo,
-            lastOccurrenceAgo: frequencyInfo.lastOccurrenceAgo,
-            frequencyLabel: frequencyInfo.frequencyLabel,
-          }
+          count: frequencyInfo.count,
+          firstOccurrenceAgo: frequencyInfo.firstOccurrenceAgo,
+          lastOccurrenceAgo: frequencyInfo.lastOccurrenceAgo,
+          frequencyLabel: frequencyInfo.frequencyLabel,
+        }
         : null,
     }),
     [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, chatLog, frequencyInfo],
@@ -149,16 +151,21 @@ export function ReportIssueModal({
     }
   }, [fullText]);
 
-  const handleOpenGithub = useCallback(() => {
-    if (urlExceededBudget) {
-      // Full prefilled URL was too long: keep complete report on clipboard, open blank form
-      void copyFullText().then(() => {
-        void openExternal(url);
-      });
-      return;
+  const handleOpenGithub = useCallback(async () => {
+    setOpenError(null);
+    try {
+      if (urlExceededBudget) {
+        // Full prefilled URL was too long: keep complete report on clipboard, open blank form
+        await copyFullText();
+        await openExternal(url);
+      } else {
+        await openExternal(url);
+      }
+      onClose();
+    } catch (err) {
+      setOpenError(err instanceof Error ? err.message : "Could not open browser");
     }
-    void openExternal(url);
-  }, [url, urlExceededBudget, copyFullText]);
+  }, [url, urlExceededBudget, copyFullText, onClose]);
 
   const handleCopy = useCallback(() => {
     void copyFullText();
@@ -375,35 +382,40 @@ export function ReportIssueModal({
               to your clipboard so you can paste it into the issue body.
             </p>
           )}
+          {openError && (
+            <p className="text-xs text-red-400 mt-1">
+              {openError}. You can copy the report and open GitHub manually.
+            </p>
+          )}
           <div className="flex items-center justify-between gap-3">
-          <Button variant="outline" onClick={onClose} className="text-sm h-9">
-            Cancel
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleCopy}
-              disabled={!description.trim()}
-              className="text-sm h-9 border-slate-700 text-slate-300 hover:border-slate-500"
-            >
-              {copied ? (
-                <>
-                  <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy Report
-                </>
-              )}
+            <Button variant="outline" onClick={onClose} className="text-sm h-9">
+              Cancel
             </Button>
-            <Button
-              onClick={handleOpenGithub}
-              disabled={!description.trim()}
-              className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
-            >
-              <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open GitHub Issue
-            </Button>
-          </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleCopy}
+                disabled={!description.trim()}
+                className="text-sm h-9 border-slate-700 text-slate-300 hover:border-slate-500"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy Report
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleOpenGithub}
+                disabled={!description.trim()}
+                className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
+              >
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open GitHub Issue
+              </Button>
+            </div>
           </div>
         </div>
       </Card>

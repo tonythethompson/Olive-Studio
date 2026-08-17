@@ -92,9 +92,26 @@ export const AgentAccessControls = memo(function AgentAccessControls({
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstToggleRef = useRef<HTMLInputElement | null>(null);
+  const busyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canMutatePolicy = isBrowserLoopbackHost();
 
+  const clearBusyTimer = useCallback(() => {
+    if (busyTimerRef.current !== null) {
+      clearTimeout(busyTimerRef.current);
+      busyTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearBusyTimer();
+    };
+  }, [clearBusyTimer]);
+
   const refresh = useCallback(async () => {
+    clearBusyTimer();
+    setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/api/olive/agent-access");
       const data = (await res.json()) as {
@@ -108,8 +125,14 @@ export const AgentAccessControls = memo(function AgentAccessControls({
       setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      clearBusyTimer();
+      busyTimerRef.current = setTimeout(() => {
+        setBusy(false);
+        busyTimerRef.current = null;
+      }, 300);
     }
-  }, []);
+  }, [clearBusyTimer]);
 
   useEffect(() => {
     void refresh();
@@ -165,6 +188,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
       setError("Policy changes require opening Studio on localhost (127.0.0.1).");
       return;
     }
+    clearBusyTimer();
     setBusy(true);
     setMessage(null);
     try {
@@ -186,6 +210,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      clearBusyTimer();
       setBusy(false);
     }
   };

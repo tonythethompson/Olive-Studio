@@ -29,9 +29,59 @@ export type ChatActionPatch = {
   modelSource?: ModelSource;
   hfModelId?: string;
   hfDataset?: string;
+  trustRemoteCode?: boolean;
+  hfTrustRemoteCode?: boolean;
   cacheDir?: string;
   passes?: Partial<UIState["passes"]>;
 };
+
+/**
+ * Fields that were stripped from an AI patch because they require explicit
+ * user confirmation before being applied (security-sensitive toggles).
+ */
+export type GatedPatchFields = {
+  trustRemoteCode?: true;
+};
+
+/**
+ * Extract security-sensitive fields from a patch that require user confirmation.
+ * Returns null when the patch contains no gated fields.
+ */
+export function extractGatedFields(patch: ChatActionPatch): GatedPatchFields | null {
+  if (patch.trustRemoteCode === true) {
+    return { trustRemoteCode: true };
+  }
+  return null;
+}
+
+/**
+ * Returns a copy of the patch with gated (security-sensitive) fields removed.
+ * Disabling trustRemoteCode (false) is always safe and passes through.
+ * Enabling trustRemoteCode (true) requires explicit confirmation via
+ * `chatPatchToUiState` with `{ confirmGated: true }`.
+ */
+export function stripGatedFields(patch: ChatActionPatch): ChatActionPatch {
+  if (patch.trustRemoteCode !== true) return patch;
+  const { trustRemoteCode: _, ...rest } = patch;
+  return rest;
+}
+
+export const TRUST_REMOTE_CODE_CONFIRM_MESSAGE =
+  "Enabling Trust Remote Code will execute Python code from the Hugging Face repository inside Olive on your machine. Only enable this for repositories you trust.\n\nDo you want to enable Trust Remote Code?";
+
+/**
+ * Checks for gated fields (like trustRemoteCode=true) and prompts the user for
+ * confirmation if running in an interactive browser environment.
+ * Returns true if no gated fields exist or if confirmed by user, false if declined.
+ */
+export function confirmGatedPatchFields(patch: ChatActionPatch): boolean {
+  const gated = extractGatedFields(patch);
+  if (!gated) return true;
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    return false;
+  }
+  return window.confirm(TRUST_REMOTE_CODE_CONFIRM_MESSAGE);
+}
 
 export type ChatAction = {
   id: string;
@@ -83,6 +133,11 @@ export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   if (typeof raw.hfDataset === "string") {
     patch.hfDataset = raw.hfDataset.trim().slice(0, 256);
   }
+  if (typeof raw.trustRemoteCode === "boolean") {
+    patch.trustRemoteCode = raw.trustRemoteCode;
+  } else if (typeof raw.hfTrustRemoteCode === "boolean") {
+    patch.trustRemoteCode = raw.hfTrustRemoteCode;
+  }
   if (typeof raw.cacheDir === "string" && raw.cacheDir.trim()) {
     patch.cacheDir = raw.cacheDir.trim().slice(0, 512);
   }
@@ -92,8 +147,17 @@ export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
+export type ChatPatchOptions = {
+  /**
+   * When true, security-sensitive fields (e.g. trustRemoteCode=true) are
+   * applied. When false or omitted, enabling trustRemoteCode is silently
+   * skipped — the caller must first show a confirmation dialog.
+   */
+  confirmGated?: boolean;
+};
+
 /** Merge a sanitized chat patch into a Partial<UIState> ready for setState. */
-export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Partial<UIState> {
+export function chatPatchToUiState(state: UIState, patch: ChatActionPatch, options?: ChatPatchOptions): Partial<UIState> {
   const next: Partial<UIState> = {};
   if (patch.ihvProvider) next.ihvProvider = patch.ihvProvider;
   if (patch.cudaVersion) next.cudaVersion = patch.cudaVersion;
@@ -102,19 +166,34 @@ export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Part
   if (patch.hfModelId !== undefined) next.hfModelId = patch.hfModelId;
   if (patch.hfDataset !== undefined) next.hfDataset = patch.hfDataset;
   if (patch.cacheDir !== undefined) next.cacheDir = patch.cacheDir;
-  if (patch.passes) {
+
+  // Determine whether trustRemoteCode should be applied:
+  // - Disabling (false) is always safe.
+  // - Enabling (true) requires explicit user confirmation via options.confirmGated.
+  const effectiveTrust: boolean | undefined =
+    patch.trustRemoteCode === false
+      ? false
+      : patch.trustRemoteCode === true && options?.confirmGated
+        ? true
+        : undefined;
+
+  if (patch.passes || effectiveTrust !== undefined) {
     const merged: UIState["passes"] = { ...state.passes, ...patch.passes };
+    // Apply trustRemoteCode into passes where it belongs in UIState.
+    if (effectiveTrust !== undefined) {
+      merged.trustRemoteCode = effectiveTrust;
+    }
     // Keep toggles consistent with method/precision changes.
-    if (patch.passes.quantMethod || patch.passes.quantPrecision) {
+    if (patch.passes?.quantMethod || patch.passes?.quantPrecision) {
       merged.quantization = true;
     }
-    if (patch.passes.quantMethod === "awq") {
+    if (patch.passes?.quantMethod === "awq") {
       merged.pruning = false;
     }
-    if (patch.passes.peftMethod) {
+    if (patch.passes?.peftMethod) {
       merged.peft = true;
     }
-    if (patch.passes.conversionFormat || patch.passes.conversionOpset) {
+    if (patch.passes?.conversionFormat || patch.passes?.conversionOpset) {
       merged.conversion = true;
     }
     next.passes = merged;
@@ -228,6 +307,7 @@ function negatedTargets(value: string): { quant: boolean; convert: boolean } {
 export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatActionPatch | null {
   const passes: Partial<UIState["passes"]> = {};
   let ihvProvider: IHVProvider | undefined;
+  let trustRemoteCode: boolean | undefined;
 
   const visit = (node: unknown, depth: number) => {
     if (depth > 8 || node == null) return;
@@ -322,6 +402,19 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
         }
       }
 
+      if (
+        key === "trust_remote_code" ||
+        key === "trustremotecode" ||
+        key === "hftrustremotecode" ||
+        key === "hf_trust_remote_code"
+      ) {
+        if (typeof value === "boolean") {
+          trustRemoteCode = value;
+        } else if (typeof value === "string") {
+          trustRemoteCode = value.toLowerCase() === "true";
+        }
+      }
+
       if (key === "passes") visit(value, depth + 1);
       else if (isRecord(value) || Array.isArray(value)) visit(value, depth + 1);
     }
@@ -330,6 +423,7 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
   visit(parsed, 0);
   const patch: ChatActionPatch = {};
   if (ihvProvider) patch.ihvProvider = ihvProvider;
+  if (trustRemoteCode !== undefined) patch.trustRemoteCode = trustRemoteCode;
   if (Object.keys(passes).length > 0) patch.passes = passes;
   return Object.keys(patch).length > 0 ? sanitizeChatActionPatch(patch) : null;
 }

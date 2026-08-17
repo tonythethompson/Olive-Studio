@@ -15,7 +15,12 @@ import { useState, useCallback } from "react";
 import { Wrench, Navigation, BookOpen, ExternalLink, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePipelineState } from "@/lib/stores/pipelineStore";
-import { chatPatchToUiState, sanitizeChatActionPatch } from "@/lib/chatActions";
+import {
+  chatPatchToUiState,
+  sanitizeChatActionPatch,
+  stripGatedFields,
+  confirmGatedPatchFields,
+} from "@/lib/chatActions";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
 import { executeNavigateAction } from "@/lib/actionExecutor";
 import type { Action } from "@/lib/types/findingTypes";
@@ -129,7 +134,9 @@ export function ActionButton({
 
     const patch = sanitizeChatActionPatch(action.payload);
     if (!patch) return;
-    const partial = chatPatchToUiState(state, patch);
+    const confirmGated = confirmGatedPatchFields(patch);
+    const appliedPatch = confirmGated ? patch : stripGatedFields(patch);
+    const partial = chatPatchToUiState(state, appliedPatch, { confirmGated });
 
     // Apply the patch through the store (runs commitUiStateUpdate internally).
     setState(partial);

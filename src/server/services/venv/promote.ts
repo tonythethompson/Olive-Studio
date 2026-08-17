@@ -4,6 +4,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { setTimeout as sleep } from "timers/promises";
 import type { VenvFamily } from "../../../lib/venvFamily.ts";
 import {
   getFamilyBackupRoot,
@@ -19,13 +20,39 @@ export type PromoteResult =
   | { ok: true; backupPath?: string }
   | { ok: false; error: string; backupPath?: string };
 
-function renameDir(from: string, to: string): void {
-  fs.renameSync(from, to);
+async function renameDir(from: string, to: string, maxAttempts = 10): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await fs.promises.rename(from, to);
+      return;
+    } catch (err: unknown) {
+      lastError = err;
+      const isTransient =
+        err != null &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err.code === "EPERM" || err.code === "EBUSY" || err.code === "EACCES");
+      if (!isTransient || attempt === maxAttempts) {
+        throw err;
+      }
+      await sleep(50 * attempt);
+    }
+  }
+  throw lastError;
 }
 
-function rmDirSafe(dir: string): void {
+async function rmDirSafe(dir: string, maxAttempts = 5): Promise<void> {
   if (!fs.existsSync(dir)) return;
-  fs.rmSync(dir, { recursive: true, force: true });
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      return;
+    } catch {
+      if (attempt === maxAttempts || !fs.existsSync(dir)) return;
+      await sleep(50 * attempt);
+    }
+  }
 }
 
 export function writeVenvManifest(root: string, manifest: VenvManifest): void {
@@ -48,7 +75,7 @@ export function readVenvManifest(root: string): VenvManifest | null {
  * live → backup, building → live; rollback on failure.
  * Returns `backupPath` when a previous live tree was moved aside.
  */
-export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
+export async function promoteBuildingToLive(family: VenvFamily): Promise<PromoteResult> {
   const live = getFamilyRoot(family);
   const building = getFamilyBuildingRoot(family);
   if (!fs.existsSync(building)) {
@@ -60,18 +87,18 @@ export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
 
   try {
     if (fs.existsSync(live)) {
-      if (fs.existsSync(backup)) rmDirSafe(backup);
-      renameDir(live, backup);
+      if (fs.existsSync(backup)) await rmDirSafe(backup);
+      await renameDir(live, backup);
       liveMoved = true;
     }
-    renameDir(building, live);
+    await renameDir(building, live);
     return { ok: true, backupPath: liveMoved ? backup : undefined };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     // Rollback best-effort
     try {
       if (liveMoved && fs.existsSync(backup) && !fs.existsSync(live)) {
-        renameDir(backup, live);
+        await renameDir(backup, live);
       }
     } catch {
       /* leave artifacts for recovery */
@@ -88,19 +115,19 @@ export function promoteBuildingToLive(family: VenvFamily): PromoteResult {
  * Undo a successful promotion: restore `backupPath` to live, or remove a
  * newly created live tree when there was no prior backup.
  */
-export function rollbackPromotedFamily(
+export async function rollbackPromotedFamily(
   family: VenvFamily,
   backupPath?: string,
-): PromoteResult {
+): Promise<PromoteResult> {
   const live = getFamilyRoot(family);
   try {
     if (backupPath && fs.existsSync(backupPath)) {
-      if (fs.existsSync(live)) rmDirSafe(live);
-      renameDir(backupPath, live);
+      if (fs.existsSync(live)) await rmDirSafe(live);
+      await renameDir(backupPath, live);
       return { ok: true, backupPath };
     }
     if (fs.existsSync(live)) {
-      rmDirSafe(live);
+      await rmDirSafe(live);
     }
     return { ok: true };
   } catch (err: unknown) {
@@ -110,19 +137,19 @@ export function rollbackPromotedFamily(
 }
 
 /** Remove a successful backup after validation (optional cleanup). */
-export function discardBackup(family: VenvFamily, backupPath?: string): void {
+export async function discardBackup(family: VenvFamily, backupPath?: string): Promise<void> {
   const target = backupPath ?? getFamilyBackupRoot(family);
   // Only remove paths that look like our backup naming.
   if (!target.includes(".backup-") && !target.includes(".legacy-")) return;
-  rmDirSafe(target);
+  await rmDirSafe(target);
 }
 
 export function ensureParentDir(dir: string): void {
   fs.mkdirSync(path.dirname(dir), { recursive: true });
 }
 
-export function clearBuildingRoot(family: VenvFamily): void {
-  rmDirSafe(getFamilyBuildingRoot(family));
+export async function clearBuildingRoot(family: VenvFamily): Promise<void> {
+  await rmDirSafe(getFamilyBuildingRoot(family));
 }
 
 export function familyPythonExists(family: VenvFamily): boolean {

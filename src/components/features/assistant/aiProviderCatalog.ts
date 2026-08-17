@@ -143,7 +143,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "opencode",
     name: "OpenCode Zen",
-    models: ["default"],
+    models: ["kimi-k2.7-code", "claude-3-5-sonnet", "deepseek-r1", "gpt-4o", "meta-llama/llama-3.3-70b-instruct"],
     keyEnvVar: "OPENCODE_API_KEY",
     docsUrl: "opencode.ai",
     baseUrl: "https://opencode.ai/zen/v1",
@@ -152,7 +152,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "opencode-go",
     name: "OpenCode Go",
-    models: ["default"],
+    models: ["kimi-k2.7-code", "claude-3-5-sonnet", "deepseek-r1", "gpt-4o", "meta-llama/llama-3.3-70b-instruct"],
     keyEnvVar: "OPENCODE_API_KEY",
     docsUrl: "opencode.ai",
     baseUrl: "https://opencode.ai/zen/go/v1",
@@ -162,7 +162,13 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "cloudflare",
     name: "Cloudflare Workers AI",
-    models: ["@cf/meta/llama-3.1-8b-instruct"],
+    models: [
+      "@cf/meta/llama-3.1-8b-instruct",
+      "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+      "@cf/mistral/mistral-7b-instruct-v0.2",
+      "@cf/qwen/qwen2.5-coder-32b-instruct",
+    ],
     keyEnvVar: "CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID",
     docsUrl: "developers.cloudflare.com/workers-ai",
     category: "subscription",
@@ -196,7 +202,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "devin",
     name: "Devin",
-    models: ["swe-1-6", "swe-1-7", "claude-sonnet-4", "claude-opus-4", "gpt-4o", "kimi-k2"],
+    models: ["swe-1-6", "swe-1-7", "claude-3-5-sonnet", "claude-3-7-sonnet", "gpt-4o", "kimi-k2"],
     keyEnvVar: "",
     docsUrl: "devin.ai",
     category: "subscription",

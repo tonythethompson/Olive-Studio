@@ -40,11 +40,18 @@ function PassStatusBadge({
   isActive: boolean;
   disabled: boolean;
 }) {
+  const badgeColor =
+    disabled
+      ? color
+      : isActive
+      ? "bg-emerald-500/25 border-emerald-500/60 text-emerald-300 font-semibold shadow-sm"
+      : "bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-electric-blue hover:text-electric-blue";
+
   return (
     <span
       className={cn(
         "inline-flex h-7 min-w-[4.5rem] items-center justify-center rounded border px-2 text-[10.5px] font-mono font-medium transition-all",
-        color,
+        badgeColor,
         disabled && "opacity-60 cursor-not-allowed",
         !disabled && !isActive && "hover:brightness-110 active:scale-95 cursor-pointer",
       )}

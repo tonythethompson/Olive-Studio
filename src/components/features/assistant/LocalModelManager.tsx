@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { MODEL_ID_FUZZY_MIN_LEN } from "@/lib/localEngineStarters";
+import { extractErrorMessage } from "@/lib/httpError";
 
 function modelIdsMatch(activeModel: string | undefined, installedId: string): boolean {
   if (!activeModel) return false;
@@ -204,8 +205,8 @@ export function LocalModelManager({
           body: JSON.stringify({ modelTag }),
         });
         if (!r.ok) {
-          const d = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(d.error || `HTTP ${r.status}`);
+          const d = await r.json().catch(() => ({}));
+          throw new Error(extractErrorMessage(d, `HTTP ${r.status}`));
         }
       }
       if (onActivate) await onActivate(modelTag, source);
@@ -228,8 +229,8 @@ export function LocalModelManager({
         body: JSON.stringify({ modelTag }),
       });
       if (!r.ok) {
-        const d = (await r.json().catch(() => ({}))) as { error?: string };
-        throw new Error(d.error || `HTTP ${r.status}`);
+        const d = await r.json().catch(() => ({}));
+        throw new Error(extractErrorMessage(d, `HTTP ${r.status}`));
       }
       await refresh();
     } catch (err) {
@@ -319,11 +320,10 @@ export function LocalModelManager({
                       return (
                         <div
                           key={`${m.source}:${m.id}`}
-                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-xs ${
-                            active
-                              ? "border-emerald-500/40 bg-emerald-950/20"
-                              : "border-slate-800 bg-slate-950/60"
-                          }`}
+                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-xs ${active
+                            ? "border-emerald-500/40 bg-emerald-950/20"
+                            : "border-slate-800 bg-slate-950/60"
+                            }`}
                         >
                           <div className="min-w-0 flex-1 space-y-0.5">
                             <div className="flex items-center gap-1.5 min-w-0">

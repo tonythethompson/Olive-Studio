@@ -11,21 +11,56 @@ export function parseJsonFromAiResponse(text: string): unknown {
     throw new Error("AI response was empty.");
   }
 
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
-  const balancedCandidates = collectBalancedJsonCandidates(candidate);
-  const attempts = [candidate, ...balancedCandidates, softRepairJson(candidate)].filter((s): s is string =>
-    Boolean(s && s.trim()),
-  );
+  // Extract all fenced code block contents, classifying by tag
+  const explicitJsonBlocks: string[] = [];
+  const otherFencedBlocks: string[] = [];
+  const fenceRegex = /```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/gi;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRegex.exec(trimmed)) !== null) {
+    const lang = (match[1] ?? "").toLowerCase();
+    const content = match[2]?.trim();
+    if (!content) continue;
+    if (lang === "json" || lang === "jsonc" || lang === "json5") {
+      explicitJsonBlocks.push(content);
+    } else {
+      otherFencedBlocks.push(content);
+    }
+  }
+
+  // Prioritize candidates:
+  // 1. Explicit ```json blocks
+  // 2. Balanced JSON chunks from overall text
+  // 3. Balanced JSON chunks from explicit json blocks
+  // 4. Raw trimmed response
+  // 5. Other untagged / non-JSON fenced code blocks (fallback)
+  const rawCandidates = [
+    ...explicitJsonBlocks,
+    ...collectBalancedJsonCandidates(trimmed),
+    ...explicitJsonBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
+    trimmed,
+    ...otherFencedBlocks,
+    ...otherFencedBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
+  ];
+
+  // De-duplicate candidates while preserving priority order
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const c of rawCandidates) {
+    const s = c.trim();
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      candidates.push(s);
+    }
+  }
 
   let lastErr: Error | undefined;
-  for (const attempt of attempts) {
+  for (const candidate of candidates) {
     try {
-      return JSON.parse(attempt);
+      return JSON.parse(candidate);
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
-      const repaired = softRepairJson(attempt);
-      if (repaired && repaired !== attempt) {
+      const repaired = softRepairJson(candidate);
+      if (repaired && repaired !== candidate) {
         try {
           return JSON.parse(repaired);
         } catch (err2) {

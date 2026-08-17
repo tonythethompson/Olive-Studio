@@ -13,6 +13,7 @@ import {
   splitCliLines,
 } from "../../../lib/lmsPullProgress.ts";
 import { gateLocalPullDiskSpace } from "../../../lib/localEngineDisk.ts";
+import { extractErrorMessage } from "../../../lib/httpError.ts";
 import { heavyCommandRateLimit } from "../../middleware/rateLimit.ts";
 import { localEngineRuntime } from "../../services/ai/localEngineState.ts";
 import {
@@ -94,8 +95,8 @@ export function mountLmStudioRoutes(router: Router): void {
         body: JSON.stringify({ model: modelTag }),
       });
       if (!r.ok) {
-        const d = (await r.json().catch(() => ({}))) as { error?: string };
-        return res.status(500).json({ error: d.error || `HTTP ${r.status}` });
+        const d = await r.json().catch(() => ({}));
+        return res.status(500).json({ error: extractErrorMessage(d, `HTTP ${r.status}`) });
       }
       return res.json({ ok: true });
     } catch (err: unknown) {
@@ -116,8 +117,8 @@ export function mountLmStudioRoutes(router: Router): void {
         body: JSON.stringify({ model: modelTag }),
       });
       if (!r.ok) {
-        const d = (await r.json().catch(() => ({}))) as { error?: string };
-        return res.status(500).json({ error: d.error || `HTTP ${r.status}` });
+        const d = await r.json().catch(() => ({}));
+        return res.status(500).json({ error: extractErrorMessage(d, `HTTP ${r.status}`) });
       }
       return res.json({ ok: true });
     } catch (err: unknown) {

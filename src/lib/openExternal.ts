@@ -17,12 +17,11 @@ export async function openExternal(url: string): Promise<void> {
   try {
     parsed = new URL(url, window.location.href);
     if (!(["http:", "https:", "mailto:"] as const).includes(parsed.protocol as "http:" | "https:" | "mailto:")) {
-      console.warn("[openExternal] Refusing to open unsupported protocol:", parsed.protocol);
-      return;
+      throw new Error(`Unsupported protocol: ${parsed.protocol}`);
     }
-  } catch {
-    console.warn("[openExternal] Refusing to open invalid URL:", url);
-    return;
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Unsupported protocol")) throw e;
+    throw new Error("Invalid URL");
   }
 
   // Check if we're running in Tauri
@@ -33,11 +32,13 @@ export async function openExternal(url: string): Promise<void> {
     } catch (err) {
       console.error("[openExternal] Tauri shell.open failed:", err);
       // Fallback to window.open if Tauri fails
-      window.open(parsed.href, "_blank", "noopener,noreferrer");
+      const win = window.open(parsed.href, "_blank", "noopener,noreferrer");
+      if (!win) throw new Error("Browser blocked the popup");
     }
   } else {
     // Browser/web fallback
-    window.open(parsed.href, "_blank", "noopener,noreferrer");
+    const win = window.open(parsed.href, "_blank", "noopener,noreferrer");
+    if (!win) throw new Error("Browser blocked the popup");
   }
 }
 
