@@ -6,29 +6,6 @@ name: Windows Desktop Package
 # in desktop-release.yml / release-dry-run.yml.
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/desktop-windows.yml"
-      - ".github/workflows/desktop-release.yml"
-      - "scripts/build-msix.ps1"
-      - "src-tauri/**"
-      - "src-tauri/tauri.conf.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "server.ts"
-      - "src/**"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/desktop-windows.yml"
-      - ".github/workflows/desktop-release.yml"
-      - "scripts/build-msix.ps1"
-      - "src-tauri/**"
-      - "src-tauri/tauri.conf.json"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "server.ts"
-      - "src/**"
   workflow_dispatch:
 
 permissions:
