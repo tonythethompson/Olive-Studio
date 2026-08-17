@@ -173,6 +173,39 @@ jobs:
             --repo "${{ github.repository }}" \
             --clobber
 
+      - name: Build portable zip (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          $releaseDir = "src-tauri/target/${{ matrix.tauri_target }}/release"
+          $outDir = "$releaseDir/bundle/portable"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          # Zip the release directory contents (exe + bundled resources) into a portable archive
+          Compress-Archive `
+            -Path "$releaseDir/Olive Studio.exe",
+                  "$releaseDir/dist",
+                  "$releaseDir/node-runtime",
+                  "$releaseDir/scripts",
+                  "$releaseDir/olive-mcp-server",
+                  "$releaseDir/genai" `
+            -DestinationPath "$outDir/OliveStudio_$version_portable.zip" `
+            -Force
+          Write-Output "Portable zip: $outDir/OliveStudio_$version_portable.zip"
+
+      - name: Upload portable zip to release
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          gh release upload "$RELEASE_TAG" \
+            "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/portable/OliveStudio_${VERSION}_portable.zip" \
+            --repo "${{ github.repository }}" \
+            --clobber
+
       - name: Smoke test macOS artifact
         if: matrix.platform == 'macos-latest'
         shell: bash

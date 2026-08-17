@@ -162,7 +162,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      # ─── MSIX (Windows only) ──────────────────────────────────────────
+      # ─── MSIX + Portable (Windows only) ─────────────────────────────
       - name: Build MSIX (Microsoft Store)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -172,6 +172,25 @@ jobs:
             -ReleaseDir "src-tauri/target/${{ matrix.tauri_target }}/release" `
             -Version $version `
             -OutFile "src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/OliveStudio_$version.msix"
+
+      - name: Build portable zip (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          $releaseDir = "src-tauri/target/${{ matrix.tauri_target }}/release"
+          $outDir = "$releaseDir/bundle/portable"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          Compress-Archive `
+            -Path "$releaseDir/Olive Studio.exe",
+                  "$releaseDir/dist",
+                  "$releaseDir/node-runtime",
+                  "$releaseDir/scripts",
+                  "$releaseDir/olive-mcp-server",
+                  "$releaseDir/genai" `
+            -DestinationPath "$outDir/OliveStudio_$version_portable.zip" `
+            -Force
+          Write-Output "Portable zip: $outDir/OliveStudio_$version_portable.zip"
 
       # ─── Upload artifacts ─────────────────────────────────────────────
       - name: Validate Linux artifacts
@@ -199,8 +218,8 @@ jobs:
         run: |
           $root = "src-tauri/target/${{ matrix.tauri_target }}/release/bundle"
           if (-not (Get-ChildItem "$root/nsis/*.exe" -ErrorAction SilentlyContinue)) { throw "Missing NSIS installer" }
-          if (-not (Get-ChildItem "$root/msi/*.msi" -ErrorAction SilentlyContinue)) { throw "Missing MSI installer" }
           if (-not (Get-ChildItem "$root/msix/*.msix" -ErrorAction SilentlyContinue)) { throw "Missing MSIX package" }
+          if (-not (Get-ChildItem "$root/portable/*.zip" -ErrorAction SilentlyContinue)) { throw "Missing portable zip" }
 
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows-latest'
@@ -211,8 +230,8 @@ jobs:
           if-no-files-found: error
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msix/*.msix
+            src-tauri/target/${{ matrix.tauri_target }}/release/bundle/portable/*.zip
 
       - name: Validate macOS artifacts
         if: matrix.platform == 'macos-latest'
