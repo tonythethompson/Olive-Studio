@@ -76,7 +76,7 @@ jobs:
 
       - name: Build macOS app bundle
         shell: bash
-        run: pnpm exec tauri build --bundles macos,dmg --config src-tauri/tauri.ci.conf.json
+        run: pnpm exec tauri build --bundles app,dmg --config src-tauri/tauri.ci.conf.json
 
       - name: Smoke test packaged app
         shell: bash
