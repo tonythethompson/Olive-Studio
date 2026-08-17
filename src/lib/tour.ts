@@ -40,7 +40,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "What Olive is",
       description:
-        "Olive is Microsoft's open-source toolkit for making machine learning models smaller and faster. It converts models to ONNX and applies optimizations like quantization so they run on your CPU, GPU, or NPU. Olive Studio helps you pick a model, target your hardware, and build that recipe. Press Next or the right arrow to continue.",
+        "Olive is Microsoft\'s open-source toolkit for optimizing and packaging machine learning models. It can convert models to ONNX and run optimizations like quantization, pruning, and caching so they run efficiently on your CPU, GPU, or NPU. Olive Studio helps you pick a model, target your hardware, and build that recipe.",
       align: "center",
     },
   },
@@ -51,7 +51,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Your pipeline",
       description:
-        "These four steps are the whole workflow: pick a model, target your hardware, build and run an optimization recipe, then try the result. Click a step to jump to it, or press Next or the arrow keys.",
+        "These four steps are the whole workflow: pick a model, target your hardware, build and run an optimization recipe, then try the result. Select a step to jump to it.",
       side: "right",
       align: "start",
     },
@@ -62,7 +62,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Model source",
       description:
-        "Apply the sample recipe if you do not have a model yet, or apply any other recipe. If a model is already loaded, press Next or the arrow keys. Applying a recipe also moves the tour forward.",
+        "Apply the sample recipe if you do not have a model yet, or apply any other recipe. Applying a recipe also moves the tour forward.",
       side: "bottom",
       align: "start",
     },
@@ -75,7 +75,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Hardware",
       description:
-        "Click a provider card to choose where the optimized model will run (CPU, GPU, or NPU). Next or the arrow keys also work and keep the current provider.",
+        "Select a provider card to choose where the optimized model will run (CPU, GPU, or NPU).",
       side: "bottom",
       align: "start",
     },
@@ -88,7 +88,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Recipe and run",
       description:
-        "This graph is the Olive recipe. Click a node to inspect it, or press Next or the arrow keys.",
+        "This graph is the Olive recipe. Select a node to inspect it.",
       side: "bottom",
       align: "start",
     },
@@ -99,7 +99,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "Playground",
       description:
-        "Try the optimized model in the browser: in-browser inference, WebGPU benchmarks, and the model Arena. Press Next or the arrow keys to continue.",
+        "Try the optimized model in the browser: in-browser inference, WebGPU benchmarks, and the model Arena.",
       side: "top",
       align: "start",
     },
@@ -111,7 +111,7 @@ export const TOUR_STEPS: DriveStep[] = [
     popover: {
       title: "The Assistant",
       description:
-        "Click Open Assistant to ask questions about Olive and get help building your recipe. Next or the arrow keys also work.",
+        "Select Open Assistant to ask questions about Olive and get help building your recipe.",
       side: "bottom",
       align: "end",
     },
