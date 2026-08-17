@@ -245,7 +245,10 @@ function ApiKeyForm({ providers }: ProvidersProp) {
               </span>
             ) : envPresentOnly ? (
               <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
-                Found {envCred!.envVar} (incomplete)
+                Found {envCred!.envVar} (incomplete —{" "}
+                {settingsProvider === "cloudflare" && !envCred?.cloudflareAccountId?.valid
+                  ? "CLOUDFLARE_ACCOUNT_ID missing or invalid"
+                  : "additional credentials needed"})
               </span>
             ) : "keyEnvVar" in providerOption && providerOption.keyEnvVar ? (
               <span className="text-[9px] text-slate-600">
@@ -271,14 +274,30 @@ function ApiKeyForm({ providers }: ProvidersProp) {
 
       {settingsProvider === "cloudflare" && (
         <div>
-          <label className="text-sm text-slate-400 mb-1 block" htmlFor="gemini-cf-account-id">
+          <label
+            className="text-sm text-slate-400 mb-1 flex flex-wrap items-center gap-1.5"
+            htmlFor="gemini-cf-account-id"
+          >
             Cloudflare Account ID
+            {envUsable && !settingsCloudflareAccountId.trim() ? (
+              <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
+                Env available: CLOUDFLARE_ACCOUNT_ID
+              </span>
+            ) : envCred?.cloudflareAccountId?.present && !envCred.cloudflareAccountId.valid ? (
+              <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+                Found CLOUDFLARE_ACCOUNT_ID (invalid format)
+              </span>
+            ) : envCred?.cloudflareAccountId?.present && envCred.cloudflareAccountId.valid && !envUsable && !settingsCloudflareAccountId.trim() ? (
+              <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-semibold">
+                Env available: CLOUDFLARE_ACCOUNT_ID
+              </span>
+            ) : null}
           </label>
           <input
             id="gemini-cf-account-id"
             type="text"
             autoComplete="off"
-            placeholder="32-char hex CLOUDFLARE_ACCOUNT_ID"
+            placeholder={envCred?.usable && !settingsCloudflareAccountId.trim() ? "Leave blank to use CLOUDFLARE_ACCOUNT_ID" : "32-char hex CLOUDFLARE_ACCOUNT_ID"}
             value={settingsCloudflareAccountId}
             onChange={(e) => providers.setSettingsCloudflareAccountId(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void providers.saveProvider()}

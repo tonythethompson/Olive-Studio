@@ -79,6 +79,11 @@
         "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
         "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
         "timestamp": 1786963554617
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963678862
       }
     ],
     "4.2 Make the Account ID placeholder dynamic based on `envUsable`": [
@@ -86,6 +91,16 @@
         "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
         "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
         "timestamp": 1786962811760
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963684789
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963764030
       }
     ],
     "5.1 Update the `envPresentOnly` amber badge on the API Key field in `src/components/features/assistant/ManualProviderSetup.tsx`": [
@@ -93,6 +108,16 @@
         "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
         "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
         "timestamp": 1786962819721
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963768521
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963875870
       }
     ],
     "6.1 Create or extend test file for `envCredentialsPayload` env var combinations": [
@@ -100,6 +125,16 @@
         "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
         "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
         "timestamp": 1786962820519
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963885417
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786964343590
       }
     ],
     "7.1 Create or extend component test for Account ID and API Key badge logic": [
@@ -107,6 +142,16 @@
         "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
         "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
         "timestamp": 1786962821362
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786964348328
+      },
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786964824936
       }
     ],
     "1. Extend EnvCredentialStatus type": [
@@ -128,6 +173,34 @@
         "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
         "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
         "timestamp": 1786963546132
+      }
+    ],
+    "4. Add env detection UI to Account ID field": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963764224
+      }
+    ],
+    "5. Improve incomplete-credential amber badge messaging": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786963876098
+      }
+    ],
+    "6. Write server unit test for envCredentialsPayload": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786964343733
+      }
+    ],
+    "7. Write component test for Cloudflare badge rendering": [
+      {
+        "executionId": "895aef95-e664-44b2-9254-0414b2df5b36",
+        "chatSessionId": "sess_ea99347a-8e57-40bf-88d4-339be494d31d",
+        "timestamp": 1786964825090
       }
     ]
   }
