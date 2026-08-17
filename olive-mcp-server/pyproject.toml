@@ -38,7 +38,7 @@ Repository = "https://github.com/asiraky/olive-studio"
 dev = [
     "pytest>=8.0.0",
     "hypothesis>=6.0.0,<7",
-    "ruff>=0.6.0",
+    "ruff>=0.6.0,<1.0.0",
 ]
 # Semantic stack is a core dep today; keep the extra for explicit installs /
 # future slim core splits.
