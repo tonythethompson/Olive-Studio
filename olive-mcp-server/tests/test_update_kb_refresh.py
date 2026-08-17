@@ -22,7 +22,8 @@ def test_refresh_is_deterministic_and_preserves_candidates(monkeypatch, tmp_path
     payloads = {
         "docs": {"status": "ok", "pages": {"index": "# Docs\n\n- documented option."}},
         "github": {
-            "status": "ok", "content": "# Open Issues\n\n- deprecated API.",
+            "status": "ok",
+            "content": "# Open Issues\n\n- deprecated API.",
             "source_timestamp": "2024-01-01T00:00:00Z",
         },
         "ort": {"status": "ok", "pages": {"CUDA": "## CUDA\n\n- use it."}},
@@ -40,7 +41,6 @@ def test_refresh_is_deterministic_and_preserves_candidates(monkeypatch, tmp_path
     second_report = json.loads(second["update_report.json"])
     assert first_report["source_fingerprint"] == second_report["source_fingerprint"]
     assert first_report["source_timestamp"] == second_report["source_timestamp"]
-    first_meta = json.loads(first["refresh_metadata.json"])
     second_meta = json.loads(second["refresh_metadata.json"])
     assert second_meta["runs"]["update_kb"]["changed_files"] == []
     candidates = json.loads((tmp_path / "candidate_quirks.json").read_text())

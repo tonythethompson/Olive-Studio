@@ -13,7 +13,6 @@ import pytest
 
 from olive_mcp_server.tools.agent_planner import plan_optimization
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -55,9 +54,7 @@ class TestLLMIntentParsing:
             _mock_validate_success,
         )
 
-        result = plan_optimization(
-            intent="quantize llama model for nvidia gpu with int4"
-        )
+        result = plan_optimization(intent="quantize llama model for nvidia gpu with int4")
 
         # Must not be an error
         assert "error" not in result
@@ -82,9 +79,7 @@ class TestLLMIntentParsing:
             _mock_validate_success,
         )
 
-        result = plan_optimization(
-            intent="quantize llama model for nvidia gpu with int4"
-        )
+        result = plan_optimization(intent="quantize llama model for nvidia gpu with int4")
         assert json.loads(json.dumps(result)) == result
 
 
@@ -335,9 +330,7 @@ class TestAlternativesGeneration:
             _mock_validate_success,
         )
 
-        result = plan_optimization(
-            intent="quantize llama model for nvidia gpu with int4"
-        )
+        result = plan_optimization(intent="quantize llama model for nvidia gpu with int4")
 
         assert "error" not in result
         alternatives = result["alternatives"]
@@ -362,9 +355,7 @@ class TestAlternativesGeneration:
             _mock_validate_success,
         )
 
-        result = plan_optimization(
-            intent="quantize llama model for nvidia gpu with int4"
-        )
+        result = plan_optimization(intent="quantize llama model for nvidia gpu with int4")
         assert json.loads(json.dumps(result)) == result
 
 
@@ -417,6 +408,7 @@ class TestResponseStructure:
         assert len(result["error"]) > 0
         # snake_case validation
         import re
+
         assert re.match(r"^[a-z][a-z0-9_]*$", result["error"])
         assert "message" in result
         assert isinstance(result["message"], str)
@@ -458,9 +450,7 @@ class TestInputValidation:
             _mock_validate_success,
         )
 
-        result = plan_optimization(
-            intent="quantize for nvidia", model_id="x" * 201
-        )
+        result = plan_optimization(intent="quantize for nvidia", model_id="x" * 201)
         assert result.get("error") == "invalid_input"
 
     def test_intent_boundary_2000_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -484,9 +474,7 @@ class TestInputValidation:
         # owner = 97 chars, "/", name = 102 chars = 200 total
         model_id = "a" * 97 + "/" + "b" * 102
         assert len(model_id) == 200
-        result = plan_optimization(
-            intent="quantize for nvidia", model_id=model_id
-        )
+        result = plan_optimization(intent="quantize for nvidia", model_id=model_id)
         assert "error" not in result
 
     @pytest.mark.parametrize(
@@ -527,9 +515,7 @@ class TestInputValidation:
 class TestUnknownProviderFallback:
     """Unknown ihvProvider in hardware_probe should fall back to inferred provider."""
 
-    def test_unknown_provider_falls_back_to_inferred(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unknown_provider_falls_back_to_inferred(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """hardware_probe with ihvProvider='not-a-provider' → falls back to CUDAExecutionProvider."""
         monkeypatch.setattr(
             "olive_mcp_server.tools.agent_planner.validate_ui_state_recipe",

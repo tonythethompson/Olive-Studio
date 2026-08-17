@@ -9,9 +9,9 @@ persistent errors.
 import pytest
 
 from olive_mcp_server.tools.troubleshooting import (
+    get_error_frequency_summary,
     reset_frequency_store,
     troubleshoot_olive_error,
-    get_error_frequency_summary,
 )
 
 

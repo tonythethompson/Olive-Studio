@@ -101,6 +101,11 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 10
+    strategy:
+      # Exercise the minimum version in the requires-python contract (>=3.10)
+      # plus the primary dev version. Dockerfile pins the shipped runtime (3.12).
+      matrix:
+        python-version: ["3.10", "3.12"]
     defaults:
       run:
         working-directory: olive-mcp-server
@@ -111,12 +116,17 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: olive-mcp-server/pyproject.toml
 
       - name: Install
         run: pip install -e ".[dev]" "mcp<2"
+
+      - name: Ruff
+        run: |
+          ruff check .
+          ruff format --check .
 
       - name: Pytest
         run: python -m pytest tests -q --tb=short

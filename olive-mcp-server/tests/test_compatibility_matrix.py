@@ -10,8 +10,9 @@ from __future__ import annotations
 import copy
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 
@@ -139,21 +140,16 @@ def _collect_top_level_errors(matrix_data: dict[str, Any]) -> list[str]:
             errors.append(f"missing top-level field: {key}")
 
     version = matrix_data.get("version")
-    if version is not None and (
-        not isinstance(version, str) or not _MATRIX_VERSION_RE.fullmatch(version)
-    ):
+    if version is not None and (not isinstance(version, str) or not _MATRIX_VERSION_RE.fullmatch(version)):
         errors.append(f"version must be semver X.Y.Z, got {version!r}")
 
     last_updated = matrix_data.get("last_updated")
-    if last_updated is not None and (
-        not isinstance(last_updated, str) or not _DATE_RE.fullmatch(last_updated)
-    ):
+    if last_updated is not None and (not isinstance(last_updated, str) or not _DATE_RE.fullmatch(last_updated)):
         errors.append(f"last_updated must be YYYY-MM-DD, got {last_updated!r}")
 
     models = matrix_data.get("models")
-    if models is not None:
-        if not isinstance(models, list) or len(models) < 1:
-            errors.append("models must be a non-empty array")
+    if models is not None and (not isinstance(models, list) or len(models) < 1):
+        errors.append("models must be a non-empty array")
     return errors
 
 
@@ -187,10 +183,7 @@ def _collect_olive_window(
             lo_p = lo + (0,) * (width - len(lo))
             hi_p = hi + (0,) * (width - len(hi))
             if lo_p > hi_p:
-                errors.append(
-                    f"olive_version_support malformed range: "
-                    f"min={window_min!r} > max={window_max!r}"
-                )
+                errors.append(f"olive_version_support malformed range: min={window_min!r} > max={window_max!r}")
         except ValueError:
             pass  # already recorded above
     return errors, window_min, window_max
@@ -217,11 +210,7 @@ def _collect_evidence_window_errors(
     try:
         if _version_in_range(ever, str(window_min), str(window_max)):
             return []
-        return [
-            f"{claim_loc}: evidence.version {ever!r} "
-            f"outside olive_version_support "
-            f"[{window_min}, {window_max}]"
-        ]
+        return [f"{claim_loc}: evidence.version {ever!r} outside olive_version_support [{window_min}, {window_max}]"]
     except ValueError as exc:
         return [f"{claim_loc}: evidence.version unparseable for window check: {exc}"]
 
@@ -250,10 +239,7 @@ def _collect_claim_evidence_errors(
         errors.append(f"{claim_loc}: evidence.reference must be non-empty")
     etype = evidence.get("type")
     if etype is not None and etype not in _EVIDENCE_TYPES:
-        errors.append(
-            f"{claim_loc}: invalid evidence.type {etype!r}; "
-            f"expected one of {sorted(_EVIDENCE_TYPES)}"
-        )
+        errors.append(f"{claim_loc}: invalid evidence.type {etype!r}; expected one of {sorted(_EVIDENCE_TYPES)}")
     ever = evidence.get("version")
     if ever is not None and (not isinstance(ever, str) or not ever.strip()):
         errors.append(f"{claim_loc}: evidence.version must be non-empty")
@@ -290,10 +276,7 @@ def _collect_claim_errors(
 
     support = claim.get("support")
     if support is not None and support not in _SUPPORT_STATES:
-        errors.append(
-            f"{claim_loc}: invalid support state {support!r}; "
-            f"expected one of {sorted(_SUPPORT_STATES)}"
-        )
+        errors.append(f"{claim_loc}: invalid support state {support!r}; expected one of {sorted(_SUPPORT_STATES)}")
 
     olive_pass = claim.get("olive_pass")
     if olive_pass is not None:
@@ -301,16 +284,10 @@ def _collect_claim_errors(
             errors.append(f"{claim_loc}: olive_pass must be non-empty string")
         else:
             if olive_pass not in known_passes:
-                errors.append(
-                    f"{claim_loc}: unknown olive_pass {olive_pass!r} "
-                    f"(not in passes.json)"
-                )
+                errors.append(f"{claim_loc}: unknown olive_pass {olive_pass!r} (not in passes.json)")
             triple = (str(model_name), str(hw_name), olive_pass)
             if triple in seen_triples:
-                errors.append(
-                    f"duplicate model/hardware/pass claim: "
-                    f"{model_name!r} / {hw_name!r} / {olive_pass!r}"
-                )
+                errors.append(f"duplicate model/hardware/pass claim: {model_name!r} / {hw_name!r} / {olive_pass!r}")
             else:
                 seen_triples.add(triple)
 
@@ -331,11 +308,7 @@ def _collect_frameworks_errors(loc: str, model_name: str, frameworks: Any) -> li
         return []
     if not isinstance(frameworks, list) or len(frameworks) < 1:
         return [f"{loc} ({model_name}): frameworks must be non-empty array"]
-    return [
-        f"{loc} ({model_name}): unknown framework {fw!r}"
-        for fw in frameworks
-        if fw not in _FRAMEWORKS
-    ]
+    return [f"{loc} ({model_name}): unknown framework {fw!r}" for fw in frameworks if fw not in _FRAMEWORKS]
 
 
 def _collect_hardware_map_errors(
@@ -527,9 +500,7 @@ def test_real_matrix_has_required_top_level_fields(matrix: dict[str, Any]) -> No
     assert "min" in ovs and "max" in ovs
 
 
-def test_real_matrix_passes_full_validation(
-    matrix: dict[str, Any], pass_names: set[str]
-) -> None:
+def test_real_matrix_passes_full_validation(matrix: dict[str, Any], pass_names: set[str]) -> None:
     """Every claim has olive_pass + evidence; passes exist; no duplicates."""
     # Arrange / Act
     errors = collect_matrix_errors(matrix, pass_names, enforce_olive_window=True)
@@ -556,9 +527,7 @@ def test_real_matrix_every_claim_has_schema_fields(matrix: dict[str, Any]) -> No
         loc = f"{model}/{hw}/{key}"
         assert "support" in claim, f"{loc}: missing support"
         assert claim["support"] in _SUPPORT_STATES, f"{loc}: bad support"
-        assert isinstance(claim.get("olive_pass"), str) and claim["olive_pass"].strip(), (
-            f"{loc}: missing olive_pass"
-        )
+        assert isinstance(claim.get("olive_pass"), str) and claim["olive_pass"].strip(), f"{loc}: missing olive_pass"
         evidence = claim.get("evidence")
         assert isinstance(evidence, dict), f"{loc}: missing evidence object"
         assert isinstance(evidence.get("reference"), str) and evidence["reference"].strip(), (
@@ -570,16 +539,10 @@ def test_real_matrix_every_claim_has_schema_fields(matrix: dict[str, Any]) -> No
         )
 
 
-def test_real_matrix_olive_passes_exist_in_passes_json(
-    matrix: dict[str, Any], pass_names: set[str]
-) -> None:
+def test_real_matrix_olive_passes_exist_in_passes_json(matrix: dict[str, Any], pass_names: set[str]) -> None:
     # Arrange / Act
     unknown = sorted(
-        {
-            claim["olive_pass"]
-            for _, _, _, claim in _iter_claims(matrix)
-            if claim.get("olive_pass") not in pass_names
-        }
+        {claim["olive_pass"] for _, _, _, claim in _iter_claims(matrix) if claim.get("olive_pass") not in pass_names}
     )
     # Assert
     assert unknown == [], f"unknown olive_pass values: {unknown}"

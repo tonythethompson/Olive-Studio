@@ -38,9 +38,7 @@ DEPRECATION_RE = re.compile(
     re.IGNORECASE,
 )
 # ISO-8601 timestamps that may appear in fetched source text (e.g. GitHub bodies).
-ISO_TIMESTAMP_RE = re.compile(
-    r"\b(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?)\b"
-)
+ISO_TIMESTAMP_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?)\b")
 
 GENERATOR_NAME = "update_kb"
 REFRESH_METADATA_NAME = "refresh_metadata.json"
@@ -140,12 +138,14 @@ def _build_candidate_quirks(parsed: dict[str, dict[str, Any]]) -> list[dict[str,
     for source_name, info in parsed.items():
         for bullet in info.get("bullets", [])[:20]:
             title = bullet[:80] + ("..." if len(bullet) > 80 else "")
-            candidates.append({
-                "category": source_name,
-                "title": title,
-                "description": bullet,
-                "source": "update_kb",
-            })
+            candidates.append(
+                {
+                    "category": source_name,
+                    "title": title,
+                    "description": bullet,
+                    "source": "update_kb",
+                }
+            )
     return candidates
 
 
@@ -300,11 +300,7 @@ def main(kb_dir: Path | None = None) -> None:
         "success": success,
         "sources": {name: _sanitize_source(data) for name, data in raw_sources.items()},
         "parsed": parsed,
-        "deprecations": [
-            deprecation
-            for section in parsed.values()
-            for deprecation in section.get("deprecations", [])
-        ],
+        "deprecations": [deprecation for section in parsed.values() for deprecation in section.get("deprecations", [])],
     }
 
     changed_files: list[str] = []

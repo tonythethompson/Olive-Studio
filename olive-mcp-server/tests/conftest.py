@@ -46,9 +46,7 @@ def wait_for_inflight_semantic_clear(
     than an abandoned worker.
     """
     if timeout_s is None:
-        timeout_s = (
-            _INFLIGHT_DRAIN_TIMEOUT_S if _model_is_warm() else _INFLIGHT_DRAIN_COLD_START_TIMEOUT_S
-        )
+        timeout_s = _INFLIGHT_DRAIN_TIMEOUT_S if _model_is_warm() else _INFLIGHT_DRAIN_COLD_START_TIMEOUT_S
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         with retrieval._INFLIGHT_LOCK:
@@ -59,10 +57,7 @@ def wait_for_inflight_semantic_clear(
         time.sleep(0.05)
     with retrieval._INFLIGHT_LOCK:
         fut = retrieval._INFLIGHT_FUTURE
-    raise AssertionError(
-        f"semantic budget worker still in flight after {timeout_s}s "
-        f"(future={fut!r})"
-    )
+    raise AssertionError(f"semantic budget worker still in flight after {timeout_s}s (future={fut!r})")
 
 
 @pytest.fixture

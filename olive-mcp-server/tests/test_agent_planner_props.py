@@ -10,15 +10,14 @@ Validates: Requirements 3.5
 
 from __future__ import annotations
 
-import re
 from unittest.mock import patch
 
-from hypothesis import given, settings, assume
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from olive_mcp_server.tools.agent_planner import (
-    plan_optimization,
     _parse_intent,
+    plan_optimization,
 )
 
 # ---------------------------------------------------------------------------
@@ -71,20 +70,15 @@ def test_unparseable_intent_returns_error(intent: str):
         result = plan_optimization(intent)
 
     assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-    assert "error" in result, (
-        f"Expected 'error' key in result for intent={intent!r}, got {result}"
-    )
+    assert "error" in result, f"Expected 'error' key in result for intent={intent!r}, got {result}"
     assert result["error"] == "unparseable_intent", (
-        f"Expected error code 'unparseable_intent', got {result['error']!r} "
-        f"for intent={intent!r}"
+        f"Expected error code 'unparseable_intent', got {result['error']!r} for intent={intent!r}"
     )
     assert "message" in result, "Error response must include 'message' field"
     assert isinstance(result["message"], str) and len(result["message"]) > 0, (
         "Error 'message' must be a non-empty string"
     )
     # Should NOT have side_effect key on error path
-    assert "side_effect" not in result, (
-        "Error response should not contain 'side_effect' field"
-    )
+    assert "side_effect" not in result, "Error response should not contain 'side_effect' field"
     # studio_request should never be called for unparseable intents
     mock_studio.assert_not_called()

@@ -76,7 +76,10 @@ def fetch_github_issues(labels: list[str] | None = None, max_results: int = 50) 
     try:
         per_page = min(max(max_results, 1), 100)
         params: dict[str, str | int] = {
-            "state": "open", "sort": "updated", "direction": "desc", "per_page": per_page,
+            "state": "open",
+            "sort": "updated",
+            "direction": "desc",
+            "per_page": per_page,
         }
         if labels:
             params["labels"] = ",".join(labels)
@@ -94,9 +97,7 @@ def fetch_github_issues(labels: list[str] | None = None, max_results: int = 50) 
         errors["issues_error"] = str(exc)
 
     try:
-        releases_response = fetch_json(
-            RELEASES_URL, params={"per_page": 5}, headers=headers
-        )
+        releases_response = fetch_json(RELEASES_URL, params={"per_page": 5}, headers=headers)
         _request_error(releases_response)
         releases = releases_response.json()[:5]
     except Exception as exc:  # noqa: BLE001
@@ -107,12 +108,8 @@ def fetch_github_issues(labels: list[str] | None = None, max_results: int = 50) 
     sections.append("# Open Issues")
     sections.extend(_issue_to_text(i) for i in issues)
     result["content"] = "\n\n".join(sections)
-    stamps = [
-        item["updated_at"] for item in issues if isinstance(item.get("updated_at"), str)
-    ]
-    stamps.extend(
-        item["published_at"] for item in releases if isinstance(item.get("published_at"), str)
-    )
+    stamps = [item["updated_at"] for item in issues if isinstance(item.get("updated_at"), str)]
+    stamps.extend(item["published_at"] for item in releases if isinstance(item.get("published_at"), str))
     if stamps:
         result["source_timestamp"] = max(stamps)
     if errors:

@@ -11,12 +11,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import pytest
-from hypothesis import given, settings, assume
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from olive_mcp_server.tools.agent_diagnosis import _apply_merge_patch, _determine_confidence
-
 
 # ---------------------------------------------------------------------------
 # Feature: v0.3-agent-mcp-tools, Property 4: JSON Merge Patch Correctness
@@ -65,22 +63,18 @@ class TestJsonMergePatchCorrectness:
     """Property 4: JSON Merge Patch Correctness (RFC 7386)."""
 
     @given(recipe=_recipe_strategy, patch=_patch_strategy)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_non_null_values_override(self, recipe: dict[str, Any], patch: dict[str, Any]) -> None:
         """Non-null values in patch override corresponding keys in result."""
         result = _apply_merge_patch(recipe, patch)
 
         for key, value in patch.items():
             if value is not None:
-                assert key in result, (
-                    f"Key '{key}' with non-null value should be present in result"
-                )
-                assert result[key] == value, (
-                    f"Key '{key}' should be overridden to {value!r}, got {result[key]!r}"
-                )
+                assert key in result, f"Key '{key}' with non-null value should be present in result"
+                assert result[key] == value, f"Key '{key}' should be overridden to {value!r}, got {result[key]!r}"
 
     @given(recipe=_recipe_strategy, patch=_patch_strategy)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_null_values_remove_keys(self, recipe: dict[str, Any], patch: dict[str, Any]) -> None:
         """Null values in patch result in key removal from result."""
         result = _apply_merge_patch(recipe, patch)
@@ -88,27 +82,22 @@ class TestJsonMergePatchCorrectness:
         for key, value in patch.items():
             if value is None:
                 assert key not in result, (
-                    f"Key '{key}' with None value should be removed from result, "
-                    f"but found {result.get(key)!r}"
+                    f"Key '{key}' with None value should be removed from result, but found {result.get(key)!r}"
                 )
 
     @given(recipe=_recipe_strategy, patch=_patch_strategy)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_absent_keys_preserved(self, recipe: dict[str, Any], patch: dict[str, Any]) -> None:
         """Keys in recipe not mentioned in patch are preserved unchanged."""
         result = _apply_merge_patch(recipe, patch)
 
         for key, value in recipe.items():
             if key not in patch:
-                assert key in result, (
-                    f"Key '{key}' not in patch should be preserved in result"
-                )
-                assert result[key] == value, (
-                    f"Key '{key}' should be unchanged ({value!r}), got {result[key]!r}"
-                )
+                assert key in result, f"Key '{key}' not in patch should be preserved in result"
+                assert result[key] == value, f"Key '{key}' should be unchanged ({value!r}), got {result[key]!r}"
 
     @given(recipe=_recipe_strategy, patch=_patch_strategy)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_original_recipe_not_mutated(self, recipe: dict[str, Any], patch: dict[str, Any]) -> None:
         """The original recipe dict is not mutated by merge patch."""
         recipe_copy = json.loads(json.dumps(recipe))
@@ -116,7 +105,7 @@ class TestJsonMergePatchCorrectness:
         assert recipe == recipe_copy, "Original recipe was mutated by _apply_merge_patch"
 
     @given(recipe=_recipe_strategy, patch=_patch_strategy)
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_result_json_round_trip(self, recipe: dict[str, Any], patch: dict[str, Any]) -> None:
         """Result of merge patch is JSON-serializable and round-trips correctly."""
         result = _apply_merge_patch(recipe, patch)
@@ -144,10 +133,8 @@ class TestJsonMergePatchCorrectness:
             max_size=4,
         ),
     )
-    @settings(max_examples=100)
-    def test_nested_merge_patch_semantics(
-        self, recipe: dict[str, Any], patch: dict[str, Any]
-    ) -> None:
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+    def test_nested_merge_patch_semantics(self, recipe: dict[str, Any], patch: dict[str, Any]) -> None:
         """Nested dicts in patch recurse into nested dicts in recipe (RFC 7386 recursive rule)."""
         result = _apply_merge_patch(recipe, patch)
 
@@ -263,20 +250,14 @@ class TestFixConfidenceDeterminism:
 
     @given(diagnosis=_high_confidence_diagnosis)
     @settings(max_examples=100)
-    def test_high_confidence_when_updated_config_and_applyable(
-        self, diagnosis: dict[str, Any]
-    ) -> None:
+    def test_high_confidence_when_updated_config_and_applyable(self, diagnosis: dict[str, Any]) -> None:
         """matched_entry + non-empty updated_config + applyable=True -> 'high'."""
         result = _determine_confidence(diagnosis)
-        assert result == "high", (
-            f"Expected 'high' for diagnosis with updated_config and applyable=True, got '{result}'"
-        )
+        assert result == "high", f"Expected 'high' for diagnosis with updated_config and applyable=True, got '{result}'"
 
     @given(diagnosis=_medium_confidence_diagnosis)
     @settings(max_examples=100)
-    def test_medium_confidence_when_rule_based(
-        self, diagnosis: dict[str, Any]
-    ) -> None:
+    def test_medium_confidence_when_rule_based(self, diagnosis: dict[str, Any]) -> None:
         """matched_entry + root_cause/workaround but no updated_config -> 'medium'."""
         result = _determine_confidence(diagnosis)
         assert result == "medium", (
@@ -285,25 +266,17 @@ class TestFixConfidenceDeterminism:
 
     @given(diagnosis=_low_confidence_diagnosis)
     @settings(max_examples=100)
-    def test_low_confidence_when_weak_match(
-        self, diagnosis: dict[str, Any]
-    ) -> None:
+    def test_low_confidence_when_weak_match(self, diagnosis: dict[str, Any]) -> None:
         """matched_entry but no root_cause, no workaround, no updated_config -> 'low'."""
         result = _determine_confidence(diagnosis)
-        assert result == "low", (
-            f"Expected 'low' for diagnosis with matched_entry but no content, got '{result}'"
-        )
+        assert result == "low", f"Expected 'low' for diagnosis with matched_entry but no content, got '{result}'"
 
     @given(diagnosis=_none_confidence_diagnosis)
     @settings(max_examples=100)
-    def test_none_confidence_when_no_match(
-        self, diagnosis: dict[str, Any]
-    ) -> None:
+    def test_none_confidence_when_no_match(self, diagnosis: dict[str, Any]) -> None:
         """matched_entry is None -> 'none' regardless of other fields."""
         result = _determine_confidence(diagnosis)
-        assert result == "none", (
-            f"Expected 'none' for diagnosis with no matched_entry, got '{result}'"
-        )
+        assert result == "none", f"Expected 'none' for diagnosis with no matched_entry, got '{result}'"
 
     @given(
         diagnosis=st.one_of(
@@ -317,9 +290,7 @@ class TestFixConfidenceDeterminism:
     def test_confidence_always_valid_value(self, diagnosis: dict[str, Any]) -> None:
         """Confidence is always one of the four valid values."""
         result = _determine_confidence(diagnosis)
-        assert result in ("high", "medium", "low", "none"), (
-            f"Confidence '{result}' is not a valid value"
-        )
+        assert result in ("high", "medium", "low", "none"), f"Confidence '{result}' is not a valid value"
 
     @given(
         diagnosis=st.one_of(
@@ -334,9 +305,7 @@ class TestFixConfidenceDeterminism:
         """Same input always produces same output (deterministic mapping)."""
         result1 = _determine_confidence(diagnosis)
         result2 = _determine_confidence(diagnosis)
-        assert result1 == result2, (
-            f"Non-deterministic: same input produced '{result1}' and '{result2}'"
-        )
+        assert result1 == result2, f"Non-deterministic: same input produced '{result1}' and '{result2}'"
 
     def test_high_confidence_with_applyable_false_not_high(self) -> None:
         """updated_config present but applyable=False -> NOT 'high'."""

@@ -2,6 +2,7 @@
 
 Validates: Requirements 11.2, 11.4
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -23,7 +24,7 @@ def test_new_tool_modules_not_in_sys_modules_after_server_import():
         "olive_mcp_server.tools.agent_model_info",
     ]
 
-    script = """
+    script = f"""
 import sys
 import olive_mcp_server.mcp_server  # noqa: F401
 
@@ -40,7 +41,7 @@ if tool is None:
 if "olive_mcp_server.tools.agent_execute" not in sys.modules:
     raise SystemExit("agent_execute not in sys.modules after resolve")
 print("OK")
-""".format(agent_modules=agent_modules)
+"""
 
     completed = subprocess.run(
         [sys.executable, "-c", script],

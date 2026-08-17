@@ -4,7 +4,6 @@ from typing import Any
 
 from . import load_passes
 
-
 _TARGET_DEFAULTS = {
     "quality": {
         "calibration_sampling_size": 300,
@@ -70,15 +69,11 @@ def get_pass_config_template(
     target = optimization_target.lower()
     if target not in _TARGET_DEFAULTS:
         return {
-            "error": f"Unknown optimization_target '{optimization_target}'. "
-            "Choose: quality, latency, balanced.",
+            "error": f"Unknown optimization_target '{optimization_target}'. Choose: quality, latency, balanced.",
         }
 
     # Start with the pass default values.
-    defaults = {
-        k: v.get("default")
-        for k, v in meta.get("optional_params", {}).items()
-    }
+    defaults = {k: v.get("default") for k, v in meta.get("optional_params", {}).items()}
     # Keep only non-null defaults.
     defaults = {k: v for k, v in defaults.items() if v is not None}
 
