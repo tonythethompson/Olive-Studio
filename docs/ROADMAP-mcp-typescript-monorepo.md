@@ -82,30 +82,30 @@ olive-studio/
 
 **Tools to port (pure JSON/logic — no embeddings):**
 
-| Tool | Source Module | Complexity |
-|------|--------------|-----------|
-| `get_olive_passes` | pass_catalog | Trivial |
-| `get_pass_parameters` | pass_parameters | Trivial |
-| `get_pass_config_template` | config_generator | Low |
-| `get_hardware_optimization_guide` | hardware_guide | Low |
-| `get_pass_chain` | pass_chain | Low |
-| `get_data_config_template` | data_config | Low |
-| `get_quantization_strategy` | strategy_advisor | Medium |
-| `evaluate_optimization_tradeoff` | tradeoff | Medium |
-| `get_model_compatibility` | compatibility | Low |
-| `get_cli_command` | cli_helper | Low |
-| `get_integration_recipe` | integration_recipes | Trivial |
-| `get_runtime_ep_hints` | runtime_ep_hints | Low |
-| `get_mcp_capabilities` | capabilities | Trivial |
-| `record_troubleshoot_feedback` | feedback | Low |
-| `validate_ui_state_recipe` | studio_recipe | Medium |
-| `get_recipe_for_ui_state` | studio_recipe | Medium |
-| `plan_optimization` | agent_planner | Medium |
-| `execute_and_observe` | agent_execute | Medium |
-| `diagnose_and_fix` | agent_diagnosis | Medium |
-| `compare_results` | agent_compare | Low |
-| `get_model_info` | agent_model_info | Low |
-| `get_context_for_pipeline` | passive_context | Low |
+| Tool                              | Source Module       | Complexity |
+| --------------------------------- | ------------------- | ---------- |
+| `get_olive_passes`                | pass_catalog        | Trivial    |
+| `get_pass_parameters`             | pass_parameters     | Trivial    |
+| `get_pass_config_template`        | config_generator    | Low        |
+| `get_hardware_optimization_guide` | hardware_guide      | Low        |
+| `get_pass_chain`                  | pass_chain          | Low        |
+| `get_data_config_template`        | data_config         | Low        |
+| `get_quantization_strategy`       | strategy_advisor    | Medium     |
+| `evaluate_optimization_tradeoff`  | tradeoff            | Medium     |
+| `get_model_compatibility`         | compatibility       | Low        |
+| `get_cli_command`                 | cli_helper          | Low        |
+| `get_integration_recipe`          | integration_recipes | Trivial    |
+| `get_runtime_ep_hints`            | runtime_ep_hints    | Low        |
+| `get_mcp_capabilities`            | capabilities        | Trivial    |
+| `record_troubleshoot_feedback`    | feedback            | Low        |
+| `validate_ui_state_recipe`        | studio_recipe       | Medium     |
+| `get_recipe_for_ui_state`         | studio_recipe       | Medium     |
+| `plan_optimization`               | agent_planner       | Medium     |
+| `execute_and_observe`             | agent_execute       | Medium     |
+| `diagnose_and_fix`                | agent_diagnosis     | Medium     |
+| `compare_results`                 | agent_compare       | Low        |
+| `get_model_info`                  | agent_model_info    | Low        |
+| `get_context_for_pipeline`        | passive_context     | Low        |
 
 **Tasks:**
 
@@ -282,14 +282,14 @@ AI Agent → MCP tool → direct import of service module → Service
 
 ## Risk Assessment
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|-----------|
-| Embedding quality regression | Medium | High | Side-by-side comparison tests; keep Python as fallback until validated |
-| `@huggingface/transformers` ONNX model incompatibility | Low | High | Test Xenova/bge-small-en-v1.5 early in Phase 3; fall back to keyword-only |
-| Monorepo import path breakage | Medium | Medium | Phase 0 validates the structure before any code moves |
-| Cold start regression (model loading) | Medium | Low | Lazy-load embeddings (same as Python); precomputed indexes cover 95% of queries |
-| Breaking MCP protocol compatibility | Low | High | Test with existing `.mcp.json` config and Kiro/Claude MCP clients |
-| Studio bridge direct-import creates circular deps | Medium | Medium | Clean boundary via `packages/shared/`; service interfaces, not implementations |
+| Risk                                                   | Likelihood | Impact | Mitigation                                                                      |
+| ------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------- |
+| Embedding quality regression                           | Medium     | High   | Side-by-side comparison tests; keep Python as fallback until validated          |
+| `@huggingface/transformers` ONNX model incompatibility | Low        | High   | Test Xenova/bge-small-en-v1.5 early in Phase 3; fall back to keyword-only       |
+| Monorepo import path breakage                          | Medium     | Medium | Phase 0 validates the structure before any code moves                           |
+| Cold start regression (model loading)                  | Medium     | Low    | Lazy-load embeddings (same as Python); precomputed indexes cover 95% of queries |
+| Breaking MCP protocol compatibility                    | Low        | High   | Test with existing `.mcp.json` config and Kiro/Claude MCP clients               |
+| Studio bridge direct-import creates circular deps      | Medium     | Medium | Clean boundary via `packages/shared/`; service interfaces, not implementations  |
 
 ---
 
