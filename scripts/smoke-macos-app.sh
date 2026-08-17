@@ -35,7 +35,8 @@ if [[ ! -f "$NODE" ]]; then
   exit 1
 fi
 test -x "$NODE"
-lipo -verify_arch x86_64 arm64 "$NODE"
+# Xcode 26+ lipo requires the input file before -verify_arch.
+lipo "$NODE" -verify_arch x86_64 arm64
 echo "Bundled Node version: $("$NODE" --version)"
 
 SERVER_MJS="$RESOURCES/dist/server.mjs"
