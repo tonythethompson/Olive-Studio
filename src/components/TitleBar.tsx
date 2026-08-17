@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Minus, Square, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SettingsMenu } from "@/components/SettingsMenu";
 
 /**
  * Renders custom Tauri window controls for Olive Studio.
@@ -61,29 +60,12 @@ export function TitleBar() {
 
   return (
     <div
-      className="h-9 shrink-0 flex items-center justify-between border-b border-slate-800 bg-slate-900 select-none"
+      className="h-8 shrink-0 flex items-center justify-between border-b border-slate-800 bg-slate-900 select-none"
       data-tauri-drag-region
     >
-      <div className="flex items-center gap-2 pl-3 min-w-0" data-tauri-drag-region>
-        <img
-          src="/assets/logo.png"
-          alt=""
-          width={16}
-          height={16}
-          className="h-4 w-4 rounded object-contain pointer-events-none"
-        />
-        <span className="text-xs font-semibold text-slate-200 truncate pointer-events-none">
-          Olive Studio
-        </span>
-        <span className="text-[11px] text-slate-600 hidden sm:inline pointer-events-none">
-          Recipe builder
-        </span>
-      </div>
+      <div className="flex-1 h-full" data-tauri-drag-region />
 
       <div className="flex items-stretch h-full" data-tauri-drag-region="false">
-        <div className="flex items-center px-2">
-          <SettingsMenu />
-        </div>
         <button
           type="button"
           aria-label="Minimize"
