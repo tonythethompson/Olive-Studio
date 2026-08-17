@@ -117,3 +117,6 @@ infra/terraform/terraform.tfstate*
 infra/terraform/.terraform/
 .kiro/specs/cloudflare-env-credential-ux/.config.kiro
 /ATXDocumentation
+-e 
+# Private strategy doc
+ROADMAP-MASTER.md
