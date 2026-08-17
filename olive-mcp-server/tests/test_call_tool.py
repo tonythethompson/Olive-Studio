@@ -1,7 +1,7 @@
-from olive_mcp_server.mcp_server import _TOOL_IMPORTS, _resolved_tools, _resolve_tool, call_tool
-from olive_mcp_server.tools.troubleshooting import reset_frequency_store
-
 import pytest
+
+from olive_mcp_server.mcp_server import _TOOL_IMPORTS, _resolve_tool, _resolved_tools, call_tool
+from olive_mcp_server.tools.troubleshooting import reset_frequency_store
 
 
 @pytest.fixture(autouse=True)

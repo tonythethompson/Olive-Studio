@@ -21,9 +21,7 @@ from olive_mcp_server.tools.strategy_advisor import get_quantization_strategy
         ("tensorrt rtx", "NVIDIA TensorRT RTX", "NvTensorRTRTXExecutionProvider"),
     ],
 )
-def test_hardware_guide_resolves_new_eps(
-    query: str, expected_target: str, expected_ep: str
-) -> None:
+def test_hardware_guide_resolves_new_eps(query: str, expected_target: str, expected_ep: str) -> None:
     result = get_hardware_optimization_guide(target_hardware=query)
     assert "error" not in result, result
     assert result["target_hardware"] == expected_target
@@ -126,6 +124,7 @@ def test_quantization_strategy_latency_budget_skips_int4_override(
     assert "int4" not in algo
     assert "aggressive" not in algo
 
+
 def test_amd_epyc_is_not_rocm_category() -> None:
     """Bare AMD EPYC / amd CPU strings must not map to the ROCm strategy bucket."""
     for query in ("AMD EPYC CPU", "amd epyc", "AMD EPYC"):
@@ -133,6 +132,7 @@ def test_amd_epyc_is_not_rocm_category() -> None:
         assert "error" not in result, result
         assert result["target_hardware"] != "rocm", f"{query!r} incorrectly mapped to rocm"
         assert "rocm" not in result["recommended_algorithm"].lower()
+
 
 def test_quantization_strategy_openvino_npu_uses_device_not_string_sniff() -> None:
     result = get_quantization_strategy(model_type="LLM", target_hardware="openvino:npu")

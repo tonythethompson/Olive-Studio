@@ -45,9 +45,7 @@ def _truthy_env(name: str) -> bool:
 def _looks_absolute_fs_path(path: str) -> bool:
     if path.startswith(("/", "~")):
         return True
-    if re.match(r"^[A-Za-z]:[\\/]", path):
-        return True
-    return False
+    return bool(re.match(r"^[A-Za-z]:[\\/]", path))
 
 
 def _path_basename(path: str) -> str:
@@ -85,6 +83,7 @@ def redact_paths_in_log_line(line: str, *, include_absolute: bool) -> str:
 
     return _PATH_RE.sub(_repl, line)
 
+
 def _artifact_path_ref(raw: str) -> str:
     """Return a privacy-safe artifact reference (basename for absolute or nested paths)."""
     if not raw:
@@ -100,12 +99,12 @@ def _artifact_path_ref(raw: str) -> str:
 def _is_error(payload: dict[str, Any]) -> bool:
     """
     Determine whether a payload contains a nonempty error message.
-    
+
     Parameters:
-    	payload (dict[str, Any]): Response payload to inspect.
-    
+        payload (dict[str, Any]): Response payload to inspect.
+
     Returns:
-    	bool: `true` if the payload's `error` field is a nonempty string, `false` otherwise.
+        bool: `true` if the payload's `error` field is a nonempty string, `false` otherwise.
     """
     err_val = payload.get("error")
     return isinstance(err_val, str) and bool(err_val)
@@ -114,12 +113,12 @@ def _is_error(payload: dict[str, Any]) -> bool:
 def _normalize_job_id(job_id: str) -> str | None:
     """
     Normalize a job identifier for use with the Studio job API.
-    
+
     Parameters:
-    	job_id (str): The job identifier to trim and validate.
-    
+        job_id (str): The job identifier to trim and validate.
+
     Returns:
-    	str | None: The normalized job identifier, or `None` if it is empty or contains invalid characters.
+        str | None: The normalized job identifier, or `None` if it is empty or contains invalid characters.
     """
     jid = (job_id or "").strip()
     if not jid or not _JOB_ID_RE.fullmatch(jid):
@@ -129,12 +128,12 @@ def _normalize_job_id(job_id: str) -> str | None:
 
 def _status_path(job_id: str) -> str:
     """Build the URL path for an optimization job's status.
-    
+
     Parameters:
-    	job_id (str): The job identifier to encode in the path.
-    
+        job_id (str): The job identifier to encode in the path.
+
     Returns:
-    	str: The URL-encoded job status path.
+        str: The URL-encoded job status path.
     """
     return f"{_STATUS_PATH}/{quote(job_id, safe='')}"
 
@@ -220,8 +219,7 @@ def get_optimization_job(job_id: str) -> dict[str, Any]:
         "finished_at": payload.get("finishedAt", payload.get("finished_at")),
         "logs_truncated": bool(payload.get("logsTruncated", payload.get("logs_truncated"))),
         "log_count": len(logs),
-        "has_metrics": payload.get("latestMetrics") is not None
-        or payload.get("latest_metrics") is not None,
+        "has_metrics": payload.get("latestMetrics") is not None or payload.get("latest_metrics") is not None,
         "latest_metrics": payload.get("latestMetrics", payload.get("latest_metrics")),
         "terminal": str(payload.get("status") or "") in _TERMINAL,
         "side_effect": False,
@@ -235,14 +233,14 @@ def validate_optimization_job(
 ) -> dict[str, Any]:
     """
     Validate an Olive recipe through Studio preflight without starting a job.
-    
+
     Parameters:
-    	recipe (dict[str, Any] | None): Recipe object to validate.
-    	recipe_json (str): JSON string containing the recipe when `recipe` is not provided.
-    	cuda_version (str): CUDA wheel version token used for validation.
-    
+        recipe (dict[str, Any] | None): Recipe object to validate.
+        recipe_json (str): JSON string containing the recipe when `recipe` is not provided.
+        cuda_version (str): CUDA wheel version token used for validation.
+
     Returns:
-    	dict[str, Any]: Validation status, fingerprint, provider, errors, warnings, CUDA version, and recipe summary.
+        dict[str, Any]: Validation status, fingerprint, provider, errors, warnings, CUDA version, and recipe summary.
     """
     body: dict[str, Any] = {"cudaVersion": cuda_version or "auto"}
     if recipe is not None:
@@ -278,17 +276,19 @@ def submit_optimization_job(
 ) -> dict[str, Any]:
     """
     Submit an optimization job through Olive Studio.
-    
+
     Parameters:
         recipe (dict[str, Any] | None): Recipe object to submit.
         recipe_json (str): JSON-encoded recipe used when ``recipe`` is not provided.
         cuda_version (str): CUDA version requested for the job.
         fingerprint (str): Optional validated recipe fingerprint used for reuse.
         idempotency_key (str): Optional key that allows a submission to reuse an existing job.
-    
+
     Returns:
-        dict[str, Any]: Submission status, job ID, state, fingerprint, reuse status, and execution metadata. Policy, availability, and submission failures are returned as structured errors.
-    
+        dict[str, Any]: Submission status, job ID, state, fingerprint, reuse status,
+        and execution metadata. Policy, availability, and submission failures are
+        returned as structured errors.
+
     The operation starts or reuses a job and therefore has side effects.
     """
     body: dict[str, Any] = {"cudaVersion": cuda_version or "auto"}
@@ -343,12 +343,14 @@ def submit_optimization_job(
 def cancel_optimization_job(job_id: str) -> dict[str, Any]:
     """
     Cancel a submitted Olive Studio optimization job.
-    
+
     Parameters:
-    	job_id (str): The Studio job identifier to cancel.
-    
+        job_id (str): The Studio job identifier to cancel.
+
     Returns:
-    	dict[str, Any]: The cancellation result, including the job ID, status, and whether the operation has side effects. Invalid identifiers, missing jobs, and cancellation failures include structured error details.
+        dict[str, Any]: The cancellation result, including the job ID, status, and
+        whether the operation has side effects. Invalid identifiers, missing jobs,
+        and cancellation failures include structured error details.
     """
     jid = _normalize_job_id(job_id)
     if not jid:
@@ -387,17 +389,19 @@ def get_optimization_results(
     log_tail: int = 40,
     include_absolute_artifact_paths: bool = False,
 ) -> dict[str, Any]:
-    """Return metadata-only results for a Studio job, including status, metrics, log excerpts, and artifact path references.
-    
+    """Return metadata-only results for a Studio job, including status, metrics,
+    log excerpts, and artifact path references.
+
     Parameters:
-    	job_id (str): Studio job identifier.
-    	log_tail (int): Maximum number of trailing log lines to include, clamped to 0–200.
-    	include_absolute_artifact_paths (bool): Request unredacted absolute paths. Honored only when
-    	    the local host sets ``OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS`` (local opt-in). Default
-    	    agent-facing results use basenames / relative forms only.
-    
+        job_id (str): Studio job identifier.
+        log_tail (int): Maximum number of trailing log lines to include, clamped to 0–200.
+        include_absolute_artifact_paths (bool): Request unredacted absolute paths. Honored only when
+                the local host sets ``OLIVE_MCP_ALLOW_ABSOLUTE_ARTIFACT_PATHS`` (local opt-in). Default
+                agent-facing results use basenames / relative forms only.
+
     Returns:
-    	dict[str, Any]: Job status, completion metadata, metrics, log information, heuristic artifact path references, and read-only operation metadata.
+        dict[str, Any]: Job status, completion metadata, metrics, log information,
+        heuristic artifact path references, and read-only operation metadata.
     """
     jid = _normalize_job_id(job_id)
     if not jid:
@@ -463,8 +467,7 @@ def get_optimization_results(
         "artifact_paths_absolute": include_absolute,
         "note": (
             "Metadata only — model artifacts and full logs are not transferred over MCP. "
-            "Paths are heuristic references from log lines. "
-            + path_note
+            "Paths are heuristic references from log lines. " + path_note
         ),
         "side_effect": False,
     }

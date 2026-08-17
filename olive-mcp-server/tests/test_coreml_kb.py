@@ -105,9 +105,7 @@ _GPU_ONLY_PASSES = [
 
 
 @pytest.mark.parametrize("pass_name", _GPU_ONLY_PASSES)
-def test_coreml_not_in_gpu_only_pass_hardware_requirements(
-    passes_by_name: dict[str, dict], pass_name: str
-) -> None:
+def test_coreml_not_in_gpu_only_pass_hardware_requirements(passes_by_name: dict[str, dict], pass_name: str) -> None:
     """**Validates: Requirements 8.2**
 
     For any pass in the GPU-only set, its entry in passes.json SHALL NOT list

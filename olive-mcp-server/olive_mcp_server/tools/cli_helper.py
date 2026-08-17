@@ -2,8 +2,6 @@
 
 from typing import Any
 
-from . import load_passes
-
 
 def get_cli_command(
     optimization_goal: str,
@@ -37,17 +35,14 @@ def get_cli_command(
         "generate-adapter": "olive generate-adapter",
     }
     if goal not in accepted:
-        raise ValueError(
-            f"Unrecognized optimization_goal '{goal}'. "
-            f"Must be one of: {', '.join(accepted.keys())}"
-        )
+        raise ValueError(f"Unrecognized optimization_goal '{goal}'. Must be one of: {', '.join(accepted.keys())}")
     base = accepted[goal]
 
     flags = [
         f'--config "{config_path}"',
         f'--model-path "{model}"',
         f'--output-dir "{output_dir}"',
-        f'--accelerator {target}',
+        f"--accelerator {target}",
     ]
     if batch_size is not None:
         flags.append(f"--batch-size {batch_size}")

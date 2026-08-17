@@ -136,8 +136,7 @@ def get_context_for_pipeline(
             )
         except Exception:
             logger.warning(
-                "Semantic KB retrieval failed for pipeline context; "
-                "falling back to keyword search",
+                "Semantic KB retrieval failed for pipeline context; falling back to keyword search",
                 exc_info=True,
             )
             try:

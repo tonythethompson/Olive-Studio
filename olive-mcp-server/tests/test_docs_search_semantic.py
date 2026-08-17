@@ -242,9 +242,7 @@ def test_keyword_mode_with_live_does_not_start_semantic_loading(
     assert any(r["source"].startswith("live:") for r in result["results"])
     sources = " ".join(r["source"] for r in result["results"])
     # Local keyword and/or live keyword hits expected; no semantic path taken.
-    assert "calibration" in sources.lower() or any(
-        "calibration" in r["snippet"].lower() for r in result["results"]
-    )
+    assert "calibration" in sources.lower() or any("calibration" in r["snippet"].lower() for r in result["results"])
 
     # Direct live helper: keyword path is fetch → split → _keyword_search only.
     live_hits, live_meta = docs_search._search_live("calibration", 3, mode="keyword")
@@ -342,9 +340,7 @@ def test_live_fetch_generation_ignores_stale_completion(monkeypatch: pytest.Monk
     monkeypatch.setattr(fetcher, "fetch_official_docs", fake_fetch)
 
     result_gen1: dict = {}
-    t1 = _threading.Thread(
-        target=lambda: result_gen1.update(pages=docs_search._fetch_live_docs()[0])
-    )
+    t1 = _threading.Thread(target=lambda: result_gen1.update(pages=docs_search._fetch_live_docs()[0]))
     t1.start()
     assert started_gen1.wait(timeout=5)
 
@@ -375,24 +371,18 @@ def test_live_index_does_not_overwrite_newer_generation(monkeypatch: pytest.Monk
     monkeypatch.setattr(docs_search, "build_kb_index", fake_build)
 
     # Newer generation publishes first.
-    monkeypatch.setattr(
-        docs_search, "_fetch_live_docs", lambda: ({"index": "newer content"}, 200.0)
-    )
+    monkeypatch.setattr(docs_search, "_fetch_live_docs", lambda: ({"index": "newer content"}, 200.0))
     docs_search._get_live_index()
     assert docs_search._LIVE_EMBED_CACHE_TIME == 200.0
 
     # Stale generation (older fetch_time) attempts to publish after.
-    monkeypatch.setattr(
-        docs_search, "_fetch_live_docs", lambda: ({"index": "older content"}, 100.0)
-    )
+    monkeypatch.setattr(docs_search, "_fetch_live_docs", lambda: ({"index": "older content"}, 100.0))
     docs_search._get_live_index()
     assert docs_search._LIVE_EMBED_CACHE_TIME == 200.0
     assert docs_search._LIVE_SNIPPETS[0][1] == "newer content"
 
 
-def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-):
+def test_load_kb_text_skips_invalid_utf8_and_keeps_valid_files(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """One undecodable KB file must not abort loading of sibling valid JSON."""
     bad = tmp_path / "bad_utf8.json"
     good = tmp_path / "good.json"
@@ -482,9 +472,7 @@ def test_search_query_sanitization(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(docs_search, "_KB_INDEX_MTIME", (-1.0, -1))
 
     # Query with null bytes should not crash and should be cleaned
-    result = docs_search.search_olive_documentation(
-        query="quant\x00ization", top_k=1, live=False, mode="keyword"
-    )
+    result = docs_search.search_olive_documentation(query="quant\x00ization", top_k=1, live=False, mode="keyword")
     assert result["query"] == "quantization"
 
     # Whitespace controls should become spaces (preserve token boundaries)
@@ -499,16 +487,12 @@ def test_search_query_sanitization(monkeypatch: pytest.MonkeyPatch):
 
     # Very long query should be truncated to 2000 chars (not crash)
     long_query = "x" * 5000
-    result2 = docs_search.search_olive_documentation(
-        query=long_query, top_k=1, live=False, mode="keyword"
-    )
+    result2 = docs_search.search_olive_documentation(query=long_query, top_k=1, live=False, mode="keyword")
     assert len(result2["query"]) == 2000
 
     # Truncation applies before control normalization ends; length stays <= 2000
     long_with_controls = ("a\tb\nc\rd\x0be\x0cf") * 400
-    result3 = docs_search.search_olive_documentation(
-        query=long_with_controls, top_k=1, live=False, mode="keyword"
-    )
+    result3 = docs_search.search_olive_documentation(query=long_with_controls, top_k=1, live=False, mode="keyword")
     assert len(result3["query"]) == 2000
     assert "\t" not in result3["query"]
     assert "\n" not in result3["query"]

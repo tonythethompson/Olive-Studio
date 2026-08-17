@@ -1,11 +1,10 @@
 """Regression tests for the documented MCP tool contract."""
 
-from pathlib import Path
 import asyncio
 import re
+from pathlib import Path
 
 from olive_mcp_server.mcp_server import _build_mcp
-
 
 README = Path(__file__).resolve().parents[1] / "README.md"
 TOOL_ROW = re.compile(r"^\| `([a-z][a-z0-9_]*)`\s*\|", re.MULTILINE)

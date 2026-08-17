@@ -74,11 +74,7 @@ def _metric_bounds(
             value = entry["metrics"].get(key)
             if value is not None:
                 values[key].append(value)
-    return {
-        key: (min(metric_values), max(metric_values))
-        for key, metric_values in values.items()
-        if metric_values
-    }
+    return {key: (min(metric_values), max(metric_values)) for key, metric_values in values.items() if metric_values}
 
 
 def _metric_weights(preference: str) -> dict[str, float]:
@@ -254,23 +250,27 @@ def compare_results(
             if not any(value is not None for value in metrics.values()):
                 excluded_jobs.append({"job_id": jid, "reason": "no_comparable_metrics"})
                 continue
-            scoreable.append({
-                "job_id": jid,
-                "status": status,
-                "metrics": metrics,
-            })
+            scoreable.append(
+                {
+                    "job_id": jid,
+                    "status": status,
+                    "metrics": metrics,
+                }
+            )
 
         # --- Score and select winner ---
         if len(scoreable) < _MIN_JOBS:
             # Not enough scoreable jobs for comparison
             comparison = []
             for entry in scoreable:
-                comparison.append({
-                    "job_id": entry["job_id"],
-                    "status": entry["status"],
-                    "metrics": entry["metrics"],
-                    "score": 0.0,
-                })
+                comparison.append(
+                    {
+                        "job_id": entry["job_id"],
+                        "status": entry["status"],
+                        "metrics": entry["metrics"],
+                        "score": 0.0,
+                    }
+                )
 
             return {
                 "comparison": comparison,

@@ -64,14 +64,10 @@ def get_integration_recipe(
     if model_type:
         filtered = [r for r in filtered if _matches_filter(model_type, r.get("model_type", []))]
     if target_hardware:
-        filtered = [
-            r for r in filtered if _matches_filter(target_hardware, r.get("target_hardware", []))
-        ]
+        filtered = [r for r in filtered if _matches_filter(target_hardware, r.get("target_hardware", []))]
     if source_format:
         query = source_format.lower()
-        filtered = [
-            r for r in filtered if r.get("source_format", "").lower() == query
-        ]
+        filtered = [r for r in filtered if r.get("source_format", "").lower() == query]
 
     return {
         "recipes": [_recipe_summary(r) for r in filtered],

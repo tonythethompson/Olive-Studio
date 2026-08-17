@@ -66,7 +66,7 @@ def _isolated_feedback_store(tmp_path: Path):
 
 
 def _read_store(path: Path) -> dict:
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
 
@@ -165,9 +165,7 @@ def test_corrupt_store_treated_as_empty(tmp_path: Path):
 def test_valid_rating_and_reason_accepted():
     """Positive: allowlisted rating + reason_code succeed."""
     # Arrange / Act
-    result = record_troubleshoot_feedback(
-        _ENTRY_B, "thumbs-down", reason_code="wrong_match"
-    )
+    result = record_troubleshoot_feedback(_ENTRY_B, "thumbs-down", reason_code="wrong_match")
 
     # Assert
     assert result["status"] == "ok"
@@ -193,9 +191,7 @@ def test_valid_rating_and_reason_accepted():
 def test_invalid_inputs_rejected(matched_entry, rating, reason_code, error_code):
     """Negative: bad entry id, rating, or free-form reason_code are rejected."""
     # Arrange / Act
-    result = record_troubleshoot_feedback(
-        matched_entry, rating, reason_code=reason_code
-    )
+    result = record_troubleshoot_feedback(matched_entry, rating, reason_code=reason_code)
 
     # Assert
     assert result["status"] == "error"
@@ -219,9 +215,7 @@ def test_invalid_rating_lists_allowed_values():
 def test_invalid_reason_lists_allowed_codes():
     """Negative: invalid_reason_code response includes allowlist."""
     # Arrange / Act
-    result = record_troubleshoot_feedback(
-        _ENTRY_A, "thumbs-up", reason_code="please fix this bug for me"
-    )
+    result = record_troubleshoot_feedback(_ENTRY_A, "thumbs-up", reason_code="please fix this bug for me")
 
     # Assert
     assert result["status"] == "error"
@@ -482,9 +476,7 @@ def test_sanitize_strips_unexpected_free_form_fields(tmp_path: Path):
 def test_ok_response_is_aggregate_only():
     """Positive: tool acknowledgement has no paths, logs, or free-form notes."""
     # Arrange / Act
-    result = record_troubleshoot_feedback(
-        _ENTRY_A, "thumbs-up", reason_code="clear_fix"
-    )
+    result = record_troubleshoot_feedback(_ENTRY_A, "thumbs-up", reason_code="clear_fix")
 
     # Assert
     assert result["status"] == "ok"
@@ -521,6 +513,7 @@ def test_api_does_not_accept_free_form_kwargs():
             error_message="CUDA OOM traceback",
         )
 
+
 # ---------------------------------------------------------------------------
 # Inter-process lock
 # ---------------------------------------------------------------------------
@@ -554,10 +547,7 @@ def test_concurrent_processes_preserve_increments(tmp_path: Path, monkeypatch):
     assert seed["status"] == "ok"
     assert seed["thumbs_up"] == 1
 
-    procs = [
-        mp.Process(target=_worker_increment, args=(str(shared), _ENTRY_A, 5))
-        for _ in range(4)
-    ]
+    procs = [mp.Process(target=_worker_increment, args=(str(shared), _ENTRY_A, 5)) for _ in range(4)]
     for p in procs:
         p.start()
     for p in procs:
@@ -567,4 +557,3 @@ def test_concurrent_processes_preserve_increments(tmp_path: Path, monkeypatch):
     data = _read_store(shared)
     # 1 seed + 4 workers * 5 increments
     assert data["entries"][_ENTRY_A]["thumbs_up"] == 21
-

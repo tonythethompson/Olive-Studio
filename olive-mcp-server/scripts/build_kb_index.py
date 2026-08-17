@@ -26,9 +26,9 @@ if str(SERVER_DIR) not in sys.path:
 def main() -> int:
     """
     Build and save embedding indexes for documentation and troubleshooting knowledge bases.
-    
+
     Returns:
-    	int: Exit code `0` after all indexes and the manifest are written successfully.
+        int: Exit code `0` after all indexes and the manifest are written successfully.
     """
     from olive_mcp_server.tools import load_studio_troubleshooting, load_troubleshooting
     from olive_mcp_server.tools.docs_search import _load_kb_text
@@ -43,7 +43,7 @@ def main() -> int:
         save_pair_index,
         write_manifest,
     )
-    from olive_mcp_server.tools.troubleshooting import _entry_embed_text, _entries_fingerprint
+    from olive_mcp_server.tools.troubleshooting import _entries_fingerprint, _entry_embed_text
 
     pairs = _load_kb_text()
     expected_hashes = {"docs_kb": content_hash_pairs(pairs)}

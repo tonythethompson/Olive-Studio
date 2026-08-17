@@ -118,10 +118,7 @@ def test_paraphrased_oom_realistic_score_vector(monkeypatch: pytest.MonkeyPatch)
         default_score=0.10,
     )
     result = troubleshoot_olive_error(
-        error_message=(
-            "Process killed while running weight-only packing "
-            "due to insufficient device memory"
-        ),
+        error_message=("Process killed while running weight-only packing due to insufficient device memory"),
         pass_name="OnnxQuantization",
         mode="semantic",
     )
@@ -390,8 +387,7 @@ def test_real_bge_paraphrased_oom_optional():
 
     result = troubleshoot_olive_error(
         error_message=(
-            "Runtime killed the process during quantization "
-            "because GPU memory was exhausted by intermediate tensors"
+            "Runtime killed the process during quantization because GPU memory was exhausted by intermediate tensors"
         ),
         pass_name="OnnxQuantization",
         mode="semantic",
@@ -458,6 +454,7 @@ def test_feedback_breaks_close_tie_toward_boosted_entry(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Positive: capped feedback can break a near-tie toward the boosted entry."""
+
     # Arrange — identical mild semantic scores; only feedback differs.
     def fake_delta(eid: str) -> float:
         if eid == "ep-fallback-cpu":

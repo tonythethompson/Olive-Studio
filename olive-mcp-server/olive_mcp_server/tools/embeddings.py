@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 EMBEDDING_DIM = 384
@@ -27,7 +30,7 @@ _model = None
 _model_lock = threading.Lock()
 
 
-def _get_model():
+def _get_model() -> SentenceTransformer | None:
     """Thread-safe lazy singleton for SentenceTransformer (CPU-only)."""
     global _model
     if _model is not None:
