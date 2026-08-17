@@ -79,12 +79,13 @@ def _normalize_model_type(model_type: str, architecture: str = "") -> str:
 def _latency_rank(latency: str) -> int:
     """
     Classify a latency description by urgency.
-    
+
     Parameters:
-    	latency (str): Text describing the target latency.
-    
+        latency (str): Text describing the target latency.
+
     Returns:
-    	int: 0 for real-time latency, 1 for latency under 500 milliseconds, 2 for latency under one second, or 3 for unspecified latency.
+        int: 0 for real-time latency, 1 for latency under 500 milliseconds, 2 for
+        latency under one second, or 3 for unspecified latency.
     """
     lat_lower = latency.lower()
     if "<100" in lat_lower or "100ms" in lat_lower or "realtime" in lat_lower or "real-time" in lat_lower:
@@ -125,10 +126,7 @@ def get_quantization_strategy(
     hw = _hardware_category(parsed.profile)
     # Prefer structured OV device; also honor the canonical NPU profile name
     # when callers pass it directly (no loose "npu" substring sniffing).
-    is_openvino_npu = (
-        parsed.openvino_device == "NPU"
-        or parsed.profile == "Intel Core Ultra NPU (OpenVINO)"
-    )
+    is_openvino_npu = parsed.openvino_device == "NPU" or parsed.profile == "Intel Core Ultra NPU (OpenVINO)"
     mt = _normalize_model_type(model_type)
     latency_rank_val = _latency_rank(latency_budget)
     quirks = load_quirks()
@@ -212,7 +210,8 @@ def get_quantization_strategy(
             risks = [
                 "Set openvinoTargetDevice to NPU in Olive Studio (EP id stays OpenVINOExecutionProvider).",
                 "Unsupported ops fall back to CPU; verify Core Ultra / Meteor Lake+ NPU driver.",
-                "OpenVINOConversion accepts torch or ONNX; prefer OpenVINOOptimumConversion only for HuggingFace/Torch sources.",
+                "OpenVINOConversion accepts torch or ONNX; prefer OpenVINOOptimumConversion "
+                "only for HuggingFace/Torch sources.",
             ]
             # OpenVINOConversion accepts torch|onnx (unlike Optimum, which is torch-only).
             pass_chain = ["OpenVINOConversion", "OpenVINOWeightCompression"]
@@ -384,7 +383,8 @@ def get_quantization_strategy(
                 "accuracy_drop": "1-3%",
             }
             risks = [
-                "Speech models often have dynamic sequence lengths; use dynamic_axes and a representative length range.",
+                "Speech models often have dynamic sequence lengths; use dynamic_axes "
+                "and a representative length range.",
             ]
             pass_chain = ["OnnxConversion", "OnnxModelOptimizer", "OnnxStaticQuantization"]
 
@@ -392,16 +392,11 @@ def get_quantization_strategy(
     uses_int4 = "int4" in algorithm.lower()
     if uses_int4:
         if latency_rank_val == 0 and mt == "llm":
-            algorithm = (
-                algorithm.replace("int4", "int4 (aggressive)")
-                + " + KV-cache quantization recommended"
-            )
+            algorithm = algorithm.replace("int4", "int4 (aggressive)") + " + KV-cache quantization recommended"
             risks.append("Aggressive int4 can increase perplexity; evaluate with a held-out set.")
         elif latency_rank_val == 0 and (mt == "cnn" or mt == "vision"):
             algorithm += " + consider pruning 20-30% before quantization"
-            risks.append(
-                "Pruning + quantization compound accuracy loss; fine-tune if possible."
-            )
+            risks.append("Pruning + quantization compound accuracy loss; fine-tune if possible.")
 
         match = re.search(r"(\d+(?:\.\d+)?)\s*%", accuracy_threshold)
         if match:
@@ -409,9 +404,7 @@ def get_quantization_strategy(
                 threshold_value = float(match.group(1))
                 if threshold_value <= 1.0:
                     algorithm = algorithm.replace("int4", "int8") + " (tight accuracy target)"
-                    risks.append(
-                        "Tight accuracy target requires larger calibration set and per-channel weights."
-                    )
+                    risks.append("Tight accuracy target requires larger calibration set and per-channel weights.")
             except ValueError:
                 # Skip override if parsing fails
                 pass

@@ -58,7 +58,7 @@ def _kb_rel(name: str) -> str:
 
 
 def load(name: str) -> dict:
-    with open(KB_DIR / name, "r", encoding="utf-8") as f:
+    with open(KB_DIR / name, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -702,9 +702,7 @@ def expand_troubleshooting():
             "solution": "Set num_heads and hidden_size in pass params; verify against model config.",
             "updated_config": {
                 "passes": {
-                    "OrtTransformersOptimization": {
-                        "params": {"num_heads": 32, "hidden_size": 4096, "opt_level": 1}
-                    }
+                    "OrtTransformersOptimization": {"params": {"num_heads": 32, "hidden_size": 4096, "opt_level": 1}}
                 }
             },
         },
@@ -729,11 +727,7 @@ def expand_troubleshooting():
             "root_cause": "Model activations exceed FP16 range or are not trained for FP16.",
             "solution": "Keep I/O types float32; cast int inputs to int32; exclude sensitive ops from FP16; consider mixed precision.",
             "updated_config": {
-                "passes": {
-                    "OnnxFloatToFloat16": {
-                        "params": {"keep_io_types": True, "cast_int_inputs_to_int32": True}
-                    }
-                }
+                "passes": {"OnnxFloatToFloat16": {"params": {"keep_io_types": True, "cast_int_inputs_to_int32": True}}}
             },
         },
         {

@@ -4,7 +4,6 @@ from typing import Any
 
 from . import load_passes
 
-
 # Canonical ordering constraints: each pass type should appear after its
 # dependencies in this list.
 _TYPE_ORDER = [
@@ -81,22 +80,25 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
             continue
 
         ptype = meta.get("type", "unknown")
-        resolved.append({
-            "name": name,
-            "type": ptype,
-            "input_formats": meta.get("input_formats", []),
-            "output_formats": meta.get("output_formats", []),
-            "known": True,
-        })
+        resolved.append(
+            {
+                "name": name,
+                "type": ptype,
+                "input_formats": meta.get("input_formats", []),
+                "output_formats": meta.get("output_formats", []),
+                "known": True,
+            }
+        )
 
         # Quantization passes check: verify input format compatibility with preceding conversion pass or source format.
         if ptype == "quantization":
             has_compatible_conversion = False
             for prev in resolved:
-                if prev.get("type") == "conversion":
-                    if any(fmt in meta.get("input_formats", []) for fmt in prev.get("output_formats", [])):
-                        has_compatible_conversion = True
-                        break
+                if prev.get("type") == "conversion" and any(
+                    fmt in meta.get("input_formats", []) for fmt in prev.get("output_formats", [])
+                ):
+                    has_compatible_conversion = True
+                    break
             if not has_compatible_conversion:
                 normalized_source = _normalize_source_format(source_format)
                 input_formats = meta.get("input_formats", [])
@@ -110,12 +112,14 @@ def get_pass_chain(pass_names: list[str], source_format: str = "") -> dict[str, 
                 elif normalized_source not in input_formats:
                     if normalized_source in _KNOWN_SOURCE_FORMATS:
                         errors.append(
-                            f"Pass '{name}' requires input format in {input_formats} but no compatible conversion pass precedes it in the chain."
+                            f"Pass '{name}' requires input format in {input_formats} "
+                            f"but no compatible conversion pass precedes it in the chain."
                         )
                     else:
                         warnings.append(
                             f"Pass '{name}' requires input format in {input_formats}. "
-                            f"If your source model is already compatible, this is fine; otherwise add a conversion pass."
+                            f"If your source model is already compatible, this is fine; "
+                            f"otherwise add a conversion pass."
                         )
 
         # Graph optimizations are more effective before quantization.

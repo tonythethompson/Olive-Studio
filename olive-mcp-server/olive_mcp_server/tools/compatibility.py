@@ -14,13 +14,13 @@ def get_model_compatibility(
 ) -> dict[str, Any]:
     """
     Evaluate compatibility for a model and framework, optionally targeting specific hardware.
-    
+
     Args:
         model_name (str): Model name or path, such as "mistralai/Mistral-7B-v0.1".
         framework (str): Source framework, such as "PyTorch", "ONNX", or "HuggingFace".
         olive_version (str): Optional Olive version to include in the result.
         hardware_target (str): Optional hardware target for selecting compatibility details.
-    
+
     Returns:
         dict[str, Any]: Compatibility details, supported passes and workflow suggestions for
             unknown models, or hardware-specific compatibility and warnings when requested.
@@ -38,7 +38,10 @@ def get_model_compatibility(
     matched = [m for m in models if normalize_model(m["model"]) == key]
     if not matched:
         return {
-            "note": f"'{model_name}' is not in the local compatibility matrix. Use get_quantization_strategy and get_pass_chain to design a custom workflow.",
+            "note": (
+                f"'{model_name}' is not in the local compatibility matrix. "
+                f"Use get_quantization_strategy and get_pass_chain to design a custom workflow."
+            ),
             "framework": fw,
             "supported_passes": list(passes.keys()),
             "suggested_first_steps": [

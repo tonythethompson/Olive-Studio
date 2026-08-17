@@ -98,7 +98,7 @@ def _build_config_context(
 
     context = "; ".join(parts)
     if len(context) > _MAX_CONFIG_CONTEXT_LEN:
-        context = context[:_MAX_CONFIG_CONTEXT_LEN - 3] + "..."
+        context = context[: _MAX_CONFIG_CONTEXT_LEN - 3] + "..."
     return context
 
 

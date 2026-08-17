@@ -34,12 +34,13 @@ MANIFEST_NAME = "manifest.json"
 
 def _truthy(name: str) -> bool:
     """Determine whether an environment variable represents an enabled value.
-    
+
     Parameters:
-    	name (str): Name of the environment variable.
-    
+        name (str): Name of the environment variable.
+
     Returns:
-    	bool: `true` if the value is `1`, `true`, `yes`, or `on`, ignoring surrounding whitespace and letter case; `false` otherwise.
+        bool: `true` if the value is `1`, `true`, `yes`, or `on`, ignoring surrounding
+        whitespace and letter case; `false` otherwise.
     """
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
@@ -47,9 +48,9 @@ def _truthy(name: str) -> bool:
 def force_rebuild() -> bool:
     """
     Determine whether runtime index rebuilding is enabled.
-    
+
     Returns:
-    	bool: `True` if shipped indexes should be ignored and rebuilt, `False` otherwise.
+        bool: `True` if shipped indexes should be ignored and rebuilt, `False` otherwise.
     """
     return _truthy("OLIVE_MCP_REBUILD_INDEX")
 
@@ -73,12 +74,12 @@ def content_hash_pairs(pairs: list[tuple[str, str]]) -> str:
 def content_hash_texts(texts: list[str]) -> str:
     """
     Compute a SHA-256 hash for an ordered sequence of text values.
-    
+
     Parameters:
-    	texts (list[str]): Text values whose normalized contents are hashed.
-    
+        texts (list[str]): Text values whose normalized contents are hashed.
+
     Returns:
-    	str: The hexadecimal SHA-256 digest.
+        str: The hexadecimal SHA-256 digest.
     """
     h = hashlib.sha256()
     for t in texts:
@@ -90,7 +91,7 @@ def content_hash_texts(texts: list[str]) -> str:
 def ensure_index_dir() -> Path:
     """
     Ensure the directory used for embedding indexes exists.
-    
+
     Returns:
         Path: The embedding index directory.
     """
@@ -100,10 +101,10 @@ def ensure_index_dir() -> Path:
 
 def _meta_path(stem: str) -> Path:
     """Return the metadata file path for an index stem.
-    
+
     Parameters:
         stem (str): Index name used to construct the metadata filename.
-    
+
     Returns:
         Path: Path to the index metadata file.
     """
@@ -112,10 +113,10 @@ def _meta_path(stem: str) -> Path:
 
 def _npz_path(stem: str) -> Path:
     """Build the path to an index's compressed NumPy data file.
-    
+
     Parameters:
         stem (str): Index filename stem.
-    
+
     Returns:
         Path: Path to the index's `.npz` file.
     """
@@ -131,12 +132,12 @@ def save_pair_index(
 ) -> dict[str, Any]:
     """
     Persist source-text pairs and their embeddings as a document index.
-    
+
     Parameters:
         pairs (list[tuple[str, str]]): Source and text values aligned with the embedding rows.
         embeddings (np.ndarray): Embedding vectors corresponding to the pairs.
         extra (dict[str, Any] | None): Additional metadata to include in the index metadata.
-    
+
     Returns:
         dict[str, Any]: Metadata describing the saved index.
     """
@@ -177,7 +178,7 @@ def save_entry_index(
 ) -> dict[str, Any]:
     """
     Persist aligned entry identifiers, embedding texts, and embeddings for a troubleshooting index.
-    
+
     Parameters:
         stem (str): Index name used to derive the stored metadata and embedding paths.
         entry_ids (list[str]): Identifiers corresponding to each embedding row.
@@ -185,7 +186,7 @@ def save_entry_index(
         embeddings (np.ndarray): Embedding vectors aligned with `entry_ids` and `embed_texts`.
         content_hash (str): Hash identifying the source content represented by the index.
         extra (dict[str, Any] | None): Additional metadata to include in the stored index metadata.
-    
+
     Returns:
         dict[str, Any]: Metadata written for the index.
     """
@@ -217,13 +218,14 @@ def save_entry_index(
 def load_pair_index(stem: str, expected_hash: str) -> tuple[list[tuple[str, str]], np.ndarray] | None:
     """
     Load a document index when its model, content hash, and embedding data are valid.
-    
+
     Parameters:
         stem (str): Index name used to locate the stored files.
         expected_hash (str): Content hash required for the index to be accepted.
-    
+
     Returns:
-        tuple[list[tuple[str, str]], np.ndarray] | None: The source-text pairs and embeddings, or `None` if the index is unavailable or invalid.
+        tuple[list[tuple[str, str]], np.ndarray] | None: The source-text pairs and
+        embeddings, or `None` if the index is unavailable or invalid.
     """
     if force_rebuild():
         return None
@@ -263,13 +265,14 @@ def load_pair_index(stem: str, expected_hash: str) -> tuple[list[tuple[str, str]
 def load_entry_embeddings(stem: str, expected_hash: str) -> np.ndarray | None:
     """
     Load embeddings from an entry index when its metadata matches the configured model and content hash.
-    
+
     Parameters:
         stem (str): Index name used to locate the stored files.
         expected_hash (str): Content hash required for the index to be valid.
-    
+
     Returns:
-        np.ndarray | None: A two-dimensional float32 embedding array, or `None` when the index is unavailable, incompatible, invalid, or rebuilding is forced.
+        np.ndarray | None: A two-dimensional float32 embedding array, or `None` when
+        the index is unavailable, incompatible, invalid, or rebuilding is forced.
     """
     if force_rebuild():
         return None
@@ -303,10 +306,10 @@ def load_entry_embeddings(stem: str, expected_hash: str) -> np.ndarray | None:
 def write_manifest(entries: dict[str, dict[str, Any]]) -> Path:
     """
     Write index metadata and embedding configuration to the manifest file.
-    
+
     Parameters:
         entries (dict[str, dict[str, Any]]): Metadata for the stored indexes.
-    
+
     Returns:
         Path: Path to the written manifest file.
     """
@@ -324,7 +327,7 @@ def write_manifest(entries: dict[str, dict[str, Any]]) -> Path:
 def read_manifest() -> dict[str, Any] | None:
     """
     Read the index manifest from its configured location.
-    
+
     Returns:
         dict[str, Any] | None: The parsed manifest, or `None` if the file is unavailable or invalid.
     """
@@ -340,18 +343,17 @@ def read_manifest() -> dict[str, Any] | None:
 def shipped_index_status() -> dict[str, Any]:
     """
     Summarize the available precomputed embedding indexes.
-    
+
     Returns:
-    	dict[str, Any]: A status dictionary containing the index metadata version, whether indexes are available, their sorted stems, and the configured model.
+        dict[str, Any]: A status dictionary containing the index metadata version,
+        whether indexes are available, their sorted stems, and the configured model.
     """
     manifest = read_manifest()
     if not manifest:
         return {"version": None, "shipped": False, "stems": []}
     indexes = manifest.get("indexes") or {}
     stems = sorted(indexes.keys())
-    version = hashlib.sha256(
-        json.dumps(indexes, sort_keys=True).encode("utf-8")
-    ).hexdigest()[:16]
+    version = hashlib.sha256(json.dumps(indexes, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     return {
         "version": version,
         "shipped": bool(stems),

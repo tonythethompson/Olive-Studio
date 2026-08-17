@@ -17,7 +17,6 @@ import pytest
 from olive_mcp_server.tools import agent_compare
 from olive_mcp_server.tools.agent_compare import compare_results
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -56,12 +55,8 @@ class TestClearWinner:
     def test_latency_preference_winner(self, monkeypatch: pytest.MonkeyPatch):
         """job-A has lower latency -> wins with latency preference (2x weight)."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=50, model_size_mb=100, accuracy=0.95
-            ),
-            "job-B": _make_job_response(
-                latency_ms=100, model_size_mb=200, accuracy=0.90
-            ),
+            "job-A": _make_job_response(latency_ms=50, model_size_mb=100, accuracy=0.95),
+            "job-B": _make_job_response(latency_ms=100, model_size_mb=200, accuracy=0.90),
         }
 
         def fake_request(method, path, **_kw):
@@ -94,9 +89,7 @@ class TestExcludedNonTerminal:
     def test_running_and_failed_excluded(self, monkeypatch: pytest.MonkeyPatch):
         """Running jobs and failed jobs are excluded with proper reasons."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=50, model_size_mb=100, accuracy=0.95
-            ),
+            "job-A": _make_job_response(latency_ms=50, model_size_mb=100, accuracy=0.95),
             "job-B": _make_job_response(status="running"),
             "job-C": _make_job_response(status="failed"),
         }
@@ -126,9 +119,7 @@ class TestExcludedNonTerminal:
     def test_completed_job_empty_metrics_excluded(self, monkeypatch: pytest.MonkeyPatch):
         """A completed job with no metrics is excluded with no_comparable_metrics."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=50, model_size_mb=100, accuracy=0.95
-            ),
+            "job-A": _make_job_response(latency_ms=50, model_size_mb=100, accuracy=0.95),
             "job-B": _make_job_response(status="completed"),  # no metrics
         }
 
@@ -158,12 +149,8 @@ class TestConstantMetricsNeutralTie:
     def test_constant_metrics_neutral_tie(self, monkeypatch: pytest.MonkeyPatch):
         """Identical metrics across jobs -> every job scores 0.5 (neutral midpoint)."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=100, model_size_mb=500, accuracy=0.9
-            ),
-            "job-B": _make_job_response(
-                latency_ms=100, model_size_mb=500, accuracy=0.9
-            ),
+            "job-A": _make_job_response(latency_ms=100, model_size_mb=500, accuracy=0.9),
+            "job-B": _make_job_response(latency_ms=100, model_size_mb=500, accuracy=0.9),
         }
 
         def fake_request(method, path, **_kw):
@@ -196,7 +183,6 @@ class TestConstantMetricsNeutralTie:
         result = compare_results(["job-A", "job-B"], preference="latency")
 
         assert "error" not in result
-        scores = {c["job_id"]: c["score"] for c in result["comparison"]}
         # latency is constant (42 == 42) -> neutral 0.5 for both on that metric.
         # size differs so the overall score won't be 0.5, but the degenerate
         # latency contribution must not bias either job.
@@ -214,9 +200,7 @@ class TestFewerThan2Scoreable:
     def test_single_completed_job(self, monkeypatch: pytest.MonkeyPatch):
         """Only 1 completed job, 1 failed -> winner=None."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=50, model_size_mb=100, accuracy=0.95
-            ),
+            "job-A": _make_job_response(latency_ms=50, model_size_mb=100, accuracy=0.95),
             "job-B": _make_job_response(status="failed"),
         }
 
@@ -387,9 +371,7 @@ class TestStudioUnavailable:
 
         assert result["winner"] is None
         assert len(result["excluded_jobs"]) == 2
-        assert all(
-            e["reason"] == "fetch_failed" for e in result["excluded_jobs"]
-        )
+        assert all(e["reason"] == "fetch_failed" for e in result["excluded_jobs"])
         assert result["comparison"] == []
         assert result["side_effect"] is False
 
@@ -405,12 +387,8 @@ class TestJsonRoundTrip:
     def test_success_result_roundtrip(self, monkeypatch: pytest.MonkeyPatch):
         """Successful comparison result round-trips through JSON."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=50, model_size_mb=100, accuracy=0.95
-            ),
-            "job-B": _make_job_response(
-                latency_ms=100, model_size_mb=200, accuracy=0.90
-            ),
+            "job-A": _make_job_response(latency_ms=50, model_size_mb=100, accuracy=0.95),
+            "job-B": _make_job_response(latency_ms=100, model_size_mb=200, accuracy=0.90),
         }
 
         def fake_request(method, path, **_kw):
@@ -430,9 +408,7 @@ class TestJsonRoundTrip:
     def test_no_winner_result_roundtrip(self, monkeypatch: pytest.MonkeyPatch):
         """No-winner result round-trips through JSON."""
         responses = {
-            "job-A": _make_job_response(
-                latency_ms=50, model_size_mb=100, accuracy=0.95
-            ),
+            "job-A": _make_job_response(latency_ms=50, model_size_mb=100, accuracy=0.95),
             "job-B": _make_job_response(status="failed"),
         }
 
