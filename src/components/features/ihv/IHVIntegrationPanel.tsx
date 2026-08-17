@@ -134,6 +134,7 @@ export function IHVIntegrationPanel({
     if (prevPasses.onnxDiscrepancyCheck && !state.passes.onnxDiscrepancyCheck) coerced.push("onnxDiscrepancyCheck");
 
     if (coerced.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: track coerced passes on provider switch
       setQnnAbiCoercedPasses(coerced);
     }
   }, [state.ihvProvider, state.passes]);
