@@ -79,17 +79,20 @@ export function registeredProviderNames(): Set<ProviderConfig["provider"]> {
  * Reports credential presence and usability for each registered provider without exposing secret values.
  *
  * @param extraUsable - Optional provider-specific usability overrides.
+ * @param extraFields - Optional provider-specific sub-fields merged onto the status record
+ *   (e.g., Cloudflare's `cloudflareAccountId`). Only fields beyond `present`, `envVar`, and `usable` are accepted.
  * @returns A map of provider names to credential status details.
  */
 export function listEnvCredentialStatus(
   extraUsable?: Partial<Record<ProviderConfig["provider"], boolean>>,
+  extraFields?: Partial<Record<ProviderConfig["provider"], Omit<EnvCredentialStatus, "present" | "envVar" | "usable">>>,
 ): Record<string, EnvCredentialStatus> {
   const out: Record<string, EnvCredentialStatus> = {};
   for (const plugin of providers.values()) {
     const envVar = matchedEnvApiKeyName(...plugin.envVarNames) ?? null;
     const present = Boolean(envVar);
     const usable = extraUsable?.[plugin.name] ?? present;
-    out[plugin.name] = { present, envVar, usable };
+    out[plugin.name] = { present, envVar, usable, ...extraFields?.[plugin.name] };
   }
   return out;
 }
