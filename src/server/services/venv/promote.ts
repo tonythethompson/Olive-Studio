@@ -28,12 +28,8 @@ async function renameDir(from: string, to: string, maxAttempts = 10): Promise<vo
       return;
     } catch (err: unknown) {
       lastError = err;
-      const isTransient =
-        err != null &&
-        typeof err === "object" &&
-        "code" in err &&
-        (err.code === "EPERM" || err.code === "EBUSY" || err.code === "EACCES");
-      if (!isTransient || attempt === maxAttempts) {
+      const code = (err as NodeJS.ErrnoException | null | undefined)?.code;
+      const isTransient = code === "EPERM" || code === "EBUSY" || code === "EACCES";
         throw err;
       }
       await sleep(50 * attempt);
