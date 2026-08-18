@@ -1,0 +1,135 @@
+name: Run mini-swe-agent on New Issues or Comment Trigger
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  solve-issue:
+    if: |
+      (
+        github.event_name == 'issues' &&
+        contains(
+          fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+          github.event.issue.author_association
+        )
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        !github.event.issue.pull_request &&
+        github.event.comment.body == '/solve' &&
+        contains(
+          fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+          github.event.comment.author_association
+        )
+      )
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install mini-swe-agent
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipx
+          pipx ensurepath
+          pipx install mini-swe-agent
+
+      # Fetch the underlying issue text if triggered by an issue_comment event
+      - name: Fetch Issue Data (for comment triggers)
+        if: github.event_name == 'issue_comment'
+        id: get-issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Fetch the issue because the comment payload has limited data.
+          ISSUE_DATA=$(gh issue view "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" --json title,body)
+          TITLE=$(jq -r '.title' <<<"$ISSUE_DATA")
+          BODY=$(jq -r '.body' <<<"$ISSUE_DATA")
+
+          # A random delimiter keeps issue text in a single environment value.
+          DELIM="EOF_$(openssl rand -hex 16)"
+          {
+            printf 'ISSUE_TITLE<<%s\n' "$DELIM"
+            printf '%s\n' "$TITLE"
+            printf '%s\n' "$DELIM"
+            printf 'ISSUE_BODY<<%s\n' "$DELIM"
+            printf '%s\n' "$BODY"
+            printf '%s\n' "$DELIM"
+          } >> "$GITHUB_ENV"
+
+      - name: Execute mini-swe-agent via Cloudflare
+        env:
+          CLOUDFLARE_API_KEY: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          TASK_TITLE: >-
+            ${{ github.event_name == 'issues'
+                && github.event.issue.title
+                || env.ISSUE_TITLE }}
+          TASK_BODY: >-
+            ${{ github.event_name == 'issues'
+                && github.event.issue.body
+                || env.ISSUE_BODY }}
+        run: |
+          set -euo pipefail
+          # Run generated commands in a non-root, isolated container.
+          DOCKER_RUN_ARGS="$(jq -cn \
+            --arg workspace "$GITHUB_WORKSPACE" \
+            --arg user "$(id -u):$(id -g)" \
+            '[
+              "--rm",
+              "--network", "none",
+              "--cap-drop", "ALL",
+              "--security-opt", "no-new-privileges:true",
+              "--user", $user,
+              "--volume", ($workspace + ":/workspace")
+            ]')"
+          AGENT_ENV="$(jq -cn '{
+            HOME: "/tmp",
+            CLOUDFLARE_API_KEY: "",
+            CLOUDFLARE_API_TOKEN: "",
+            CLOUDFLARE_ACCOUNT_ID: "",
+            GITHUB_TOKEN: "",
+            GH_TOKEN: ""
+          }')"
+          mini \
+            -c mini.yaml \
+            -c "environment.image=node:22-bookworm" \
+            -c "environment.cwd=/workspace" \
+            -c "environment.run_args=$DOCKER_RUN_ARGS" \
+            -c "environment.env=$AGENT_ENV" \
+            --environment-class docker \
+            --task "$TASK_TITLE"$'\n\n'"$TASK_BODY" \
+            --model "cloudflare/@cf/zai-org/glm-5.2" \
+            --yolo
+
+      - name: Create Pull Request with Fix
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # A PAT lets generated PRs trigger the normal CI workflows.
+          token: ${{ secrets.AUTOPILOT_TOKEN }}
+          commit-message: >-
+            fix: automatically resolved by mini-swe-agent using GLM 5.2
+          title: "🤖 GLM 5.2 Fix for Issue #${{ github.event.issue.number }}"
+          body: >-
+            This PR was generated automatically by mini-swe-agent using GLM 5.2
+            via Cloudflare Workers AI.
+          branch: "mini-swe/fix-issue-${{ github.event.issue.number }}"
+          delete-branch: true
