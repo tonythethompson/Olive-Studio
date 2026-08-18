@@ -293,7 +293,9 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
     if (evt.type === "error") {
       const urlToOpen = state.openedUrl || evt.openedUrl;
       if (urlToOpen) {
-        void openExternal(urlToOpen);
+        void openExternal(urlToOpen).catch((err) => {
+          console.error("Failed to open external URL:", err);
+        });
       }
       throw new Error(evt.error || evt.message || "Setup failed");
     }
@@ -327,7 +329,11 @@ export function useLocalEngineSetup({ isOpen, onModelActivated }: UseLocalEngine
       openedUrl?: string;
     };
     if (!r.ok || !data.ok) {
-      if (data.openedUrl) void openExternal(data.openedUrl);
+      if (data.openedUrl) {
+        void openExternal(data.openedUrl).catch((err) => {
+          console.error("Failed to open external URL:", err);
+        });
+      }
       throw new Error(data.error || data.message || `HTTP ${r.status}`);
     }
     setLocalInstallInfo(data.message || "Engine ready.");

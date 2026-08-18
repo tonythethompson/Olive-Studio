@@ -22,6 +22,7 @@ import { OLIVE_ASK_AI_CHAT, type AskAiChatDetail } from "@/lib/aiChatBridge";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PipelineStatusSummary } from "@/components/features/pipeline/PipelineStatusSummary";
 import { PipelineSectionGate } from "@/components/features/pipeline/PipelineSectionGate";
+import { ServerConnectionBanner } from "@/components/ServerConnectionBanner";
 
 const BatchProcessingPanel = lazy(() =>
   import("@/components/features/execute/BatchProcessingPanel").then((m) => ({ default: m.BatchProcessingPanel })),
@@ -401,6 +402,7 @@ function Dashboard() {
     <DesktopMinimumViewport>
       <div className="flex flex-col h-screen bg-slate-950 text-slate-300 overflow-hidden font-sans">
         <TitleBar />
+        <ServerConnectionBanner />
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <a
             href="#main"

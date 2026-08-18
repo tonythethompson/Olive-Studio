@@ -5,34 +5,99 @@
  * @returns The parsed JSON value
  * @throws Error if the response is empty or does not contain valid JSON
  */
+/** Extract fenced code blocks from text, classifying by language tag. */
+function extractFencedBlocks(
+  text: string,
+): { jsonBlocks: string[]; otherBlocks: string[] } {
+  const jsonBlocks: string[] = [];
+  const otherBlocks: string[] = [];
+  const fenceRegex = /```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/gi;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRegex.exec(text)) !== null) {
+    const lang = (match[1] ?? "").toLowerCase();
+    const content = match[2]?.trim();
+    if (!content) continue;
+    if (lang === "json" || lang === "jsonc" || lang === "json5") {
+      jsonBlocks.push(content);
+    } else {
+      otherBlocks.push(content);
+    }
+  }
+  return { jsonBlocks, otherBlocks };
+}
+
+/** Build a prioritized, de-duplicated candidate list for JSON parsing. */
+function buildCandidateList(
+  trimmed: string,
+  jsonBlocks: string[],
+  otherBlocks: string[],
+): string[] {
+  // Prioritize candidates:
+  // 1. Explicit ```json blocks
+  // 2. Balanced JSON chunks from overall text
+  // 3. Balanced JSON chunks from explicit json blocks
+  // 4. Raw trimmed response
+  // 5. Other untagged / non-JSON fenced code blocks (fallback)
+  const rawCandidates = [
+    ...jsonBlocks,
+    ...collectBalancedJsonCandidates(trimmed),
+    ...jsonBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
+    trimmed,
+    ...otherBlocks,
+    ...otherBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
+  ];
+
+  // De-duplicate candidates while preserving priority order
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const c of rawCandidates) {
+    const s = c.trim();
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      candidates.push(s);
+    }
+  }
+  return candidates;
+}
+
+/** Attempt to parse a candidate string as JSON, with soft repair fallback. */
+function tryParseJson(
+  candidate: string,
+): { value: unknown } | { error: Error } {
+  try {
+    return { value: JSON.parse(candidate) };
+  } catch (err) {
+    const repaired = softRepairJson(candidate);
+    if (repaired && repaired !== candidate) {
+      try {
+        return { value: JSON.parse(repaired) };
+      } catch (err2) {
+        return { error: err2 instanceof Error ? err2 : new Error(String(err2)) };
+      }
+    }
+    return { error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
 export function parseJsonFromAiResponse(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) {
     throw new Error("AI response was empty.");
   }
 
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
-  const balancedCandidates = collectBalancedJsonCandidates(candidate);
-  const attempts = [candidate, ...balancedCandidates, softRepairJson(candidate)].filter((s): s is string =>
-    Boolean(s && s.trim()),
+  const { jsonBlocks: explicitJsonBlocks, otherBlocks: otherFencedBlocks } =
+    extractFencedBlocks(trimmed);
+  const candidates = buildCandidateList(
+    trimmed,
+    explicitJsonBlocks,
+    otherFencedBlocks,
   );
 
   let lastErr: Error | undefined;
-  for (const attempt of attempts) {
-    try {
-      return JSON.parse(attempt);
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      const repaired = softRepairJson(attempt);
-      if (repaired && repaired !== attempt) {
-        try {
-          return JSON.parse(repaired);
-        } catch (err2) {
-          lastErr = err2 instanceof Error ? err2 : new Error(String(err2));
-        }
-      }
-    }
+  for (const candidate of candidates) {
+    const result = tryParseJson(candidate);
+    if ("value" in result) return result.value;
+    lastErr = result.error;
   }
 
   const detail = lastErr?.message ? ` (${lastErr.message})` : "";

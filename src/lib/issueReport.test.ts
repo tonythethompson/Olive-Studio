@@ -50,17 +50,52 @@ describe("redactSecrets", () => {
     expect(redactSecrets('api_key="sk-1234567890abcdef1234567890"')).toContain("[REDACTED]");
   });
 
-  it("redacts standalone JWTs and PEM private keys", () => {
+  it("redacts standalone JWTs and PEM private keys while preserving model names and semantic versions", () => {
     const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturevalue123";
-    const compactJwt = "a.e30.-";
-    const emptySignatureJwt = "a.e30.";
     const pem = "-----BEGIN PRIVATE KEY-----\nsecret-material\n-----END PRIVATE KEY-----";
-    const redacted = redactSecrets(`jwt=${jwt}\ncompact=${compactJwt}\nempty=${emptySignatureJwt}\nkey=${pem}`);
+    const redacted = redactSecrets(`jwt=${jwt}\nkey=${pem}`);
     expect(redacted).not.toContain(jwt);
-    expect(redacted).not.toContain(compactJwt);
-    expect(redacted).not.toContain(emptySignatureJwt);
     expect(redacted).not.toContain("secret-material");
-    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(4);
+    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(2);
+
+    const modelName = "Qwen/Qwen2.5-0.5B-Instruct";
+    const semver = "v1.2.3";
+    expect(redactSecrets(`Model: ${modelName}, Version: ${semver}`)).toBe(`Model: ${modelName}, Version: ${semver}`);
+  });
+
+  it("redacts compact JWTs with short segments", () => {
+    const compact = "eyJhbGciOiJ9.e30.x";
+    const redacted = redactSecrets(`token=${compact}`);
+    expect(redacted).not.toContain(compact);
+    expect(redacted).toContain("[REDACTED]");
+  });
+
+  it("redacts complete five-segment compact JWEs in one match", () => {
+    const jwe =
+      "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4R0NNIn0.encryptedKey123456.ivSegment123456.ciphertext123456.authTag123456";
+    const redacted = redactSecrets(`token=${jwe}`);
+    expect(redacted).not.toContain(jwe);
+    // The full five segments must be consumed — no trailing segment may survive.
+    expect(redacted).not.toContain("encryptedKey123456");
+    expect(redacted).not.toContain("ciphertext123456");
+    expect(redacted).not.toContain("authTag123456");
+    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(1);
+  });
+
+  it("redacts three-segment dotted tokens that do not start with eyJ", () => {
+    const nonEyJ = "AbCdEfGh12345678.payload12345678.signature1234";
+    const redacted = redactSecrets(`session=${nonEyJ}`);
+    expect(redacted).not.toContain(nonEyJ);
+    expect(redacted).toContain("[REDACTED]");
+  });
+
+  it("does not redact model names, semver, or short dotted identifiers as JWTs", () => {
+    // Slash-qualified HF model ids with dots must survive.
+    expect(redactSecrets("Qwen/Qwen2.5-0.5B-Instruct")).toBe("Qwen/Qwen2.5-0.5B-Instruct");
+    // Short dotted tokens (segments < 8 chars, not eyJ) are not secrets.
+    expect(redactSecrets("node.js.org")).toBe("node.js.org");
+    expect(redactSecrets("package.json.bak")).toBe("package.json.bak");
+    expect(redactSecrets("1.0.0")).toBe("1.0.0");
   });
 
   it("redacts Windows user paths", () => {
@@ -115,7 +150,7 @@ describe("collectTelemetry", () => {
     const state = {
       hfModelId: "bert-base-uncased",
       ihvProvider: "CUDAExecutionProvider",
-    openvinoTargetDevice: "CPU",
+      openvinoTargetDevice: "CPU",
       modelSource: "huggingface" as const,
       passes: { conversion: true, quantization: false, pruning: false, onnxTransforms: false },
     } as BuildReportOptions["state"];

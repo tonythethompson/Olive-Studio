@@ -779,4 +779,25 @@ describe("Property 3: Non-Patch Actions Preserve Store", () => {
       { numRuns: 100 },
     );
   });
+
+  it("executeApplyPatchAction gates trustRemoteCode=true unless confirmGated is explicitly granted", () => {
+    const patchAction: ActionPayloadApplyPatch = {
+      kind: "applyPatch",
+      label: "Enable Trust Remote Code",
+      payload: {
+        hfModelId: "custom/arch-model",
+        trustRemoteCode: true,
+      },
+    };
+
+    // In headless test without confirmGated options, trustRemoteCode=true is blocked (stays false)
+    const resultUnconfirmed = executeAction(patchAction);
+    expect(resultUnconfirmed.success).toBe(true);
+    expect(usePipelineStore.getState().state.passes.trustRemoteCode).toBe(false);
+
+    // When confirmGated: true is provided, trustRemoteCode=true is applied
+    const resultConfirmed = executeAction(patchAction, { confirmGated: true });
+    expect(resultConfirmed.success).toBe(true);
+    expect(usePipelineStore.getState().state.passes.trustRemoteCode).toBe(true);
+  });
 });

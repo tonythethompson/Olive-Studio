@@ -106,3 +106,65 @@ describe("bedrock buildConfig", () => {
     expect(cfg.apiKey).toBe("");
   });
 });
+
+describe("bedrock createBedrockClient validation", () => {
+  const saved = {
+    secret: process.env.AWS_SECRET_ACCESS_KEY,
+    token: process.env.AWS_SESSION_TOKEN,
+    region: process.env.AWS_REGION,
+  };
+
+  beforeEach(() => {
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    delete process.env.AWS_SESSION_TOKEN;
+    delete process.env.AWS_REGION;
+  });
+
+  afterEach(() => {
+    if (saved.secret === undefined) delete process.env.AWS_SECRET_ACCESS_KEY;
+    else process.env.AWS_SECRET_ACCESS_KEY = saved.secret;
+    if (saved.token === undefined) delete process.env.AWS_SESSION_TOKEN;
+    else process.env.AWS_SESSION_TOKEN = saved.token;
+    if (saved.region === undefined) delete process.env.AWS_REGION;
+    else process.env.AWS_REGION = saved.region;
+  });
+
+  it("throws a credentials-format error for a non-empty malformed apiKey", async () => {
+    const provider = getProvider("bedrock")!;
+    const cfg = {
+      provider: "bedrock" as const,
+      apiKey: "not-a-valid-key",
+      model: "anthropic.claude-3-5-haiku-20241022-v1:0",
+      baseUrl: "us-east-1",
+    };
+    await expect(provider.call(cfg, "system", [], false)).rejects.toThrow(
+      /Invalid AWS Bedrock credentials format/,
+    );
+  });
+
+  it("throws a credentials-format error for a non-empty malformed apiKey with surrounding whitespace", async () => {
+    const provider = getProvider("bedrock")!;
+    const cfg = {
+      provider: "bedrock" as const,
+      apiKey: "  garbage-key  ",
+      model: "anthropic.claude-3-5-haiku-20241022-v1:0",
+      baseUrl: "us-east-1",
+    };
+    await expect(provider.call(cfg, "system", [], false)).rejects.toThrow(
+      /Invalid AWS Bedrock credentials format/,
+    );
+  });
+
+  it("throws an incomplete-credentials error for a half-packed apiKey (access key without secret)", async () => {
+    const provider = getProvider("bedrock")!;
+    const cfg = {
+      provider: "bedrock" as const,
+      apiKey: "AKIAEXAMPLE:  ",
+      model: "anthropic.claude-3-5-haiku-20241022-v1:0",
+      baseUrl: "us-east-1",
+    };
+    await expect(provider.call(cfg, "system", [], false)).rejects.toThrow(
+      /incomplete/i,
+    );
+  });
+});

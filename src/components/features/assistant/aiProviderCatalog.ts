@@ -1,3 +1,6 @@
+import { CLOUDFLARE_FALLBACK_MODELS } from "@/lib/cloudflare/client.ts";
+import { DEVIN_FALLBACK_MODELS } from "@/lib/devin/client.ts";
+
 export interface ProviderOption {
   readonly id: string;
   readonly name: string;
@@ -143,7 +146,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "opencode",
     name: "OpenCode Zen",
-    models: ["default"],
+    models: ["kimi-k2.7-code", "claude-3-5-sonnet", "deepseek-r1", "gpt-4o", "meta-llama/llama-3.3-70b-instruct"],
     keyEnvVar: "OPENCODE_API_KEY",
     docsUrl: "opencode.ai",
     baseUrl: "https://opencode.ai/zen/v1",
@@ -152,7 +155,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "opencode-go",
     name: "OpenCode Go",
-    models: ["default"],
+    models: ["kimi-k2.7-code", "claude-3-5-sonnet", "deepseek-r1", "gpt-4o", "meta-llama/llama-3.3-70b-instruct"],
     keyEnvVar: "OPENCODE_API_KEY",
     docsUrl: "opencode.ai",
     baseUrl: "https://opencode.ai/zen/go/v1",
@@ -162,7 +165,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "cloudflare",
     name: "Cloudflare Workers AI",
-    models: ["@cf/meta/llama-3.1-8b-instruct"],
+    models: CLOUDFLARE_FALLBACK_MODELS.map((m) => m.id),
     keyEnvVar: "CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID",
     docsUrl: "developers.cloudflare.com/workers-ai",
     category: "subscription",
@@ -196,7 +199,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "devin",
     name: "Devin",
-    models: ["swe-1-6", "swe-1-7", "claude-sonnet-4", "claude-opus-4", "gpt-4o", "kimi-k2"],
+    models: DEVIN_FALLBACK_MODELS.map((m) => m.id),
     keyEnvVar: "",
     docsUrl: "devin.ai",
     category: "subscription",

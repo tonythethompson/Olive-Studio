@@ -17,7 +17,13 @@ import type {
 } from "@/lib/types/findingTypes";
 import { usePipelineStore } from "@/lib/stores/pipelineStore";
 import { commitUiStateUpdate } from "@/lib/pipelineValidation";
-import { sanitizeChatActionPatch, chatPatchToUiState } from "@/lib/chatActions";
+import {
+  sanitizeChatActionPatch,
+  chatPatchToUiState,
+  stripGatedFields,
+  confirmGatedPatchFields,
+  type ChatPatchOptions,
+} from "@/lib/chatActions";
 import {
   isPipelineViewId,
   navigatePipeline,
@@ -111,12 +117,15 @@ export function executeDocumentationAction(
   };
 }
 
+export interface ExecuteApplyPatchOptions extends ChatPatchOptions {}
+
 /**
  * Execute an applyPatch action.
  * Applies the patch through commitUiStateUpdate. DOES modify PipelineStore.
  */
 export function executeApplyPatchAction(
   action: ActionPayloadApplyPatch,
+  options?: ExecuteApplyPatchOptions,
 ): ActionExecutionResult {
   const patch = sanitizeChatActionPatch(action.payload);
   if (!patch) {
@@ -126,8 +135,10 @@ export function executeApplyPatchAction(
       modifiedStore: false,
     };
   }
+  const confirmGated = options?.confirmGated ?? confirmGatedPatchFields(patch);
   const currentState = usePipelineStore.getState().state;
-  const partial = chatPatchToUiState(currentState, patch);
+  const appliedPatch = confirmGated ? patch : stripGatedFields(patch);
+  const partial = chatPatchToUiState(currentState, appliedPatch, { confirmGated });
   // Pass through commitUiStateUpdate to get the committed result, then
   // apply via replaceState so callers can detect coercion differences.
   const committed = commitUiStateUpdate(currentState, partial);
@@ -148,10 +159,13 @@ export function executeApplyPatchAction(
  * **Key invariant:** navigate, explain, and documentation actions return
  * `modifiedStore: false` and never call PipelineStore.setState.
  */
-export function executeAction(action: Action): ActionExecutionResult {
+export function executeAction(
+  action: Action,
+  options?: ExecuteApplyPatchOptions,
+): ActionExecutionResult {
   switch (action.kind) {
     case "applyPatch":
-      return executeApplyPatchAction(action);
+      return executeApplyPatchAction(action, options);
     case "navigate":
       return executeNavigateAction(action);
     case "explain":
