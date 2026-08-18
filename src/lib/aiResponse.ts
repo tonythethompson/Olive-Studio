@@ -5,28 +5,33 @@
  * @returns The parsed JSON value
  * @throws Error if the response is empty or does not contain valid JSON
  */
-export function parseJsonFromAiResponse(text: string): unknown {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    throw new Error("AI response was empty.");
-  }
-
-  // Extract all fenced code block contents, classifying by tag
-  const explicitJsonBlocks: string[] = [];
-  const otherFencedBlocks: string[] = [];
+/** Extract fenced code blocks from text, classifying by language tag. */
+function extractFencedBlocks(
+  text: string,
+): { jsonBlocks: string[]; otherBlocks: string[] } {
+  const jsonBlocks: string[] = [];
+  const otherBlocks: string[] = [];
   const fenceRegex = /```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/gi;
   let match: RegExpExecArray | null;
-  while ((match = fenceRegex.exec(trimmed)) !== null) {
+  while ((match = fenceRegex.exec(text)) !== null) {
     const lang = (match[1] ?? "").toLowerCase();
     const content = match[2]?.trim();
     if (!content) continue;
     if (lang === "json" || lang === "jsonc" || lang === "json5") {
-      explicitJsonBlocks.push(content);
+      jsonBlocks.push(content);
     } else {
-      otherFencedBlocks.push(content);
+      otherBlocks.push(content);
     }
   }
+  return { jsonBlocks, otherBlocks };
+}
 
+/** Build a prioritized, de-duplicated candidate list for JSON parsing. */
+function buildCandidateList(
+  trimmed: string,
+  jsonBlocks: string[],
+  otherBlocks: string[],
+): string[] {
   // Prioritize candidates:
   // 1. Explicit ```json blocks
   // 2. Balanced JSON chunks from overall text
@@ -34,12 +39,12 @@ export function parseJsonFromAiResponse(text: string): unknown {
   // 4. Raw trimmed response
   // 5. Other untagged / non-JSON fenced code blocks (fallback)
   const rawCandidates = [
-    ...explicitJsonBlocks,
+    ...jsonBlocks,
     ...collectBalancedJsonCandidates(trimmed),
-    ...explicitJsonBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
+    ...jsonBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
     trimmed,
-    ...otherFencedBlocks,
-    ...otherFencedBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
+    ...otherBlocks,
+    ...otherBlocks.flatMap((b) => collectBalancedJsonCandidates(b)),
   ];
 
   // De-duplicate candidates while preserving priority order
@@ -52,22 +57,47 @@ export function parseJsonFromAiResponse(text: string): unknown {
       candidates.push(s);
     }
   }
+  return candidates;
+}
+
+/** Attempt to parse a candidate string as JSON, with soft repair fallback. */
+function tryParseJson(
+  candidate: string,
+): { value: unknown } | { error: Error } {
+  try {
+    return { value: JSON.parse(candidate) };
+  } catch (err) {
+    const repaired = softRepairJson(candidate);
+    if (repaired && repaired !== candidate) {
+      try {
+        return { value: JSON.parse(repaired) };
+      } catch (err2) {
+        return { error: err2 instanceof Error ? err2 : new Error(String(err2)) };
+      }
+    }
+    return { error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
+export function parseJsonFromAiResponse(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("AI response was empty.");
+  }
+
+  const { jsonBlocks: explicitJsonBlocks, otherBlocks: otherFencedBlocks } =
+    extractFencedBlocks(trimmed);
+  const candidates = buildCandidateList(
+    trimmed,
+    explicitJsonBlocks,
+    otherFencedBlocks,
+  );
 
   let lastErr: Error | undefined;
   for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      const repaired = softRepairJson(candidate);
-      if (repaired && repaired !== candidate) {
-        try {
-          return JSON.parse(repaired);
-        } catch (err2) {
-          lastErr = err2 instanceof Error ? err2 : new Error(String(err2));
-        }
-      }
-    }
+    const result = tryParseJson(candidate);
+    if ("value" in result) return result.value;
+    lastErr = result.error;
   }
 
   const detail = lastErr?.message ? ` (${lastErr.message})` : "";
