@@ -70,6 +70,18 @@ describe("redactSecrets", () => {
     expect(redacted).toContain("[REDACTED]");
   });
 
+  it("redacts complete five-segment compact JWEs in one match", () => {
+    const jwe =
+      "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4R0NNIn0.encryptedKey123456.ivSegment123456.ciphertext123456.authTag123456";
+    const redacted = redactSecrets(`token=${jwe}`);
+    expect(redacted).not.toContain(jwe);
+    // The full five segments must be consumed — no trailing segment may survive.
+    expect(redacted).not.toContain("encryptedKey123456");
+    expect(redacted).not.toContain("ciphertext123456");
+    expect(redacted).not.toContain("authTag123456");
+    expect(redacted.match(/\[REDACTED\]/g)?.length).toBe(1);
+  });
+
   it("redacts three-segment dotted tokens that do not start with eyJ", () => {
     const nonEyJ = "AbCdEfGh12345678.payload12345678.signature1234";
     const redacted = redactSecrets(`session=${nonEyJ}`);

@@ -30,8 +30,8 @@ async function renameDir(from: string, to: string, maxAttempts = 10): Promise<vo
       lastError = err;
       const code = (err as NodeJS.ErrnoException | null | undefined)?.code;
       const isTransient = code === "EPERM" || code === "EBUSY" || code === "EACCES";
-      if (!isTransient) {
       if (!isTransient || attempt === maxAttempts) {
+        throw err;
       }
       await sleep(50 * attempt);
     }

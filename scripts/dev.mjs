@@ -32,10 +32,20 @@ const child = spawn(
 );
 
 let completed = false;
+let childExited = false;
+
+const signalHandlers = new Map();
+
+const removeSignalListeners = () => {
+  for (const [signal, handler] of signalHandlers) {
+    process.removeListener(signal, handler);
+  }
+};
 
 child.on("error", (err) => {
   if (completed) return;
   completed = true;
+  childExited = true;
   console.error("Failed to start dev server:", err.message);
   process.exit(1);
 });
@@ -43,28 +53,23 @@ child.on("error", (err) => {
 child.on("exit", (code, signal) => {
   if (completed) return;
   completed = true;
+  childExited = true;
   if (signal) {
+    // Remove our handlers first so re-signaling self actually terminates the
+    // launcher instead of being caught by this same handler again.
+    removeSignalListeners();
     process.kill(process.pid, signal);
   } else {
     process.exit(code ?? 0);
   }
 });
 
-let childExited = false;
-child.on("exit", () => {
-  childExited = true;
-});
-
-const signalHandlers = new Map();
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   const handler = () => {
     if (!childExited && !child.killed) {
       child.kill(sig);
     } else if (childExited) {
-      // Remove all signal listeners before re-signaling self
-      for (const [signal, h] of signalHandlers) {
-        process.removeListener(signal, h);
-      }
+      removeSignalListeners();
       process.kill(process.pid, sig);
     }
   };

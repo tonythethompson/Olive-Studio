@@ -425,7 +425,9 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
         if (typeof value === "boolean") {
           trustRemoteCode = value;
         } else if (typeof value === "string") {
-          trustRemoteCode = value.toLowerCase() === "true";
+          const normalized = value.trim().toLowerCase();
+          if (normalized === "true") trustRemoteCode = true;
+          else if (normalized === "false") trustRemoteCode = false;
         }
       }
 

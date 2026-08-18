@@ -14,6 +14,7 @@ import {
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
 import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR, reconnectMcpClient } from "../services/mcp/client.ts";
+import { getMcpPython } from "../services/mcp/paths.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.ts";
 import {
@@ -448,11 +449,11 @@ export function mountMcpRoutes(router: Router): void {
   // ─── MCP Health ────────────────────────────────────────────────────────
   router.get("/mcp/health", studioLocalOnly, kbStatusRateLimit, async (_req, res) => {
     const isRemote = Boolean(process.env.OLIVE_MCP_URL);
-    const mcpVenvPython =
-      process.platform === "win32"
-        ? path.join(process.cwd(), "olive-mcp-server", ".venv", "Scripts", "python.exe")
-        : path.join(process.cwd(), "olive-mcp-server", ".venv", "bin", "python");
-    const venvExists = isRemote ? undefined : fs.existsSync(mcpVenvPython);
+    // getMcpPython() mirrors what the MCP client actually launches: it prefers
+    // olive-mcp-server/.venv and falls back to the repo-root .venv. Reporting
+    // existence of that exact interpreter keeps venvExists consistent with
+    // whether MCP can start locally.
+    const venvExists = isRemote ? undefined : fs.existsSync(getMcpPython());
     try {
       const out = await callOliveMcpTool("get_mcp_capabilities", {});
       if (out.unavailable || out.error) {

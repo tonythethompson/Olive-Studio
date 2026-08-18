@@ -102,6 +102,10 @@ export const AgentAccessControls = memo(function AgentAccessControls({
     }
   }, []);
 
+  // Monotonic request generation: only the most recent refresh/update may apply
+  // its result, so a stale GET response cannot overwrite a newer PUT outcome.
+  const requestGenRef = useRef(0);
+
   useEffect(() => {
     return () => {
       clearBusyTimer();
@@ -109,6 +113,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
   }, [clearBusyTimer]);
 
   const refresh = useCallback(async () => {
+    const gen = ++requestGenRef.current;
     clearBusyTimer();
     setBusy(true);
     setError(null);
@@ -121,16 +126,22 @@ export const AgentAccessControls = memo(function AgentAccessControls({
       };
       if (!res.ok) throw new Error(formatAgentAccessError(res.status, data.error));
       if (!data.policy) throw new Error("Missing policy payload");
-      setPolicy(data.policy);
-      setError(null);
+      if (gen === requestGenRef.current) {
+        setPolicy(data.policy);
+        setError(null);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (gen === requestGenRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      clearBusyTimer();
-      busyTimerRef.current = setTimeout(() => {
-        setBusy(false);
-        busyTimerRef.current = null;
-      }, 300);
+      if (gen === requestGenRef.current) {
+        clearBusyTimer();
+        busyTimerRef.current = setTimeout(() => {
+          setBusy(false);
+          busyTimerRef.current = null;
+        }, 300);
+      }
     }
   }, [clearBusyTimer]);
 
@@ -188,6 +199,7 @@ export const AgentAccessControls = memo(function AgentAccessControls({
       setError("Policy changes require opening Studio on localhost (127.0.0.1).");
       return;
     }
+    const gen = ++requestGenRef.current;
     clearBusyTimer();
     setBusy(true);
     setMessage(null);
@@ -204,14 +216,20 @@ export const AgentAccessControls = memo(function AgentAccessControls({
       };
       if (!res.ok) throw new Error(formatAgentAccessError(res.status, data.error));
       if (!data.policy) throw new Error("Missing policy payload");
-      setPolicy(data.policy);
-      setMessage("Saved.");
-      setError(null);
+      if (gen === requestGenRef.current) {
+        setPolicy(data.policy);
+        setMessage("Saved.");
+        setError(null);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (gen === requestGenRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      clearBusyTimer();
-      setBusy(false);
+      if (gen === requestGenRef.current) {
+        clearBusyTimer();
+        setBusy(false);
+      }
     }
   };
 

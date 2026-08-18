@@ -59,6 +59,34 @@ describe("sanitizeChatActionPatch", () => {
     });
   });
 
+  it("promotes nested passes.trustRemoteCode through the gated top-level field", () => {
+    const patch = sanitizeChatActionPatch({
+      passes: { quantization: true, trustRemoteCode: true },
+    });
+    expect(patch).not.toBeNull();
+    expect(patch).toEqual({
+      trustRemoteCode: true,
+      passes: { quantization: true },
+    });
+    // The nested value must be gated like a top-level one: blocked without confirmation,
+    // leaving the prior (false) value untouched rather than silently enabling it.
+    const state = baseState();
+    const next = chatPatchToUiState(state, patch!);
+    expect(next.passes?.trustRemoteCode).toBe(false);
+    const confirmed = chatPatchToUiState(state, patch!, { confirmGated: true });
+    expect(confirmed.passes?.trustRemoteCode).toBe(true);
+  });
+
+  it("does not promote nested passes.trustRemoteCode when a top-level value wins", () => {
+    const patch = sanitizeChatActionPatch({
+      trustRemoteCode: false,
+      passes: { trustRemoteCode: true },
+    });
+    // Disabling at the top level wins; the nested enable is dropped entirely.
+    expect(patch?.trustRemoteCode).toBe(false);
+    expect(patch?.passes).toBeUndefined();
+  });
+
   it("rejects invalid providers and empty patches", () => {
     expect(sanitizeChatActionPatch({ ihvProvider: "NotARealEP" })).toBeNull();
     expect(sanitizeChatActionPatch({})).toBeNull();
@@ -196,6 +224,15 @@ describe("parseChatStructuredReply", () => {
     const quantOnly = salvageChatActionPatchFromLooseJson({ step: "apply_quantization" });
     expect(quantOnly?.passes?.quantization).toBe(true);
     expect(quantOnly?.passes?.quantMethod).toBe("ptq");
+  });
+
+  it("parses trustRemoteCode loose strings only for explicit true/false", () => {
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: "true" })?.trustRemoteCode).toBe(true);
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: " TRUE " })?.trustRemoteCode).toBe(true);
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: "false" })?.trustRemoteCode).toBe(false);
+    // Unrecognized strings must not silently disable an existing toggle.
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: "yes please" })?.trustRemoteCode).toBeUndefined();
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: " " })?.trustRemoteCode).toBeUndefined();
   });
 
   it("does not salvage passes from free-form prose fields like note", () => {
