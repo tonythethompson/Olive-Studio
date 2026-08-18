@@ -95,7 +95,13 @@ export function mountLmStudioRoutes(router: Router): void {
         body: JSON.stringify({ model: modelTag }),
       });
       if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
+        const text = await r.text();
+        let d: unknown;
+        try {
+          d = JSON.parse(text);
+        } catch {
+          d = text;
+        }
         return res.status(500).json({ error: extractErrorMessage(d, `HTTP ${r.status}`) });
       }
       return res.json({ ok: true });
@@ -117,7 +123,13 @@ export function mountLmStudioRoutes(router: Router): void {
         body: JSON.stringify({ model: modelTag }),
       });
       if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
+        const text = await r.text();
+        let d: unknown;
+        try {
+          d = JSON.parse(text);
+        } catch {
+          d = text;
+        }
         return res.status(500).json({ error: extractErrorMessage(d, `HTTP ${r.status}`) });
       }
       return res.json({ ok: true });

@@ -1,3 +1,6 @@
+import { CLOUDFLARE_FALLBACK_MODELS } from "@/lib/cloudflare/client.ts";
+import { DEVIN_FALLBACK_MODELS } from "@/lib/devin/client.ts";
+
 export interface ProviderOption {
   readonly id: string;
   readonly name: string;
@@ -162,13 +165,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "cloudflare",
     name: "Cloudflare Workers AI",
-    models: [
-      "@cf/meta/llama-3.1-8b-instruct",
-      "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-      "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-      "@cf/mistral/mistral-7b-instruct-v0.2",
-      "@cf/qwen/qwen2.5-coder-32b-instruct",
-    ],
+    models: CLOUDFLARE_FALLBACK_MODELS.map((m) => m.id),
     keyEnvVar: "CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID",
     docsUrl: "developers.cloudflare.com/workers-ai",
     category: "subscription",
@@ -202,7 +199,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "devin",
     name: "Devin",
-    models: ["swe-1-6", "swe-1-7", "claude-3-5-sonnet", "claude-3-7-sonnet", "gpt-4o", "kimi-k2"],
+    models: DEVIN_FALLBACK_MODELS.map((m) => m.id),
     keyEnvVar: "",
     docsUrl: "devin.ai",
     category: "subscription",

@@ -82,11 +82,11 @@ const SECRET_PATTERNS: RegExp[] = [
   /(?:AKIA|ASIA)[A-Z0-9]{16}/g,
   // Bearer tokens (Authorization header)
   /Bearer\s+[A-Za-z0-9\-._~+/]+=*/g,
-  // JSON Web Tokens — canonical form (base64url header starting with eyJ)
-  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*)?(?![A-Za-z0-9_-])/g,
+  // JSON Web Tokens — canonical form (JWS: 3 segments, JWE: 5 segments, base64url header starting with eyJ)
+  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)?(?![A-Za-z0-9_-])/g,
   // Dotted base64url tokens that don't start with eyJ but are long enough to be secrets
-  // (3 segments, each ≥8 chars — safely excludes semver, model names, and short identifiers)
-  /(?<![A-Za-z0-9_\-/])(?!eyJ)[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_\-/])/g,
+  // (3+ segments, each ≥8 chars — safely excludes semver, model names, and short identifiers)
+  /(?<![A-Za-z0-9_\-/])(?!eyJ)[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]{8,})*(?![A-Za-z0-9_\-/])/g,
   // PEM private-key blocks
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/gi,
   // Generic long hex strings that look like secrets (32+ hex chars)

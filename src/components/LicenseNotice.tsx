@@ -43,7 +43,9 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
             <span className="text-slate-200">Olive Studio</span> is free software licensed under the{" "}
             <button
               type="button"
-              onClick={() => void openExternal(MIT_URL)}
+              onClick={() => void openExternal(MIT_URL).catch((err) => {
+                console.error("Failed to open external URL:", err);
+              })}
               className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline"
             >
               MIT License
@@ -58,7 +60,9 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
             Copyright © 2026 Anthony Thompson. Source:{" "}
             <button
               type="button"
-              onClick={() => void openExternal(REPO_URL)}
+              onClick={() => void openExternal(REPO_URL).catch((err) => {
+                console.error("Failed to open external URL:", err);
+              })}
               className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-xs"
             >
               GitHub
@@ -66,7 +70,9 @@ export function LicenseNotice({ open, onClose }: LicenseNoticeProps) {
             {" · "}
             <button
               type="button"
-              onClick={() => void openExternal(LICENSE_URL)}
+              onClick={() => void openExternal(LICENSE_URL).catch((err) => {
+                console.error("Failed to open external URL:", err);
+              })}
               className="text-electric-blue hover:underline cursor-pointer bg-transparent border-none p-0 inline text-xs"
             >
               full license text

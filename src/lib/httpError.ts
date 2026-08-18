@@ -12,15 +12,15 @@
  * @returns The extracted error string.
  */
 export function extractErrorMessage(payload: unknown, fallback: string): string {
-  if (typeof payload === "string") return payload;
+  if (typeof payload === "string" && payload.trim()) return payload;
   if (typeof payload === "object" && payload !== null) {
     const rec = payload as Record<string, unknown>;
-    if (typeof rec.error === "string") return rec.error;
+    if (typeof rec.error === "string" && rec.error.trim()) return rec.error;
     if (typeof rec.error === "object" && rec.error !== null) {
       const inner = rec.error as Record<string, unknown>;
-      if (typeof inner.message === "string") return inner.message;
+      if (typeof inner.message === "string" && inner.message.trim()) return inner.message;
     }
-    if (typeof rec.message === "string") return rec.message;
+    if (typeof rec.message === "string" && rec.message.trim()) return rec.message;
   }
   return fallback;
 }

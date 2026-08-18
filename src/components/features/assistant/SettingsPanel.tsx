@@ -148,6 +148,8 @@ export function SettingsPanel({ providers, local, isOpen }: SettingsPanelProps) 
         <LocalAiSetupCard
           local={local}
           activeModel={providers.providerStatus.model}
+          activeProvider={providers.providerStatus.provider}
+          activeBaseUrl={providers.providerStatus.baseUrl ?? undefined}
           isOpen={isOpen}
           onActivate={async (modelTag, source) => {
             const ok = await providers.enableLocalAiProvider(source, modelTag);

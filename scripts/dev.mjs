@@ -12,9 +12,9 @@ const serverScript = path.join(root, "server.ts");
 
 const existingOptions = process.env.NODE_OPTIONS || "";
 const memoryOption = "--max-old-space-size=4096";
-const nodeOptions = existingOptions.includes("--max-old-space-size")
-  ? existingOptions
-  : `${existingOptions} ${memoryOption}`.trim();
+// Remove any existing --max-old-space-size setting before appending the enforced 4GB policy
+const cleanedOptions = existingOptions.replace(/--max-old-space-size=\d+/g, "").trim();
+const nodeOptions = `${cleanedOptions} ${memoryOption}`.trim();
 
 const isWin = process.platform === "win32";
 const child = spawn(
@@ -23,7 +23,7 @@ const child = spawn(
   {
     cwd: root,
     stdio: "inherit",
-    shell: isWin,
+    shell: false,
     env: {
       ...process.env,
       NODE_OPTIONS: nodeOptions,
@@ -31,7 +31,18 @@ const child = spawn(
   },
 );
 
+let completed = false;
+
+child.on("error", (err) => {
+  if (completed) return;
+  completed = true;
+  console.error("Failed to start dev server:", err.message);
+  process.exit(1);
+});
+
 child.on("exit", (code, signal) => {
+  if (completed) return;
+  completed = true;
   if (signal) {
     process.kill(process.pid, signal);
   } else {
@@ -39,10 +50,24 @@ child.on("exit", (code, signal) => {
   }
 });
 
+let childExited = false;
+child.on("exit", () => {
+  childExited = true;
+});
+
+const signalHandlers = new Map();
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(sig, () => {
-    if (!child.killed) {
+  const handler = () => {
+    if (!childExited && !child.killed) {
       child.kill(sig);
+    } else if (childExited) {
+      // Remove all signal listeners before re-signaling self
+      for (const [signal, h] of signalHandlers) {
+        process.removeListener(signal, h);
+      }
+      process.kill(process.pid, sig);
     }
-  });
+  };
+  signalHandlers.set(sig, handler);
+  process.on(sig, handler);
 }

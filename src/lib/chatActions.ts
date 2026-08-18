@@ -103,6 +103,8 @@ function sanitizePasses(raw: unknown): Partial<UIState["passes"]> | undefined {
   if (!isRecord(raw)) return undefined;
   const out: Partial<UIState["passes"]> = {};
   for (const [key, value] of Object.entries(raw)) {
+    // trustRemoteCode is security-gated and must not pass through nested passes merge
+    if (key === "trustRemoteCode") continue;
     const coerced = coercePassValue(key, value);
     if (coerced === null) continue;
     (out as Record<string, unknown>)[key] = coerced;
@@ -141,8 +143,20 @@ export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   if (typeof raw.cacheDir === "string" && raw.cacheDir.trim()) {
     patch.cacheDir = raw.cacheDir.trim().slice(0, 512);
   }
+
+  // Extract nested passes.trustRemoteCode before sanitizing passes
+  let nestedTrustRemoteCode: boolean | undefined;
+  if (isRecord(raw.passes) && typeof raw.passes.trustRemoteCode === "boolean") {
+    nestedTrustRemoteCode = raw.passes.trustRemoteCode;
+  }
+
   const passes = sanitizePasses(raw.passes);
   if (passes) patch.passes = passes;
+
+  // Process nested trustRemoteCode through the top-level gated field path
+  if (nestedTrustRemoteCode !== undefined && patch.trustRemoteCode === undefined) {
+    patch.trustRemoteCode = nestedTrustRemoteCode;
+  }
 
   return Object.keys(patch).length > 0 ? patch : null;
 }

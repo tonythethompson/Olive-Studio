@@ -133,7 +133,6 @@ function createBedrockClient(cfg: ProviderConfig): BedrockRuntimeClient {
       parsePackedCredentials(normalizedApiKey);
     // Temporary / assumed-role credentials carry a third packed segment;
     // static keys omit it and no env token is mixed in.
-    const { accessKeyId, secretAccessKey, sessionToken } = parsePackedCredentials(cfg.apiKey);
     return new BedrockRuntimeClient({
       region,
       credentials: {

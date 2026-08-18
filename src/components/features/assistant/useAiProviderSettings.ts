@@ -444,7 +444,9 @@ export function useAiProviderSettings({
       };
       if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
       if (data.authUrl) {
-        void openExternal(data.authUrl);
+        void openExternal(data.authUrl).catch((err) => {
+          console.error("Failed to open external URL:", err);
+        });
       }
       setCodexMessage(data.message || "Complete sign-in in the browser, then click Refresh status.");
       // Poll account a few times after login window opens
@@ -496,7 +498,9 @@ export function useAiProviderSettings({
       const r = await fetch("/api/devin/login");
       const data = (await r.json()) as { ok?: boolean; authUrl?: string; error?: string };
       if (!r.ok || !data.ok || !data.authUrl) throw new Error(data.error || `HTTP ${r.status}`);
-      void openExternal(data.authUrl);
+      void openExternal(data.authUrl).catch((err) => {
+        console.error("Failed to open external URL:", err);
+      });
       setDevinMessage("Sign in in the browser, then paste the token shown on the page below.");
     } catch (err: unknown) {
       setProviderSaveError(err instanceof Error ? err.message : String(err));

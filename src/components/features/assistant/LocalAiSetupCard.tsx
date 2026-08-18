@@ -107,7 +107,9 @@ function EngineMissingBanner({
         </button>
         <button
           type="button"
-          onClick={() => void openExternal(isLms ? "https://lmstudio.ai" : "https://ollama.com")}
+          onClick={() => void openExternal(isLms ? "https://lmstudio.ai" : "https://ollama.com").catch((err) => {
+            console.error("Failed to open external URL:", err);
+          })}
           className={`text-xs underline cursor-pointer bg-transparent border-none p-0 ${accentText}`}
         >
           Manual install
@@ -270,6 +272,10 @@ interface LocalAiSetupCardProps {
   local: LocalEngineSetup;
   /** Model currently serving audit/chat, shown by the model manager. */
   activeModel?: string;
+  /** Active provider ID (e.g., "openai-compat" for local engines). */
+  activeProvider?: string;
+  /** Active provider base URL (e.g., "http://127.0.0.1:1234/v1" for LM Studio). */
+  activeBaseUrl?: string;
   isOpen: boolean;
   onActivate?: (modelTag: string, source: LocalEngine) => void | Promise<void>;
 }
@@ -279,10 +285,12 @@ interface LocalAiSetupCardProps {
  *
  * @param local - Local AI engine state and actions
  * @param activeModel - The currently active local model
+ * @param activeProvider - The currently active provider ID
+ * @param activeBaseUrl - The currently active provider base URL
  * @param isOpen - Whether the local model manager is expanded
  * @param onActivate - Called when a model is activated
  */
-export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: LocalAiSetupCardProps) {
+export function LocalAiSetupCard({ local, activeModel, activeProvider, activeBaseUrl, isOpen, onActivate }: LocalAiSetupCardProps) {
   const isLms = local.preferredEngine === "lms";
   const accentText = isLms ? "text-electric-blue" : "text-emerald-400";
   const accentBg = isLms
@@ -364,9 +372,13 @@ export function LocalAiSetupCard({ local, activeModel, isOpen, onActivate }: Loc
       <div className="space-y-2">
         {models.map((m) => {
           const installedId = findInstalledStarterId(m, local.installedModels);
+          // A starter is active only when the current provider is openai-compat with the matching loopback URL
+          const expectedBaseUrl = isLms ? "http://127.0.0.1:1234/v1" : "http://127.0.0.1:11434/v1";
+          const isLocalProviderActive = activeProvider === "openai-compat" && activeBaseUrl === expectedBaseUrl;
           const isStarterActive = Boolean(
             installedId &&
             activeModel &&
+            isLocalProviderActive &&
             (installedId === activeModel ||
               stemsLooselyMatch(activeModel.toLowerCase(), installedId.toLowerCase())),
           );

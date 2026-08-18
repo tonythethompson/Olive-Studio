@@ -341,7 +341,7 @@ async function migrateGpuContaminatedVenv(
       if (cudaNeedsBuild) {
         const cudaPromote = await promoteBuildingToLive("cuda");
         if (!cudaPromote.ok) {
-          writeMigrationJournal("cuda_promoted", cudaPromote.error);
+          writeMigrationJournal("building", cudaPromote.error);
           await clearBuildingRoot("default");
           await clearBuildingRoot("cuda");
           return { ok: false, error: cudaPromote.error };

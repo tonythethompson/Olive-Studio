@@ -155,9 +155,10 @@ export function ReportIssueModal({
     setOpenError(null);
     try {
       if (urlExceededBudget) {
-        // Full prefilled URL was too long: keep complete report on clipboard, open blank form
-        await copyFullText();
-        await openExternal(url);
+        // Full prefilled URL was too long: start opening URL before clipboard copy to preserve user activation
+        const openPromise = openExternal(url);
+        const copyPromise = copyFullText();
+        await Promise.all([openPromise, copyPromise]);
       } else {
         await openExternal(url);
       }
@@ -383,7 +384,7 @@ export function ReportIssueModal({
             </p>
           )}
           {openError && (
-            <p className="text-xs text-red-400 mt-1">
+            <p className="text-xs text-red-400 mt-1" role="alert">
               {openError}. You can copy the report and open GitHub manually.
             </p>
           )}

@@ -13,7 +13,7 @@ import {
   isKbSyncInProgress,
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
-import { callOliveMcpTool, getMcpPython, MCP_UNAVAILABLE_ERROR, reconnectMcpClient } from "../services/mcp/client.ts";
+import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR, reconnectMcpClient } from "../services/mcp/client.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.ts";
 import {
