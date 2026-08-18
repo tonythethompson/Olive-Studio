@@ -120,12 +120,17 @@ function createBedrockClient(cfg: ProviderConfig): BedrockRuntimeClient {
 
   const region = resolveRegion(cfg);
 
-  if (cfg.apiKey?.trim()) {
-    if (!hasExplicitCredentials(cfg)) {
+  const normalizedApiKey = cfg.apiKey?.trim() ?? "";
+
+  if (normalizedApiKey) {
+    if (!hasExplicitCredentials({ ...cfg, apiKey: normalizedApiKey })) {
       throw new Error(
         "Invalid AWS Bedrock credentials format: enter as accessKeyId:secretAccessKey (accessKeyId must start with AKIA or ASIA). Or clear the API key to use your ~/.aws/credentials default profile.",
       );
     }
+
+    const { accessKeyId, secretAccessKey, sessionToken } =
+      parsePackedCredentials(normalizedApiKey);
     // Temporary / assumed-role credentials carry a third packed segment;
     // static keys omit it and no env token is mixed in.
     const { accessKeyId, secretAccessKey, sessionToken } = parsePackedCredentials(cfg.apiKey);
