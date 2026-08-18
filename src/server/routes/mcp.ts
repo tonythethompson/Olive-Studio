@@ -448,9 +448,11 @@ export function mountMcpRoutes(router: Router): void {
   // ─── MCP Health ────────────────────────────────────────────────────────
   router.get("/mcp/health", studioLocalOnly, kbStatusRateLimit, async (_req, res) => {
     const isRemote = Boolean(process.env.OLIVE_MCP_URL);
-    const python = isRemote ? null : getMcpPython();
-    const venvExists = isRemote ? undefined : fs.existsSync(python!);
-
+    const mcpVenvPython =
+      process.platform === "win32"
+        ? path.join(process.cwd(), "olive-mcp-server", ".venv", "Scripts", "python.exe")
+        : path.join(process.cwd(), "olive-mcp-server", ".venv", "bin", "python");
+    const venvExists = isRemote ? undefined : fs.existsSync(mcpVenvPython);
     try {
       const out = await callOliveMcpTool("get_mcp_capabilities", {});
       if (out.unavailable || out.error) {
