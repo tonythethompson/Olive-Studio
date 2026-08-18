@@ -124,12 +124,11 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           # A PAT lets generated PRs trigger the normal CI workflows.
-          token: ${{ secrets.AUTOPILOT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: >-
             fix: automatically resolved by mini-swe-agent using GLM 5.2
           title: "🤖 GLM 5.2 Fix for Issue #${{ github.event.issue.number }}"
           body: >-
-            This PR was generated automatically by mini-swe-agent using GLM 5.2
-            via Cloudflare Workers AI.
+            This PR was generated automatically by mini-swe-agent. 
           branch: "mini-swe/fix-issue-${{ github.event.issue.number }}"
           delete-branch: true
