@@ -65,7 +65,7 @@ jobs:
           TASK_BODY: ${{ github.event.issue.body || env.ISSUE_BODY }}
         run: |
           mini \
-            --task "$TASK_TITLE\n\n$TASK_BODY" \
+            --task "$TASK_TITLE"$'\n\n'"$TASK_BODY" \
             --model "cloudflare/@cf/zai-org/glm-5.2" \
             --yolo
           
