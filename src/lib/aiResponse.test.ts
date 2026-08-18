@@ -65,4 +65,55 @@ describe("parseJsonFromAiResponse", () => {
     ) as { score: number };
     expect(parsed.score).toBe(88);
   });
+
+  it("prefers explicit ```json block over earlier non-JSON code blocks", () => {
+    const text = `Here is a python snippet:
+\`\`\`python
+import olive
+print("not json")
+\`\`\`
+
+And here is the recommendation:
+\`\`\`json
+{
+  "reply": "Optimized",
+  "actions": []
+}
+\`\`\``;
+    const parsed = parseJsonFromAiResponse(text) as { reply: string };
+    expect(parsed.reply).toBe("Optimized");
+  });
+
+  it("finds parsable JSON among multiple untagged fenced blocks", () => {
+    const text = `Sample code:
+\`\`\`
+const a = 1;
+const b = 2;
+\`\`\`
+
+Configuration payload:
+\`\`\`
+{
+  "score": 95
+}
+\`\`\``;
+    const parsed = parseJsonFromAiResponse(text) as { score: number };
+    expect(parsed.score).toBe(95);
+  });
+
+  it("prefers balanced JSON in prose over non-JSON code block fallback", () => {
+    const text = `Sample snippet:
+\`\`\`bash
+echo 123
+\`\`\`
+
+And the structured analysis:
+{
+  "score": 99,
+  "level": "Optimized"
+}`;
+    const parsed = parseJsonFromAiResponse(text) as { score: number; level: string };
+    expect(parsed.score).toBe(99);
+    expect(parsed.level).toBe("Optimized");
+  });
 });

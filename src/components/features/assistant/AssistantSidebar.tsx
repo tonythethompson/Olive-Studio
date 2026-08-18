@@ -8,7 +8,13 @@ import {
   buildChatPresetQueries,
   buildWorkspaceContextSummary,
 } from "@/lib/aiWorkspaceContext";
-import { chatPatchToUiState, sanitizeChatActionPatch, type ChatAction } from "@/lib/chatActions";
+import {
+  chatPatchToUiState,
+  sanitizeChatActionPatch,
+  stripGatedFields,
+  confirmGatedPatchFields,
+  type ChatAction,
+} from "@/lib/chatActions";
 import { Bot, X, MessageSquareCode, Settings2, Shield, Bug } from "lucide-react";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { PipelineReview } from "./PipelineReview";
@@ -153,7 +159,9 @@ export function AssistantSidebar({
   const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
     const patch = sanitizeChatActionPatch(action.patch);
     if (!patch) return;
-    const partial = chatPatchToUiState(state, patch);
+    const confirmGated = confirmGatedPatchFields(patch);
+    const appliedPatch = confirmGated ? patch : stripGatedFields(patch);
+    const partial = chatPatchToUiState(state, appliedPatch, { confirmGated });
     setState(partial);
     chat.markActionApplied(messageIndex, action.id);
     // Route post-patch refresh through PipelineReview's schedulePostPatchRefresh.
@@ -205,7 +213,7 @@ export function AssistantSidebar({
     if (!openToAudit) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
-    requestReviewRefresh();
+    requestReviewRefresh({ resetFirst: true });
     onAuditOpened?.();
   }, [openToAudit, requestReviewRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -230,15 +238,17 @@ export function AssistantSidebar({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, isReportOpen, onClose]);
 
+  const normalizedProviderId =
+    normalizeUiProviderId(providers.providerStatus.provider ?? "") ?? providers.providerStatus.provider;
+  const devinMatch =
+    normalizedProviderId === "devin"
+      ? providers.devinModels.find((m) => m.id === providers.providerStatus.model)
+      : undefined;
+  const modelName = devinMatch ? devinMatch.name : providers.providerStatus.model;
+
   const providerLabel =
     providerSource !== "none"
-      ? `${PROVIDER_OPTIONS.find(
-        (p) =>
-          p.id ===
-          (normalizeUiProviderId(providers.providerStatus.provider ?? "") ??
-            providers.providerStatus.provider),
-      )?.name ?? providers.providerStatus.provider
-      } / ${providers.providerStatus.model}`
+      ? `${PROVIDER_OPTIONS.find((p) => p.id === normalizedProviderId)?.name ?? providers.providerStatus.provider} / ${modelName}`
       : "No provider set";
 
   return (
@@ -265,10 +275,13 @@ export function AssistantSidebar({
       >
         <div className="w-full wide:w-[420px] h-full flex flex-col shadow-[-4px_0_24px_rgba(3,7,18,0.25)]">
           {/* Header */}
-          <div className="h-12 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-950/80">
+          <div className="h-12 flex items-center justify-between px-4 border-b border-slate-800 shrink-0 bg-slate-950/80">
             <div className="flex items-center gap-2 min-w-0">
               <Bot className="h-4 w-4 text-electric-blue shrink-0" />
               <span className="text-sm font-medium text-slate-100">Assistant</span>
+              <span className="text-xs text-slate-400 font-mono truncate max-w-[140px]" title={state.ihvProvider}>
+                [{state.ihvProvider.replace("ExecutionProvider", "")}]
+              </span>
               <span className="text-xs text-slate-500 truncate hidden sm:inline">· {providerLabel}</span>
             </div>
             <button
@@ -381,24 +394,17 @@ export function AssistantSidebar({
           </div>
 
           {/* Footer */}
-          <div className="p-3.5 border-t border-slate-800 shrink-0 bg-slate-950/85 space-y-2">
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 justify-center">
-              <Bot className="h-3 w-3 text-slate-600" />
-              <span>
-                Target: <span className="text-slate-400 font-mono">{state.ihvProvider}</span>
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 text-center leading-snug px-1">
-              AI can be wrong. Verify Audit, Chat, and Apply changes against your model, EP, and Olive docs
-              before running jobs.
+          <div className="px-3.5 py-2 border-t border-slate-800 shrink-0 bg-slate-950/85 flex items-center justify-between gap-2">
+            <p className="text-[10px] text-slate-500 truncate leading-tight flex-1" title="AI can make mistakes. Verify Audit, Chat, and Apply changes before running jobs.">
+              Verify AI changes against your model & EP before running.
             </p>
             <button
               type="button"
               onClick={() => setIsReportOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-electric-blue transition-colors cursor-pointer py-1.5 rounded hover:bg-slate-800/50"
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-electric-blue transition-colors cursor-pointer py-1 px-2 rounded hover:bg-slate-800 shrink-0 font-medium"
             >
               <Bug className="h-3 w-3" />
-              Send feedback
+              <span>Feedback</span>
             </button>
           </div>
 

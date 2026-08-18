@@ -22,7 +22,7 @@
   "scripts": {
     "preinstall": "node -e \"if (!/pnpm/.test(process.env.npm_execpath || \\\"\\\")) { console.error('Use pnpm install, not npm install'); process.exit(1); }\" && node scripts/fix-stale-symlinks.mjs",
     "postinstall": "node scripts/postinstall-mcp-setup.mjs",
-    "dev": "tsx server.ts",
+    "dev": "node scripts/dev.mjs",
     "generate:recipes": "node scripts/generate-olive-recipes-catalog.mjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs && node scripts/copy-genai-sidecar.mjs",
     "build:desktop": "vite build && esbuild server.ts --bundle --platform=node --format=esm --ignore-annotations --banner:js=\"import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);\" --outfile=dist/server.mjs && node scripts/copy-genai-sidecar.mjs",

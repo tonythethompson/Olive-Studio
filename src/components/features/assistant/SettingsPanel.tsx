@@ -22,12 +22,15 @@ interface ActiveProviderCardProps {
  * Compact one-line active provider status with an optional Clear action.
  */
 function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
-  const { providerStatus } = providers;
+  const { providerStatus, devinModels } = providers;
+  const normalizedId = normalizeUiProviderId(providerStatus.provider ?? "") ?? providerStatus.provider;
   const providerName =
     PROVIDER_OPTIONS.find(
-      (p) => p.id === (normalizeUiProviderId(providerStatus.provider ?? "") ?? providerStatus.provider),
+      (p) => p.id === normalizedId,
     )?.name ?? providerStatus.provider;
   const sourceLabel = activeProviderSourceLabel(providerStatus);
+  const devinMatch = normalizedId === "devin" ? devinModels.find((m) => m.id === providerStatus.model) : undefined;
+  const displayModel = devinMatch ? `${devinMatch.name}` : providerStatus.model;
 
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-1.5">
@@ -37,7 +40,7 @@ function ActiveProviderCard({ providers }: ActiveProviderCardProps) {
         <p className="min-w-0 truncate text-sm text-slate-200">
           <span className="font-medium text-slate-100">{providerName}</span>
           <span className="text-slate-500">:</span>{" "}
-          <span className="font-mono text-slate-300">{providerStatus.model}</span>
+          <span className="font-mono text-slate-300" title={providerStatus.model}>{displayModel}</span>
           {sourceLabel ? <span className="text-slate-500"> · {sourceLabel}</span> : null}
         </p>
       )}
@@ -134,16 +137,19 @@ export function SettingsPanel({ providers, local, isOpen }: SettingsPanelProps) 
 
   return (
     <div className="space-y-4">
-      {/* Pull into the scroll panel's p-4 so nothing peeks above/behind while sticky */}
-      <div className="sticky top-0 z-10 -mx-4 -mt-4 space-y-3 bg-slate-950 px-4 pt-4 pb-3">
+      {/* Pull into the scroll panel's p-4 so only the active model card is persistent */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 bg-slate-950 px-4 pt-4 pb-2 border-b border-slate-900/60 shadow-sm">
         <ActiveProviderCard providers={providers} />
-        <SettingsModeTabs mode={settingsMode} onChange={setSettingsMode} />
       </div>
+
+      <SettingsModeTabs mode={settingsMode} onChange={setSettingsMode} />
 
       {settingsMode === "local" ? (
         <LocalAiSetupCard
           local={local}
           activeModel={providers.providerStatus.model}
+          activeProvider={providers.providerStatus.provider}
+          activeBaseUrl={providers.providerStatus.baseUrl ?? undefined}
           isOpen={isOpen}
           onActivate={async (modelTag, source) => {
             const ok = await providers.enableLocalAiProvider(source, modelTag);

@@ -82,8 +82,14 @@ const SECRET_PATTERNS: RegExp[] = [
   /(?:AKIA|ASIA)[A-Z0-9]{16}/g,
   // Bearer tokens (Authorization header)
   /Bearer\s+[A-Za-z0-9\-._~+/]+=*/g,
-  // JSON Web Tokens (three base64url-encoded segments; payload/signature may be empty)
-  /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*(?![A-Za-z0-9_-])/g,
+  // JSON Web Tokens — canonical form (JWS: 3 segments, JWE: 5 segments, base64url header starting with eyJ).
+  // The `{2,}` requires at least 3 segments and greedily consumes every
+  // contiguous dot-separated base64url segment so a complete 5-segment JWE is
+  // redacted in one match (the trailing lookahead must not stop at a `.`).
+  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}(?![A-Za-z0-9_-])/g,
+  // Dotted base64url tokens that don't start with eyJ but are long enough to be secrets
+  // (3+ segments, each ≥8 chars — safely excludes semver, model names, and short identifiers)
+  /(?<![A-Za-z0-9_\-/])(?!eyJ)[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]{8,})*(?![A-Za-z0-9_\-/])/g,
   // PEM private-key blocks
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/gi,
   // Generic long hex strings that look like secrets (32+ hex chars)
@@ -267,7 +273,7 @@ export function buildIssueBody(report: IssueReport): string {
   lines.push(`**Category:** ${REPORT_CATEGORIES.find((c) => c.id === report.category)?.label ?? report.category}`);
   lines.push(`**Severity:** ${REPORT_SEVERITIES.find((s) => s.id === severity)?.label ?? severity}`);
   lines.push(`**Area:** ${REPORT_AREAS.find((a) => a.id === report.area)?.label ?? report.area}`);
-  
+
   // Frequency info for repeated errors
   if (report.frequencyInfo && report.frequencyInfo.count > 1) {
     lines.push(`**Occurrences:** ${report.frequencyInfo.count} times`);

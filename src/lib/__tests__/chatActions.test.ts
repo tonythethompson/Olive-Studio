@@ -5,6 +5,10 @@ import {
   parseChatStructuredReply,
   salvageChatActionPatchFromLooseJson,
   summarizeChatPatch,
+  extractGatedFields,
+  stripGatedFields,
+  confirmGatedPatchFields,
+  TRUST_REMOTE_CODE_CONFIRM_MESSAGE,
 } from "@/lib/chatActions";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import type { UIState, IHVProvider } from "@/types";
@@ -45,6 +49,44 @@ describe("sanitizeChatActionPatch", () => {
     });
   });
 
+  it("preserves trustRemoteCode in patches", () => {
+    const patch = sanitizeChatActionPatch({
+      hfTrustRemoteCode: true,
+      trustRemoteCode: true,
+    });
+    expect(patch).toEqual({
+      trustRemoteCode: true,
+    });
+  });
+
+  it("promotes nested passes.trustRemoteCode through the gated top-level field", () => {
+    const patch = sanitizeChatActionPatch({
+      passes: { quantization: true, trustRemoteCode: true },
+    });
+    expect(patch).not.toBeNull();
+    expect(patch).toEqual({
+      trustRemoteCode: true,
+      passes: { quantization: true },
+    });
+    // The nested value must be gated like a top-level one: blocked without confirmation,
+    // leaving the prior (false) value untouched rather than silently enabling it.
+    const state = baseState();
+    const next = chatPatchToUiState(state, patch!);
+    expect(next.passes?.trustRemoteCode).toBe(false);
+    const confirmed = chatPatchToUiState(state, patch!, { confirmGated: true });
+    expect(confirmed.passes?.trustRemoteCode).toBe(true);
+  });
+
+  it("does not promote nested passes.trustRemoteCode when a top-level value wins", () => {
+    const patch = sanitizeChatActionPatch({
+      trustRemoteCode: false,
+      passes: { trustRemoteCode: true },
+    });
+    // Disabling at the top level wins; the nested enable is dropped entirely.
+    expect(patch?.trustRemoteCode).toBe(false);
+    expect(patch?.passes).toBeUndefined();
+  });
+
   it("rejects invalid providers and empty patches", () => {
     expect(sanitizeChatActionPatch({ ihvProvider: "NotARealEP" })).toBeNull();
     expect(sanitizeChatActionPatch({})).toBeNull();
@@ -63,6 +105,64 @@ describe("chatPatchToUiState", () => {
     expect(next.passes?.quantization).toBe(true);
     expect(next.passes?.quantMethod).toBe("awq");
     expect(next.passes?.pruning).toBe(false);
+  });
+
+  it("blocks trustRemoteCode=true without explicit confirmGated", () => {
+    const state = baseState();
+    const next = chatPatchToUiState(state, { trustRemoteCode: true });
+    // trustRemoteCode=true is a security-sensitive toggle; it must not apply silently.
+    expect(next.passes?.trustRemoteCode).toBeUndefined();
+  });
+
+  it("applies trustRemoteCode=true when confirmGated is set", () => {
+    const state = baseState();
+    const next = chatPatchToUiState(state, { trustRemoteCode: true }, { confirmGated: true });
+    expect(next.passes?.trustRemoteCode).toBe(true);
+  });
+
+  it("allows trustRemoteCode=false without confirmation (disabling is safe)", () => {
+    const state = baseState();
+    state.passes.trustRemoteCode = true;
+    const next = chatPatchToUiState(state, { trustRemoteCode: false });
+    expect(next.passes?.trustRemoteCode).toBe(false);
+  });
+});
+
+describe("extractGatedFields", () => {
+  it("returns trustRemoteCode when patch enables it", () => {
+    expect(extractGatedFields({ trustRemoteCode: true })).toEqual({ trustRemoteCode: true });
+  });
+
+  it("returns null when trustRemoteCode is false or absent", () => {
+    expect(extractGatedFields({ trustRemoteCode: false })).toBeNull();
+    expect(extractGatedFields({ ihvProvider: "CUDAExecutionProvider" as IHVProvider })).toBeNull();
+    expect(extractGatedFields({})).toBeNull();
+  });
+});
+
+describe("stripGatedFields", () => {
+  it("removes trustRemoteCode=true from the patch", () => {
+    const stripped = stripGatedFields({ trustRemoteCode: true, ihvProvider: "CUDAExecutionProvider" as IHVProvider });
+    expect(stripped.trustRemoteCode).toBeUndefined();
+    expect(stripped.ihvProvider).toBe("CUDAExecutionProvider");
+  });
+
+  it("preserves trustRemoteCode=false (disabling is safe)", () => {
+    const stripped = stripGatedFields({ trustRemoteCode: false });
+    expect(stripped.trustRemoteCode).toBe(false);
+  });
+});
+
+describe("confirmGatedPatchFields", () => {
+  it("returns true immediately when patch has no gated fields", () => {
+    expect(confirmGatedPatchFields({ ihvProvider: "CUDAExecutionProvider" as IHVProvider })).toBe(true);
+    expect(confirmGatedPatchFields({ trustRemoteCode: false })).toBe(true);
+    expect(confirmGatedPatchFields({})).toBe(true);
+  });
+
+  it("returns false in headless environment without window", () => {
+    expect(confirmGatedPatchFields({ trustRemoteCode: true })).toBe(false);
+    expect(TRUST_REMOTE_CODE_CONFIRM_MESSAGE).toContain("Trust Remote Code");
   });
 });
 
@@ -124,6 +224,15 @@ describe("parseChatStructuredReply", () => {
     const quantOnly = salvageChatActionPatchFromLooseJson({ step: "apply_quantization" });
     expect(quantOnly?.passes?.quantization).toBe(true);
     expect(quantOnly?.passes?.quantMethod).toBe("ptq");
+  });
+
+  it("parses trustRemoteCode loose strings only for explicit true/false", () => {
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: "true" })?.trustRemoteCode).toBe(true);
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: " TRUE " })?.trustRemoteCode).toBe(true);
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: "false" })?.trustRemoteCode).toBe(false);
+    // Unrecognized strings must not silently disable an existing toggle.
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: "yes please" })?.trustRemoteCode).toBeUndefined();
+    expect(salvageChatActionPatchFromLooseJson({ trust_remote_code: " " })?.trustRemoteCode).toBeUndefined();
   });
 
   it("does not salvage passes from free-form prose fields like note", () => {

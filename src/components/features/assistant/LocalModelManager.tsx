@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { MODEL_ID_FUZZY_MIN_LEN } from "@/lib/localEngineStarters";
+import { extractErrorMessage } from "@/lib/httpError";
 
 function modelIdsMatch(activeModel: string | undefined, installedId: string): boolean {
   if (!activeModel) return false;
@@ -15,6 +16,58 @@ function modelIdsMatch(activeModel: string | undefined, installedId: string): bo
   if (activeModel === installedTail) return true;
   // Bare active id may still match a path-qualified install via a long suffix.
   return activeModel.length >= MODEL_ID_FUZZY_MIN_LEN && installedId.endsWith(activeModel);
+}
+
+
+type EngineResult = { models: string[]; loaded: string[] } | null;
+
+/** Process a single engine's fetch result, returning models/loaded or surfacing errors. */
+async function processEngineResult(
+  res: PromiseSettledResult<Response | null>,
+  source: "lms" | "ollama",
+  engine: string,
+  isCancelled: (() => boolean) | undefined,
+  setError: (msg: string) => void,
+): Promise<EngineResult> {
+  if (res.status !== "fulfilled" || !res.value) return null;
+  if (res.value.ok) {
+    const d = await res.value.json();
+    if (source === "lms") {
+      return { models: d.installedModels || [], loaded: d.loadedModels || [] };
+    }
+    return { models: d.installedModels || [], loaded: d.runningModels || [] };
+  }
+  if (engine === source) {
+    const d = (await res.value.json().catch(() => ({}))) as { error?: string };
+    if (d.error && !isCancelled?.()) setError(d.error);
+  }
+  return null;
+}
+
+/** Merge and de-duplicate model lists from multiple engines. */
+function mergeModelLists(
+  lmsData: EngineResult,
+  ollamaData: EngineResult,
+): Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> {
+  const allModels: Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> = [];
+  const seen = new Set<string>();
+  if (lmsData) {
+    for (const id of lmsData.models) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        allModels.push({ id, loaded: lmsData.loaded.includes(id), source: "lms" });
+      }
+    }
+  }
+  if (ollamaData) {
+    for (const id of ollamaData.models) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        allModels.push({ id, loaded: ollamaData.loaded.includes(id), source: "ollama" });
+      }
+    }
+  }
+  return allModels;
 }
 
 /**
@@ -111,60 +164,15 @@ export function LocalModelManager({
 
       if (isCancelled?.()) return;
 
-      const lmsModels: string[] = [];
-      const ollamaModels: string[] = [];
-      const lmsLoaded: string[] = [];
-      const ollamaLoaded: string[] = [];
-
-      if (fetchLms && lmsRes.status === "fulfilled" && lmsRes.value && lmsRes.value.ok) {
-        const d = await lmsRes.value.json();
-        lmsModels.push(...(d.installedModels || []));
-        lmsLoaded.push(...(d.loadedModels || []));
-      } else if (
-        fetchLms &&
-        engine === "lms" &&
-        lmsRes.status === "fulfilled" &&
-        lmsRes.value &&
-        !lmsRes.value.ok
-      ) {
-        const d = (await lmsRes.value.json().catch(() => ({}))) as { error?: string };
-        if (d.error && !isCancelled?.()) setError(d.error);
-      }
-      if (fetchOllama && ollamaRes.status === "fulfilled" && ollamaRes.value && ollamaRes.value.ok) {
-        const d = await ollamaRes.value.json();
-        ollamaModels.push(...(d.installedModels || []));
-        ollamaLoaded.push(...(d.runningModels || []));
-      } else if (
-        fetchOllama &&
-        engine === "ollama" &&
-        ollamaRes.status === "fulfilled" &&
-        ollamaRes.value &&
-        !ollamaRes.value.ok
-      ) {
-        const d = (await ollamaRes.value.json().catch(() => ({}))) as { error?: string };
-        if (d.error && !isCancelled?.()) setError(d.error);
-      }
+      const lmsData = await processEngineResult(lmsRes, "lms", engine, isCancelled, setError);
+      const ollamaData = await processEngineResult(ollamaRes, "ollama", engine, isCancelled, setError);
 
       if (isCancelled?.()) return;
 
-      const allModels: Array<{ id: string; loaded: boolean; source: "lms" | "ollama" }> = [];
-      const seen = new Set<string>();
-      if (fetchLms) {
-        for (const id of lmsModels) {
-          if (!seen.has(id)) {
-            seen.add(id);
-            allModels.push({ id, loaded: lmsLoaded.includes(id), source: "lms" });
-          }
-        }
-      }
-      if (fetchOllama) {
-        for (const id of ollamaModels) {
-          if (!seen.has(id)) {
-            seen.add(id);
-            allModels.push({ id, loaded: ollamaLoaded.includes(id), source: "ollama" });
-          }
-        }
-      }
+      const allModels = mergeModelLists(
+        fetchLms ? lmsData : null,
+        fetchOllama ? ollamaData : null,
+      );
       if (!isCancelled?.()) setModels(allModels);
     } catch (err: unknown) {
       if (engine !== "all" && !isCancelled?.()) {
@@ -204,8 +212,8 @@ export function LocalModelManager({
           body: JSON.stringify({ modelTag }),
         });
         if (!r.ok) {
-          const d = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(d.error || `HTTP ${r.status}`);
+          const d = await r.json().catch(() => ({}));
+          throw new Error(extractErrorMessage(d, `HTTP ${r.status}`));
         }
       }
       if (onActivate) await onActivate(modelTag, source);
@@ -228,8 +236,8 @@ export function LocalModelManager({
         body: JSON.stringify({ modelTag }),
       });
       if (!r.ok) {
-        const d = (await r.json().catch(() => ({}))) as { error?: string };
-        throw new Error(d.error || `HTTP ${r.status}`);
+        const d = await r.json().catch(() => ({}));
+        throw new Error(extractErrorMessage(d, `HTTP ${r.status}`));
       }
       await refresh();
     } catch (err) {
@@ -319,11 +327,10 @@ export function LocalModelManager({
                       return (
                         <div
                           key={`${m.source}:${m.id}`}
-                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-xs ${
-                            active
-                              ? "border-emerald-500/40 bg-emerald-950/20"
-                              : "border-slate-800 bg-slate-950/60"
-                          }`}
+                          className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-xs ${active
+                            ? "border-emerald-500/40 bg-emerald-950/20"
+                            : "border-slate-800 bg-slate-950/60"
+                            }`}
                         >
                           <div className="min-w-0 flex-1 space-y-0.5">
                             <div className="flex items-center gap-1.5 min-w-0">

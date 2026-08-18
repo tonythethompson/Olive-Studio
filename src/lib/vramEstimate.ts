@@ -296,11 +296,18 @@ export function getSelectedGpuVramGb(
         provider === "NvTensorRTRTXExecutionProvider" ||
         provider === "TensorrtExecutionProvider"
         ? (probe.nvidia?.gpus ?? [])
+        : provider === "DmlExecutionProvider" || provider === "WebGpuExecutionProvider"
+        ? [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
         : [];
 
   const vramMb = gpus.map((gpu) => gpu.vramMb).filter((value): value is number => value != null && value > 0);
 
-  if (!vramMb.length) return null;
+  if (!vramMb.length) {
+    if (provider === "DmlExecutionProvider" || provider === "WebGpuExecutionProvider") {
+      return getPrimaryGpuVramGb(probe);
+    }
+    return null;
+  }
   return Math.max(...vramMb) / 1024;
 }
 

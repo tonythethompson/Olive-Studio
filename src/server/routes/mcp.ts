@@ -14,6 +14,7 @@ import {
   setKbSyncInProgress,
 } from "../services/mcp/state.ts";
 import { callOliveMcpTool, MCP_UNAVAILABLE_ERROR, reconnectMcpClient } from "../services/mcp/client.ts";
+import { getMcpPython } from "../services/mcp/paths.ts";
 import { isAllowedMcpToolName } from "../services/mcp/allowedTools.ts";
 import { evaluateStudioRecipeBridge } from "../services/mcp/studioRecipeBridge.ts";
 import {
@@ -250,8 +251,7 @@ function buildKbStatus(data: PassesJson, lastSync?: string | null): KbStatusCach
  *
  * @returns A successful status result, or an error response when the knowledge base cannot be read.
  */
-export function performKbSync():
-  { ok: true; status: KbStatusCache } | { ok: false; statusCode: number; body: Record<string, unknown> } {
+export function performKbSync(): { ok: true; status: KbStatusCache } | { ok: false; statusCode: number; body: Record<string, unknown> } {
   const kb = readPassesJson();
   if (!kb.ok) {
     return { ok: false, statusCode: 500, body: { ok: false, ...kbFailureResponse(kb) } };
@@ -420,22 +420,16 @@ export function mountMcpRoutes(router: Router): void {
         writeStudioConfig({ mcpSettings: next });
         try {
           await reconnectMcpClient();
-          return next;
-        } catch (err) {
-          // Revert config on disk if reconnect failed so failed settings are not persisted
+        } catch (reconnectErr) {
           writeStudioConfig({ mcpSettings: previousMcpSettings });
-          // Await restore so the next settings write cannot share this reconnect
-          // (and so we do not release the write queue while MCP is mid-rollback).
           try {
             await reconnectMcpClient();
-          } catch (rollbackErr) {
-            console.warn(
-              "[mcp] failed to restore previous MCP process after settings rollback:",
-              rollbackErr instanceof Error ? rollbackErr.message : rollbackErr,
-            );
+          } catch {
+            // best-effort rollback reconnect
           }
-          throw err;
+          throw reconnectErr;
         }
+        return next;
       });
       return res.json({ ok: true, mcpSettings });
     } catch {
@@ -450,5 +444,41 @@ export function mountMcpRoutes(router: Router): void {
       mcpSettings: mcpSettings ?? {},
       isRemote: Boolean(process.env.OLIVE_MCP_URL),
     });
+  });
+
+  // ─── MCP Health ────────────────────────────────────────────────────────
+  router.get("/mcp/health", studioLocalOnly, kbStatusRateLimit, async (_req, res) => {
+    const isRemote = Boolean(process.env.OLIVE_MCP_URL);
+    // getMcpPython() mirrors what the MCP client actually launches: it prefers
+    // olive-mcp-server/.venv and falls back to the repo-root .venv. Reporting
+    // existence of that exact interpreter keeps venvExists consistent with
+    // whether MCP can start locally.
+    const venvExists = isRemote ? undefined : fs.existsSync(getMcpPython());
+    try {
+      const out = await callOliveMcpTool("get_mcp_capabilities", {});
+      if (out.unavailable || out.error) {
+        return res.json({
+          ok: false,
+          available: false,
+          isRemote,
+          ...(venvExists !== undefined && { venvExists }),
+          error: "MCP server unavailable",
+        });
+      }
+      return res.json({
+        ok: true,
+        available: true,
+        isRemote,
+        ...(venvExists !== undefined && { venvExists }),
+      });
+    } catch {
+      return res.json({
+        ok: false,
+        available: false,
+        isRemote,
+        ...(venvExists !== undefined && { venvExists }),
+        error: "MCP health check failed",
+      });
+    }
   });
 }

@@ -17,56 +17,10 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("driver.js", () => ({ driver: mocks.driverFactory }));
 
-import tourDemoRecipe from "@/data/tour-demo-recipe.json";
-import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
 import { setPipelineOliveRunning } from "@/lib/pipelineNavigation";
-import { hasSelectedModel } from "@/lib/pipelineValidation";
-import { createDefaultPipelineState, usePipelineStore } from "@/lib/stores/pipelineStore";
+import { usePipelineStore } from "@/lib/stores/pipelineStore";
 import { usePreferencesStore } from "@/lib/stores/preferencesStore";
-import { ensureTourDemoModel, startGuidedTour, TOUR_STEPS } from "./tour";
-
-describe("tour demo recipe", () => {
-  it("derives a selected Hugging Face model on CPU with conversion enabled", () => {
-    const derived = deriveUiStateFromOliveRecipe(tourDemoRecipe, { replacePasses: true });
-    const state = {
-      ...createDefaultPipelineState(),
-      ...derived,
-      passes: { ...createDefaultPipelineState().passes, ...derived.passes },
-    };
-    expect(hasSelectedModel(state)).toBe(true);
-    expect(state.hfModelId).toBe("sshleifer/tiny-gpt2");
-    expect(state.modelSource).toBe("huggingface");
-    expect(state.ihvProvider).toBe("CPUExecutionProvider");
-    expect(state.passes.conversion).toBe(true);
-  });
-});
-
-describe("ensureTourDemoModel", () => {
-  beforeEach(() => {
-    usePipelineStore.getState().resetState();
-  });
-
-  it("applies the sample recipe when no model is selected", () => {
-    const result = ensureTourDemoModel();
-    expect(result.applied).toBe(true);
-    const state = usePipelineStore.getState().state;
-    expect(hasSelectedModel(state)).toBe(true);
-    expect(state.hfModelId).toBe("sshleifer/tiny-gpt2");
-  });
-
-  it("does not overwrite an already selected model", () => {
-    usePipelineStore.getState().setState({ hfModelId: "microsoft/phi-2" });
-    const result = ensureTourDemoModel();
-    expect(result.applied).toBe(false);
-    expect(usePipelineStore.getState().state.hfModelId).toBe("microsoft/phi-2");
-  });
-
-  it("is a no-op the second time after a successful apply", () => {
-    expect(ensureTourDemoModel().applied).toBe(true);
-    expect(ensureTourDemoModel().applied).toBe(false);
-    expect(usePipelineStore.getState().state.hfModelId).toBe("sshleifer/tiny-gpt2");
-  });
-});
+import { startGuidedTour, ensureTourDemoModel, TOUR_STEPS } from "./tour";
 
 describe("TOUR_STEPS", () => {
   it("starts with an unanchored Olive overview, then real controls", () => {
@@ -132,24 +86,13 @@ describe("startGuidedTour", () => {
     expect(mocks.drive).toHaveBeenCalledTimes(1);
   });
 
-  it("applies the sample recipe when Next is pressed on Model source with an empty workspace", () => {
-    mocks.getActiveStep.mockReturnValue({ data: { id: "model-source" } });
+  it("advances to the next step when onNextClick is triggered without mutating model state", () => {
     startGuidedTour(() => {});
     const config = mocks.driverFactory.mock.calls[0][0] as {
       onNextClick: () => void;
     };
     config.onNextClick();
-    expect(usePipelineStore.getState().state.hfModelId).toBe("sshleifer/tiny-gpt2");
-    expect(mocks.moveNext).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not clobber an existing model when Next is pressed on Model source", () => {
-    usePipelineStore.getState().setState({ hfModelId: "microsoft/phi-2" });
-    mocks.getActiveStep.mockReturnValue({ data: { id: "model-source" } });
-    startGuidedTour(() => {});
-    const config = mocks.driverFactory.mock.calls[0][0] as { onNextClick: () => void };
-    config.onNextClick();
-    expect(usePipelineStore.getState().state.hfModelId).toBe("microsoft/phi-2");
+    expect(usePipelineStore.getState().state.hfModelId).toBe("");
     expect(mocks.moveNext).toHaveBeenCalledTimes(1);
   });
 
@@ -206,5 +149,31 @@ describe("guided tour preference", () => {
     expect(usePreferencesStore.getState()).not.toHaveProperty("welcomeDismissed");
     expect(usePreferencesStore.getState()).not.toHaveProperty("dismissWelcome");
     expect(usePreferencesStore.getState().tourSeen).toBe(false);
+  });
+});
+
+describe("ensureTourDemoModel", () => {
+  beforeEach(() => {
+    usePipelineStore.getState().resetState();
+  });
+
+  it("applies the tour demo recipe and resets to clean defaults when no model is selected", () => {
+    // Modify a non-recipe field before applying
+    usePipelineStore.getState().setState({ cacheDir: "/custom/cache" });
+    const result = ensureTourDemoModel();
+    expect(result.applied).toBe(true);
+    const state = usePipelineStore.getState().state;
+    expect(state.hfModelId).toBe("sshleifer/tiny-gpt2");
+    expect(state.passes.conversion).toBe(true);
+    expect(state.passes.conversionOpset).toBe(17);
+    // Ensure defaults are properly reset
+    expect(state.cacheDir).toBe("");
+  });
+
+  it("returns applied: false when a model is already selected", () => {
+    usePipelineStore.getState().setState({ hfModelId: "custom/my-model" });
+    const result = ensureTourDemoModel();
+    expect(result.applied).toBe(false);
+    expect(usePipelineStore.getState().state.hfModelId).toBe("custom/my-model");
   });
 });

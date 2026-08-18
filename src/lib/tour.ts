@@ -1,38 +1,16 @@
 import { driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
-import tourDemoRecipe from "@/data/tour-demo-recipe.json";
-import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
 import { isPipelineOliveRunning } from "@/lib/pipelineNavigation";
+import { usePipelineStore, createDefaultPipelineState } from "@/lib/stores/pipelineStore";
 import { hasSelectedModel } from "@/lib/pipelineValidation";
-import { createDefaultPipelineState, usePipelineStore } from "@/lib/stores/pipelineStore";
+import { deriveUiStateFromOliveRecipe } from "@/lib/oliveRecipeHub";
+import tourDemoRecipe from "@/data/tour-demo-recipe.json";
 
-let tourModelUnsub: (() => void) | undefined;
 let tourActive = false;
 
 /**
- * Loads the bundled sample recipe when the workspace has no model selected.
- *
- * @returns Whether a sample recipe was applied
- */
-export function ensureTourDemoModel(): { applied: boolean } {
-  const store = usePipelineStore.getState();
-  if (hasSelectedModel(store.state)) return { applied: false };
-  try {
-    const derived = deriveUiStateFromOliveRecipe(tourDemoRecipe, { replacePasses: true });
-    store.replaceState({
-      ...createDefaultPipelineState(),
-      ...derived,
-      passes: { ...createDefaultPipelineState().passes, ...derived.passes },
-    });
-    return { applied: hasSelectedModel(usePipelineStore.getState().state) };
-  } catch {
-    return { applied: false };
-  }
-}
-
-/**
  * Guided tour steps: Olive overview, then real pipeline controls.
- * Interaction steps use click-to-advance; Model source waits for a real Apply.
+ * Interaction steps use click-to-advance.
  */
 export const TOUR_STEPS: DriveStep[] = [
   {
@@ -129,17 +107,31 @@ export const TOUR_STEPS: DriveStep[] = [
   },
 ];
 
-function stepId(step: DriveStep | undefined): string | undefined {
-  const data = step?.data as { id?: string } | undefined;
-  return data?.id;
+/**
+ * Applies the bundled sample recipe when no model is currently selected.
+ * Used by the tour and the InputRecipeRail "Apply" button.
+ * Returns `{ applied: true }` only the first time it actually writes state.
+ */
+export function ensureTourDemoModel(): { applied: boolean } {
+  const store = usePipelineStore.getState();
+  if (hasSelectedModel(store.state)) return { applied: false };
+  try {
+    const defaults = createDefaultPipelineState();
+    const derived = deriveUiStateFromOliveRecipe(tourDemoRecipe, { replacePasses: true });
+    store.replaceState({
+      ...defaults,
+      ...derived,
+      passes: {
+        ...defaults.passes,
+        ...(derived.passes ?? {}),
+      },
+    });
+    return { applied: true };
+  } catch {
+    return { applied: false };
+  }
 }
 
-/**
- * Starts the guided tour and handles completion or dismissal.
- *
- * @param onSettled - Callback invoked once when the tour ends or is skipped
- * @returns The tour instance, or null when an Olive job is running or a tour is already active
- */
 export function startGuidedTour(onSettled: () => void) {
   if (isPipelineOliveRunning() || tourActive) return null;
 
@@ -155,29 +147,9 @@ export function startGuidedTour(onSettled: () => void) {
     disableActiveInteraction: false,
     steps: TOUR_STEPS,
     onNextClick: () => {
-      if (stepId(driverObj.getActiveStep()) === "model-source") {
-        ensureTourDemoModel();
-      }
       driverObj.moveNext();
     },
-    onHighlighted: (_element, step) => {
-      tourModelUnsub?.();
-      tourModelUnsub = undefined;
-      if (stepId(step) !== "model-source") return;
-      tourModelUnsub = usePipelineStore.subscribe((store) => {
-        if (!hasSelectedModel(store.state)) return;
-        tourModelUnsub?.();
-        tourModelUnsub = undefined;
-        driverObj.moveNext();
-      });
-    },
-    onDeselected: () => {
-      tourModelUnsub?.();
-      tourModelUnsub = undefined;
-    },
     onDestroyStarted: () => {
-      tourModelUnsub?.();
-      tourModelUnsub = undefined;
       tourActive = false;
       onSettled();
       driverObj.destroy();

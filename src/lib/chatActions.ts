@@ -29,9 +29,59 @@ export type ChatActionPatch = {
   modelSource?: ModelSource;
   hfModelId?: string;
   hfDataset?: string;
+  trustRemoteCode?: boolean;
+  hfTrustRemoteCode?: boolean;
   cacheDir?: string;
   passes?: Partial<UIState["passes"]>;
 };
+
+/**
+ * Fields that were stripped from an AI patch because they require explicit
+ * user confirmation before being applied (security-sensitive toggles).
+ */
+export type GatedPatchFields = {
+  trustRemoteCode?: true;
+};
+
+/**
+ * Extract security-sensitive fields from a patch that require user confirmation.
+ * Returns null when the patch contains no gated fields.
+ */
+export function extractGatedFields(patch: ChatActionPatch): GatedPatchFields | null {
+  if (patch.trustRemoteCode === true) {
+    return { trustRemoteCode: true };
+  }
+  return null;
+}
+
+/**
+ * Returns a copy of the patch with gated (security-sensitive) fields removed.
+ * Disabling trustRemoteCode (false) is always safe and passes through.
+ * Enabling trustRemoteCode (true) requires explicit confirmation via
+ * `chatPatchToUiState` with `{ confirmGated: true }`.
+ */
+export function stripGatedFields(patch: ChatActionPatch): ChatActionPatch {
+  if (patch.trustRemoteCode !== true) return patch;
+  const { trustRemoteCode: _, ...rest } = patch;
+  return rest;
+}
+
+export const TRUST_REMOTE_CODE_CONFIRM_MESSAGE =
+  "Enabling Trust Remote Code will execute Python code from the Hugging Face repository inside Olive on your machine. Only enable this for repositories you trust.\n\nDo you want to enable Trust Remote Code?";
+
+/**
+ * Checks for gated fields (like trustRemoteCode=true) and prompts the user for
+ * confirmation if running in an interactive browser environment.
+ * Returns true if no gated fields exist or if confirmed by user, false if declined.
+ */
+export function confirmGatedPatchFields(patch: ChatActionPatch): boolean {
+  const gated = extractGatedFields(patch);
+  if (!gated) return true;
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    return false;
+  }
+  return window.confirm(TRUST_REMOTE_CODE_CONFIRM_MESSAGE);
+}
 
 export type ChatAction = {
   id: string;
@@ -53,6 +103,8 @@ function sanitizePasses(raw: unknown): Partial<UIState["passes"]> | undefined {
   if (!isRecord(raw)) return undefined;
   const out: Partial<UIState["passes"]> = {};
   for (const [key, value] of Object.entries(raw)) {
+    // trustRemoteCode is security-gated and must not pass through nested passes merge
+    if (key === "trustRemoteCode") continue;
     const coerced = coercePassValue(key, value);
     if (coerced === null) continue;
     (out as Record<string, unknown>)[key] = coerced;
@@ -83,17 +135,83 @@ export function sanitizeChatActionPatch(raw: unknown): ChatActionPatch | null {
   if (typeof raw.hfDataset === "string") {
     patch.hfDataset = raw.hfDataset.trim().slice(0, 256);
   }
+  if (typeof raw.trustRemoteCode === "boolean") {
+    patch.trustRemoteCode = raw.trustRemoteCode;
+  } else if (typeof raw.hfTrustRemoteCode === "boolean") {
+    patch.trustRemoteCode = raw.hfTrustRemoteCode;
+  }
   if (typeof raw.cacheDir === "string" && raw.cacheDir.trim()) {
     patch.cacheDir = raw.cacheDir.trim().slice(0, 512);
   }
+
+  // Extract nested passes.trustRemoteCode before sanitizing passes
+  let nestedTrustRemoteCode: boolean | undefined;
+  if (isRecord(raw.passes) && typeof raw.passes.trustRemoteCode === "boolean") {
+    nestedTrustRemoteCode = raw.passes.trustRemoteCode;
+  }
+
   const passes = sanitizePasses(raw.passes);
   if (passes) patch.passes = passes;
+
+  // Process nested trustRemoteCode through the top-level gated field path
+  if (nestedTrustRemoteCode !== undefined && patch.trustRemoteCode === undefined) {
+    patch.trustRemoteCode = nestedTrustRemoteCode;
+  }
 
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
+export type ChatPatchOptions = {
+  /**
+   * When true, security-sensitive fields (e.g. trustRemoteCode=true) are
+   * applied. When false or omitted, enabling trustRemoteCode is silently
+   * skipped — the caller must first show a confirmation dialog.
+   */
+  confirmGated?: boolean;
+};
+
+/**
+ * Determine whether trustRemoteCode should be applied:
+ * - Disabling (false) is always safe.
+ * - Enabling (true) requires explicit user confirmation via options.confirmGated.
+ */
+function resolveEffectiveTrust(
+  patch: ChatActionPatch,
+  options?: ChatPatchOptions,
+): boolean | undefined {
+  if (patch.trustRemoteCode === false) return false;
+  if (patch.trustRemoteCode === true && options?.confirmGated) return true;
+  return undefined;
+}
+
+/** Merge passes from state and patch, applying consistency rules for toggles. */
+function mergePasses(
+  state: UIState,
+  patch: ChatActionPatch,
+  effectiveTrust: boolean | undefined,
+): UIState["passes"] | undefined {
+  if (!patch.passes && effectiveTrust === undefined) return undefined;
+  const merged: UIState["passes"] = { ...state.passes, ...patch.passes };
+  if (effectiveTrust !== undefined) {
+    merged.trustRemoteCode = effectiveTrust;
+  }
+  if (patch.passes?.quantMethod || patch.passes?.quantPrecision) {
+    merged.quantization = true;
+  }
+  if (patch.passes?.quantMethod === "awq") {
+    merged.pruning = false;
+  }
+  if (patch.passes?.peftMethod) {
+    merged.peft = true;
+  }
+  if (patch.passes?.conversionFormat || patch.passes?.conversionOpset) {
+    merged.conversion = true;
+  }
+  return merged;
+}
+
 /** Merge a sanitized chat patch into a Partial<UIState> ready for setState. */
-export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Partial<UIState> {
+export function chatPatchToUiState(state: UIState, patch: ChatActionPatch, options?: ChatPatchOptions): Partial<UIState> {
   const next: Partial<UIState> = {};
   if (patch.ihvProvider) next.ihvProvider = patch.ihvProvider;
   if (patch.cudaVersion) next.cudaVersion = patch.cudaVersion;
@@ -102,23 +220,10 @@ export function chatPatchToUiState(state: UIState, patch: ChatActionPatch): Part
   if (patch.hfModelId !== undefined) next.hfModelId = patch.hfModelId;
   if (patch.hfDataset !== undefined) next.hfDataset = patch.hfDataset;
   if (patch.cacheDir !== undefined) next.cacheDir = patch.cacheDir;
-  if (patch.passes) {
-    const merged: UIState["passes"] = { ...state.passes, ...patch.passes };
-    // Keep toggles consistent with method/precision changes.
-    if (patch.passes.quantMethod || patch.passes.quantPrecision) {
-      merged.quantization = true;
-    }
-    if (patch.passes.quantMethod === "awq") {
-      merged.pruning = false;
-    }
-    if (patch.passes.peftMethod) {
-      merged.peft = true;
-    }
-    if (patch.passes.conversionFormat || patch.passes.conversionOpset) {
-      merged.conversion = true;
-    }
-    next.passes = merged;
-  }
+
+  const effectiveTrust = resolveEffectiveTrust(patch, options);
+  const mergedPasses = mergePasses(state, patch, effectiveTrust);
+  if (mergedPasses !== undefined) next.passes = mergedPasses;
   return next;
 }
 
@@ -221,13 +326,149 @@ function negatedTargets(value: string): { quant: boolean; convert: boolean } {
   return { quant, convert };
 }
 
+/** Mutable accumulator for loose-JSON salvage traversal. */
+interface SalvageContext {
+  passes: Partial<UIState["passes"]>;
+  ihvProvider: IHVProvider | undefined;
+  trustRemoteCode: boolean | undefined;
+}
+
+/** Detect and extract an IHV execution provider from a key-value pair. */
+function salvageProvider(ctx: SalvageContext, key: string, value: unknown): void {
+  if (
+    (key === "ihvprovider" || key === "execution_provider" || key === "executionprovider") &&
+    typeof value === "string" &&
+    IHV_PROVIDERS.has(value)
+  ) {
+    ctx.ihvProvider = value as IHVProvider;
+  }
+}
+
+/** Detect and extract a conversion opset from a key-value pair. */
+function salvageOpset(ctx: SalvageContext, key: string, value: unknown): void {
+  if (
+    (key.includes("opset") || key === "targetopset" || key === "target_opset") &&
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    ctx.passes.conversion = true;
+    ctx.passes.conversionOpset = Math.round(value);
+  }
+}
+
+/** Detect and extract a quant method from a key-value pair. */
+function salvageQuantMethod(ctx: SalvageContext, key: string, value: unknown): void {
+  if (key === "quantmethod" || key === "quant_method") {
+    if (typeof value === "string") {
+      const method = normalizeLooseQuantMethod(value);
+      if (method) {
+        ctx.passes.quantization = true;
+        ctx.passes.quantMethod = method;
+      }
+    }
+  }
+}
+
+/** Detect and extract quant precision from a key-value pair. */
+function salvagePrecision(ctx: SalvageContext, key: string, value: unknown): void {
+  if (key === "precision" || key === "quantprecision" || key === "quant_precision") {
+    if (typeof value === "string") {
+      const prec = normalizeLooseQuantPrecision(value);
+      if (prec) {
+        ctx.passes.quantization = true;
+        ctx.passes.quantPrecision = prec;
+        if (!ctx.passes.quantMethod) ctx.passes.quantMethod = "ptq";
+      }
+    }
+  }
+}
+
+/** Detect and extract quantization from action/step fields, handling negation. */
+function salvageQuantAction(ctx: SalvageContext, key: string, value: unknown): void {
+  const isActionField = key === "step" || key === "action" || key === "task";
+  // Negation must be scoped near the specific instruction it modifies —
+  // a single flag gating every detector on a multi-clause value (e.g.
+  // "convert to onnx without quantization") would wrongly suppress the
+  // unrelated, non-negated conversion instruction too.
+  const negated = typeof value === "string" ? negatedTargets(value) : { quant: false, convert: false };
+  const isQuantMentioned =
+    /quant/i.test(key) || (isActionField && typeof value === "string" && hasAffirmativeQuantToken(value));
+
+  if (
+    !isQuantMentioned ||
+    negated.quant ||
+    !(value === true || (typeof value === "string" && hasAffirmativeQuantToken(value)))
+  ) {
+    return;
+  }
+
+  ctx.passes.quantization = true;
+  if (typeof value === "string") {
+    const prec = normalizeLooseQuantPrecision(value) ?? extractLooseQuantPrecisionFromValue(value);
+    if (prec) ctx.passes.quantPrecision = prec;
+    const method = normalizeLooseQuantMethod(value) ?? extractLooseQuantMethodFromValue(value);
+    if (method) ctx.passes.quantMethod = method;
+  }
+  if (!ctx.passes.quantMethod && !ctx.passes.quantPrecision) {
+    // "apply_quantization" with no precision → enable PTQ toggle only
+    ctx.passes.quantMethod = ctx.passes.quantMethod ?? "ptq";
+  }
+}
+
+/** Detect and extract conversion from action/step fields, handling negation. */
+function salvageConvertAction(ctx: SalvageContext, key: string, value: unknown): void {
+  const isActionField = key === "step" || key === "action" || key === "task";
+  const negated = typeof value === "string" ? negatedTargets(value) : { quant: false, convert: false };
+
+  if (
+    negated.convert ||
+    !(/convert/.test(key) ||
+      key === "onnx" ||
+      /onnx/.test(key) ||
+      (isActionField && typeof value === "string" && (/convert/i.test(value) || /onnx/i.test(value)))) ||
+    !(value === true || typeof value === "string" || typeof value === "number" || isRecord(value))
+  ) {
+    return;
+  }
+
+  ctx.passes.conversion = true;
+  if (typeof value === "string" && /onnx|openvino|qnn|tensorrt/i.test(value)) {
+    const fmt = value.toLowerCase();
+    if (fmt === "onnx" || fmt === "openvino" || fmt === "qnn" || fmt === "tensorrt") {
+      ctx.passes.conversionFormat = fmt;
+    }
+  }
+}
+
+/** Detect and extract trustRemoteCode from a key-value pair. */
+function salvageTrustRemoteCode(ctx: SalvageContext, key: string, value: unknown): void {
+  if (
+    key !== "trust_remote_code" &&
+    key !== "trustremotecode" &&
+    key !== "hftrustremotecode" &&
+    key !== "hf_trust_remote_code"
+  ) {
+    return;
+  }
+  if (typeof value === "boolean") {
+    ctx.trustRemoteCode = value;
+  } else if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") ctx.trustRemoteCode = true;
+    else if (normalized === "false") ctx.trustRemoteCode = false;
+  }
+}
+
 /**
  * Small local models often invent custom step schemas instead of `actions[].patch`.
  * Walk loose JSON and map known fields onto an allowlisted ChatActionPatch.
  */
 export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatActionPatch | null {
-  const passes: Partial<UIState["passes"]> = {};
-  let ihvProvider: IHVProvider | undefined;
+  const ctx: SalvageContext = {
+    passes: {},
+    ihvProvider: undefined,
+    trustRemoteCode: undefined,
+  };
 
   const visit = (node: unknown, depth: number) => {
     if (depth > 8 || node == null) return;
@@ -240,87 +481,13 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
     for (const [rawKey, value] of Object.entries(node)) {
       const key = rawKey.toLowerCase().replace(/[\s-]+/g, "_");
 
-      if (
-        (key === "ihvprovider" || key === "execution_provider" || key === "executionprovider") &&
-        typeof value === "string" &&
-        IHV_PROVIDERS.has(value)
-      ) {
-        ihvProvider = value as IHVProvider;
-      }
-
-      if (
-        (key.includes("opset") || key === "targetopset" || key === "target_opset") &&
-        typeof value === "number" &&
-        Number.isFinite(value)
-      ) {
-        passes.conversion = true;
-        passes.conversionOpset = Math.round(value);
-      }
-
-      if (key === "quantmethod" || key === "quant_method") {
-        if (typeof value === "string") {
-          const method = normalizeLooseQuantMethod(value);
-          if (method) {
-            passes.quantization = true;
-            passes.quantMethod = method;
-          }
-        }
-      }
-
-      if (key === "precision" || key === "quantprecision" || key === "quant_precision") {
-        if (typeof value === "string") {
-          const prec = normalizeLooseQuantPrecision(value);
-          if (prec) {
-            passes.quantization = true;
-            passes.quantPrecision = prec;
-            if (!passes.quantMethod) passes.quantMethod = "ptq";
-          }
-        }
-      }
-
-      const isActionField = key === "step" || key === "action" || key === "task";
-      // Negation must be scoped near the specific instruction it modifies —
-      // a single flag gating every detector on a multi-clause value (e.g.
-      // "convert to onnx without quantization") would wrongly suppress the
-      // unrelated, non-negated conversion instruction too.
-      const negated = typeof value === "string" ? negatedTargets(value) : { quant: false, convert: false };
-      const isQuantMentioned =
-        /quant/i.test(key) || (isActionField && typeof value === "string" && hasAffirmativeQuantToken(value));
-
-      if (
-        isQuantMentioned &&
-        !negated.quant &&
-        (value === true || (typeof value === "string" && hasAffirmativeQuantToken(value)))
-      ) {
-        passes.quantization = true;
-        if (typeof value === "string") {
-          const prec = normalizeLooseQuantPrecision(value) ?? extractLooseQuantPrecisionFromValue(value);
-          if (prec) passes.quantPrecision = prec;
-          const method = normalizeLooseQuantMethod(value) ?? extractLooseQuantMethodFromValue(value);
-          if (method) passes.quantMethod = method;
-        }
-        if (!passes.quantMethod && !passes.quantPrecision) {
-          // "apply_quantization" with no precision → enable PTQ toggle only
-          passes.quantMethod = passes.quantMethod ?? "ptq";
-        }
-      }
-
-      if (
-        !negated.convert &&
-        (/convert/.test(key) ||
-          key === "onnx" ||
-          /onnx/.test(key) ||
-          (isActionField && typeof value === "string" && (/convert/i.test(value) || /onnx/i.test(value)))) &&
-        (value === true || typeof value === "string" || typeof value === "number" || isRecord(value))
-      ) {
-        passes.conversion = true;
-        if (typeof value === "string" && /onnx|openvino|qnn|tensorrt/i.test(value)) {
-          const fmt = value.toLowerCase();
-          if (fmt === "onnx" || fmt === "openvino" || fmt === "qnn" || fmt === "tensorrt") {
-            passes.conversionFormat = fmt;
-          }
-        }
-      }
+      salvageProvider(ctx, key, value);
+      salvageOpset(ctx, key, value);
+      salvageQuantMethod(ctx, key, value);
+      salvagePrecision(ctx, key, value);
+      salvageQuantAction(ctx, key, value);
+      salvageConvertAction(ctx, key, value);
+      salvageTrustRemoteCode(ctx, key, value);
 
       if (key === "passes") visit(value, depth + 1);
       else if (isRecord(value) || Array.isArray(value)) visit(value, depth + 1);
@@ -329,8 +496,9 @@ export function salvageChatActionPatchFromLooseJson(parsed: unknown): ChatAction
 
   visit(parsed, 0);
   const patch: ChatActionPatch = {};
-  if (ihvProvider) patch.ihvProvider = ihvProvider;
-  if (Object.keys(passes).length > 0) patch.passes = passes;
+  if (ctx.ihvProvider) patch.ihvProvider = ctx.ihvProvider;
+  if (ctx.trustRemoteCode !== undefined) patch.trustRemoteCode = ctx.trustRemoteCode;
+  if (Object.keys(ctx.passes).length > 0) patch.passes = ctx.passes;
   return Object.keys(patch).length > 0 ? sanitizeChatActionPatch(patch) : null;
 }
 

@@ -120,10 +120,19 @@ function createBedrockClient(cfg: ProviderConfig): BedrockRuntimeClient {
 
   const region = resolveRegion(cfg);
 
-  if (hasExplicitCredentials(cfg)) {
+  const normalizedApiKey = cfg.apiKey?.trim() ?? "";
+
+  if (normalizedApiKey) {
+    if (!hasExplicitCredentials({ ...cfg, apiKey: normalizedApiKey })) {
+      throw new Error(
+        "Invalid AWS Bedrock credentials format: enter as accessKeyId:secretAccessKey (accessKeyId must start with AKIA or ASIA). Or clear the API key to use your ~/.aws/credentials default profile.",
+      );
+    }
+
+    const { accessKeyId, secretAccessKey, sessionToken } =
+      parsePackedCredentials(normalizedApiKey);
     // Temporary / assumed-role credentials carry a third packed segment;
     // static keys omit it and no env token is mixed in.
-    const { accessKeyId, secretAccessKey, sessionToken } = parsePackedCredentials(cfg.apiKey);
     return new BedrockRuntimeClient({
       region,
       credentials: {
@@ -236,7 +245,7 @@ registerProvider({
     const secretKey = process.env.AWS_SECRET_ACCESS_KEY!.trim();
     // Only temporary (ASIA) credentials carry a session token; never mix an
     // env token into a long-term (AKIA) key.
-    const sessionToken = /^ASIA/.test(accessKeyId) ? process.env.AWS_SESSION_TOKEN?.trim() : undefined;
+    const sessionToken = accessKeyId.startsWith("ASIA") ? process.env.AWS_SESSION_TOKEN?.trim() : undefined;
     const packedKey = sessionToken
       ? `${accessKeyId}:${secretKey}:${sessionToken}`
       : `${accessKeyId}:${secretKey}`;
