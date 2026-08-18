@@ -498,13 +498,19 @@ describe("GET /api/mcp/health", () => {
   });
 
   it("reports local health with venvExists when in local mode", async () => {
-    const res = await fetch(`${baseUrl}/api/mcp/health`);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok?: boolean; available?: boolean; isRemote?: boolean; venvExists?: boolean };
-    expect(body.ok).toBe(true);
-    expect(body.available).toBe(true);
-    expect(body.isRemote).toBe(false);
-    expect(typeof body.venvExists).toBe("boolean");
+    const originalUrl = process.env.OLIVE_MCP_URL;
+    delete process.env.OLIVE_MCP_URL;
+    try {
+      const res = await fetch(`${baseUrl}/api/mcp/health`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok?: boolean; available?: boolean; isRemote?: boolean; venvExists?: boolean };
+      expect(body.ok).toBe(true);
+      expect(body.available).toBe(true);
+      expect(body.isRemote).toBe(false);
+      expect(typeof body.venvExists).toBe("boolean");
+    } finally {
+      if (originalUrl !== undefined) process.env.OLIVE_MCP_URL = originalUrl;
+    }
   });
 
   it("omits local venvExists check when OLIVE_MCP_URL is configured (remote mode)", async () => {
