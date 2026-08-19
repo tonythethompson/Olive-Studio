@@ -5,6 +5,26 @@ GitHub Action and begins with `/oc` (or `/opencode`). The message usually carrie
 `<pull_request>` context block (title, body, changed files, comments, reviews) — read it
 carefully before answering.
 
+## Absolute rule: never emit `@path` tokens in anything you post
+
+**The action posts your reply text verbatim — it does NOT expand files.** A line like
+`@/tmp/opencode/summary.md` (or any `@...` path token) in a finding body, a thread reply,
+or the final summary is posted literally as the comment body, leaking a runner path into a
+public comment. This has happened on this repo more than once and it is embarrassing.
+
+- **Never** write `@/tmp/...`, `@./...`, or any `@<file>` shorthand in text that will be
+  posted. A body that references a file is a bug, not a shortcut.
+- If you draft content in a temp file, **read it back and inline the full contents** before
+  posting. When a reply is long, paste it — do not reference it.
+- The `@` form is only ever valid as a literal argument to the `gh` CLI (`-f body=@file`),
+  and only when you invoke `gh` directly in a shell. Even then, `gh api` does not reliably
+  expand it — assume it will post the literal token and always pass real content instead
+  (e.g. `-f body="$(cat file)"`).
+- **Mandatory self-check before finishing:** grep every body you are about to post for
+  `@/` and `/tmp/`. If anything matches, fix it. The `opencode.yml` workflow fails the run
+  when a posted comment leaks a path token, so a leak shows up as a red check — but never
+  count on that; inline content from the start.
+
 ## Model routing
 
 The workflow probes and selects the agent model per command (see `.github/workflows/opencode.yml`):

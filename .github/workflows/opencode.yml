@@ -359,3 +359,34 @@ jobs:
           fi
           echo "::error::opencode github run failed on both attempts"
           exit 1
+
+      # Detection net for the leaked-`@path` failure mode. `opencode github run`
+      # posts the agent's reply text verbatim, so if the reply referenced a temp
+      # file (e.g. "@/tmp/opencode/summary.md") that token leaks into a public
+      # comment. Scan the comments this run posted and fail loudly on any bare
+      # "@/..." line instead of letting the leak pass unnoticed.
+      - name: Guard against leaked path tokens
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUM="${{ github.event.issue.number || github.event.pull_request.number || '' }}"
+          [ -n "$PR_NUM" ] || exit 0
+          SINCE=$(( $(date +%s) - 5400 ))
+          LEAKED=$(
+            {
+              gh api "repos/${{ github.repository }}/issues/$PR_NUM/comments" --paginate \
+                --jq '.[] | select((.created_at | fromdateiso8601) > '"$SINCE"') | .body'
+              gh api "repos/${{ github.repository }}/pulls/$PR_NUM/comments" --paginate \
+                --jq '.[] | select((.created_at | fromdateiso8601) > '"$SINCE"') | .body'
+            } | grep -E '^\s*@/' || true
+          )
+          if [ -n "$LEAKED" ]; then
+            echo "::error::A comment posted by this run contains a leaked path token instead of content:"
+            echo "$LEAKED"
+            echo "The temp file no longer exists on this runner, so the intended content cannot"
+            echo "be recovered. Re-run /oc fix and inline the content rather than a @/tmp/... path."
+            exit 1
+          fi
+          echo "::notice::No leaked path tokens in comments posted by this run."
