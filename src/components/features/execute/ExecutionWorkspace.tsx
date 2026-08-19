@@ -28,7 +28,7 @@ import { ExportRecipeOverlay } from "./ExportRecipeOverlay";
 import { ExecutionLogPanel } from "./ExecutionLogPanel";
 import { ManualExecutionControls } from "./ManualExecutionControls";
 
-import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
+import { buildRecipeFromState } from "@/lib/recipePipeline";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 
@@ -250,6 +250,7 @@ export function ExecutionWorkspace({
   // Report issue modal state.
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportArea, setReportArea] = useState<ReportArea | undefined>(undefined);
+  const [reportTitle, setReportTitle] = useState("");
   const [reportDescription, setReportDescription] = useState("");
 
   // Job history modal state.
@@ -272,21 +273,10 @@ export function ExecutionWorkspace({
   } = useAgentMode();
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [exportRecords, setExportRecords] = useState<JobHistoryRecord[]>([]);
 
-  useEffect(() => {
-    let isSubscribed = true;
-    void getJobHistory()
-      .then((records) => {
-        if (isSubscribed) setExportRecords(records);
-      })
-      .catch(() => {
-        if (isSubscribed) setExportRecords([]);
-      });
-    return () => {
-      isSubscribed = false;
-    };
-  }, [isHistoryOpen, agentOutcome, executionStatus]);
+  const handleStartAgent = useCallback(() => {
+    startAgent();
+  }, [startAgent]);
 
   // SSE stream for agent activity
   const handleAgentStreamEntry = useCallback(
@@ -330,20 +320,11 @@ export function ExecutionWorkspace({
     onComplete: handleAgentStreamComplete,
   });
 
-  const handleStartAgent = useCallback(() => {
-    void startAgent({
-      recipeJson: buildRecipeJsonFromState(state),
-      cudaVersion: state.cudaVersion ?? "auto",
-    });
-  }, [startAgent, state]);
-
-  /**
-   * Handle mode toggle. If switching from agent to manual while agent is running,
-   * show the confirmation dialog instead of switching immediately.
-   */
+  /** Handle tab switches — prompt if agent is actively running. */
   const handleModeChange = useCallback(
     (newMode: "manual" | "agent") => {
-      if (agentMode === "agent" && newMode === "manual" && agentRunning) {
+      if (newMode === agentMode) return;
+      if (agentMode === "agent" && agentRunning) {
         setConfirmDialogOpen(true);
         return;
       }
@@ -400,6 +381,22 @@ export function ExecutionWorkspace({
     },
     [state, hardwareProbe, setState, setExecutionLogs],
   );
+
+  const [exportRecords, setExportRecords] = useState<JobHistoryRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getJobHistory()
+      .then((records) => {
+        if (!cancelled) setExportRecords(records);
+      })
+      .catch(() => {
+        if (!cancelled) setExportRecords([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div
@@ -505,6 +502,7 @@ export function ExecutionWorkspace({
             onRetryProvider={handleRetryProvider}
             onSendFeedback={() => {
               setReportArea("execution-batch");
+              setReportTitle(`Execution failed (exit code ${executionExitCode ?? "?"})`);
               setReportDescription(
                 `Execution failed with exit code ${executionExitCode ?? "?"}.\n\nRecent logs:\n${executionLogs.slice(-20).join("\n")}`,
               );
@@ -554,6 +552,7 @@ export function ExecutionWorkspace({
         onClose={() => {
           setIsReportOpen(false);
           setReportArea(undefined);
+          setReportTitle("");
           setReportDescription("");
         }}
         state={state}
@@ -561,6 +560,7 @@ export function ExecutionWorkspace({
         executionLogs={executionLogs}
         mcpDiagnostic={diagnosis.mcpDiagnostic}
         defaultArea={reportArea}
+        defaultTitle={reportTitle}
         defaultDescription={reportDescription}
       />
     </div>

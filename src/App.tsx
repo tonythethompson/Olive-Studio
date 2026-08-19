@@ -683,6 +683,11 @@ function Dashboard() {
                 defaultArea={
                   reportData ? labelToArea(reportData.label) : pipelineViewToReportArea(activeView)
                 }
+                defaultTitle={
+                  reportData
+                    ? `Error in ${reportData.label ?? "UI"}: ${reportData.error.message.slice(0, 60)}`
+                    : undefined
+                }
                 defaultDescription={
                   reportData
                     ? `Error in ${reportData.label ?? "unknown section"}:\n\n${reportData.error.message}\n\n${reportData.componentStack ? `Component stack:\n${reportData.componentStack}` : ""}`

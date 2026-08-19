@@ -132,29 +132,31 @@ export function AssistantSidebar({
     reviewRefreshRef.current?.(pending.resetFirst ? { resetFirst: true } : undefined);
   }, []);
 
-  const chatLogForReport = useMemo(
-    () =>
-      chat.chatMessages.map((m) => {
-        // Normalize message text to keep one "sender: text" line per turn
-        // 1. Replace newlines with spaces
-        // 2. Collapse multiple whitespace characters
-        // 3. Trim leading/trailing whitespace
-        // 4. Optionally truncate to a reasonable maximum length
-        const maxLength = 500;
-        const normalized = m.text
-          .replace(/\s*\n\s*/g, " ") // replace newlines (and surrounding spaces) with a single space
-          .replace(/\s+/g, " ") // collapse multiple whitespace into a single space
-          .trim();
+  const chatLogForReport = useMemo(() => {
+    // Clip off any initial boilerplate assistant messages before the first user message
+    const firstUserIndex = chat.chatMessages.findIndex((m) => m.sender === "user");
+    const relevantMessages = firstUserIndex >= 0 ? chat.chatMessages.slice(firstUserIndex) : [];
 
-        const text =
-          normalized.length > maxLength
-            ? `${normalized.slice(0, maxLength)}…`
-            : normalized;
+    return relevantMessages.map((m) => {
+      // Normalize message text to keep one "sender: text" line per turn
+      // 1. Replace newlines with spaces
+      // 2. Collapse multiple whitespace characters
+      // 3. Trim leading/trailing whitespace
+      // 4. Optionally truncate to a reasonable maximum length
+      const maxLength = 500;
+      const normalized = m.text
+        .replace(/\s*\n\s*/g, " ") // replace newlines (and surrounding spaces) with a single space
+        .replace(/\s+/g, " ") // collapse multiple whitespace into a single space
+        .trim();
 
-        return `${m.sender}: ${text}`;
-      }),
-    [chat.chatMessages],
-  );
+      const text =
+        normalized.length > maxLength
+          ? `${normalized.slice(0, maxLength)}…`
+          : normalized;
+
+      return `${m.sender}: ${text}`;
+    });
+  }, [chat.chatMessages]);
 
   const handleApplyChatAction = (messageIndex: number, action: ChatAction) => {
     const patch = sanitizeChatActionPatch(action.patch);

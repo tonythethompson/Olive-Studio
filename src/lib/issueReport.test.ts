@@ -75,7 +75,6 @@ describe("redactSecrets", () => {
       "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4R0NNIn0.encryptedKey123456.ivSegment123456.ciphertext123456.authTag123456";
     const redacted = redactSecrets(`token=${jwe}`);
     expect(redacted).not.toContain(jwe);
-    // The full five segments must be consumed — no trailing segment may survive.
     expect(redacted).not.toContain("encryptedKey123456");
     expect(redacted).not.toContain("ciphertext123456");
     expect(redacted).not.toContain("authTag123456");
@@ -90,9 +89,7 @@ describe("redactSecrets", () => {
   });
 
   it("does not redact model names, semver, or short dotted identifiers as JWTs", () => {
-    // Slash-qualified HF model ids with dots must survive.
     expect(redactSecrets("Qwen/Qwen2.5-0.5B-Instruct")).toBe("Qwen/Qwen2.5-0.5B-Instruct");
-    // Short dotted tokens (segments < 8 chars, not eyJ) are not secrets.
     expect(redactSecrets("node.js.org")).toBe("node.js.org");
     expect(redactSecrets("package.json.bak")).toBe("package.json.bak");
     expect(redactSecrets("1.0.0")).toBe("1.0.0");
@@ -173,6 +170,26 @@ describe("collectTelemetry", () => {
     expect(result.logs).not.toContain("line0");
     expect(result.logs).toContain("line99");
   });
+
+  it("clips off initial boilerplate assistant greeting before the first user message", () => {
+    const rawChat = [
+      "assistant: Hello! I'm your Olive Studio assistant. I read your live workspace...",
+      "user: How do I quantize with AWQ?",
+      "assistant: To quantize with AWQ, select Quantization in Passes.",
+    ];
+    const result = collectTelemetry(["chat-logs"], { chatLog: rawChat });
+    expect(result["chat-logs"]).not.toContain("Hello! I'm your Olive Studio assistant");
+    expect(result["chat-logs"]).toContain("user: How do I quantize with AWQ?");
+    expect(result["chat-logs"]).toContain("assistant: To quantize with AWQ");
+  });
+
+  it("returns fallback when chat has only boilerplate greeting and no user turns", () => {
+    const rawChat = [
+      "assistant: Hello! I'm your Olive Studio assistant. I read your live workspace...",
+    ];
+    const result = collectTelemetry(["chat-logs"], { chatLog: rawChat });
+    expect(result["chat-logs"]).toBe("No chat history available");
+  });
 });
 
 // ── Issue body ───────────────────────────────────────────────────────────────
@@ -231,12 +248,58 @@ describe("buildIssueBody", () => {
     const body = buildIssueBody({ ...baseReport, category: "feature", severity: "blocking" });
     expect(body).toContain("**Severity:** N/A");
   });
+
+  it("includes screenshot section when screenshotName is provided", () => {
+    const body = buildIssueBody({ ...baseReport, screenshotName: "error_screenshot.png" });
+    expect(body).toContain("### Screenshots");
+    expect(body).toContain("error_screenshot.png");
+    expect(body).toContain("paste (Ctrl+V)");
+  });
+
+  it("includes paste anchor when chat logs are offloaded", () => {
+    const report: IssueReport = {
+      ...baseReport,
+      telemetry: {
+        ...baseReport.telemetry,
+        "chat-logs": "user: help\nassistant: sure",
+      },
+    };
+    const body = buildIssueBody(report, { chatLogOffloaded: true });
+    expect(body).toContain("### Assistant Chat Log");
+    expect(body).toContain("Chat log was copied to your clipboard");
+  });
+
+  it("includes paste anchor when execution logs are offloaded", () => {
+    const report: IssueReport = {
+      ...baseReport,
+      telemetry: {
+        ...baseReport.telemetry,
+        logs: "log line 1\nlog line 2",
+      },
+    };
+    const body = buildIssueBody(report, { logsOffloaded: true });
+    expect(body).toContain("### Execution Logs");
+    expect(body).toContain("Execution logs were copied to your clipboard");
+  });
 });
 
 // ── Issue title ──────────────────────────────────────────────────────────────
 
 describe("buildIssueTitle", () => {
-  it("builds title from category, area, and description snippet", () => {
+  it("uses custom user title when provided", () => {
+    const report: IssueReport = {
+      category: "bug",
+      severity: "annoying",
+      area: "recipe-builder",
+      title: "Custom Title Provided By User",
+      description: "Some long description that shouldn't be used as the title snippet.",
+      telemetry: {},
+    };
+    const title = buildIssueTitle(report);
+    expect(title).toBe("[Bug report] Model source: Custom Title Provided By User");
+  });
+
+  it("builds title from category, area, and description snippet when title is omitted", () => {
     const report: IssueReport = {
       category: "bug",
       severity: "annoying",
@@ -249,12 +312,12 @@ describe("buildIssueTitle", () => {
     expect(title).toContain("graph view");
   });
 
-  it("truncates long descriptions", () => {
+  it("truncates long descriptions when no title is provided", () => {
     const report: IssueReport = {
       category: "feature",
       severity: "annoying",
       area: "other",
-      description: "A".repeat(100),
+      description: "A request for a great new feature that will revolutionize workflows across all models.",
       telemetry: {},
     };
     const title = buildIssueTitle(report);
@@ -274,82 +337,91 @@ describe("buildIssueTitle", () => {
   });
 });
 
-// ── GitHub URL ───────────────────────────────────────────────────────────────
+// ── GitHub URL & Smart Offloading ────────────────────────────────────────────
 
-describe("buildGitHubIssueUrl", () => {
-  it("generates URL with correct repo", () => {
+describe("buildGitHubIssueUrl & buildReport smart progressive offloading", () => {
+  it("generates pre-filled URL with title, body, and labels when within budget", () => {
     const report: IssueReport = {
       category: "bug",
       severity: "annoying",
       area: "other",
-      description: "Test issue",
-      telemetry: {},
-    };
-    const url = buildGitHubIssueUrl(report);
-    expect(url).toContain("https://github.com/tonythethompson/Olive-Studio/issues/new?");
-  });
-
-  it("includes title as query param", () => {
-    const report: IssueReport = {
-      category: "bug",
-      severity: "annoying",
-      area: "other",
-      description: "Test",
-      telemetry: {},
-    };
-    const url = buildGitHubIssueUrl(report);
-    expect(url).toContain("title=");
-  });
-
-  it("includes labels", () => {
-    const report: IssueReport = {
-      category: "feature",
-      severity: "annoying",
-      area: "other",
-      description: "Test",
-      telemetry: {},
-    };
-    const url = buildGitHubIssueUrl(report);
-    expect(url).toContain("labels=user-report");
-    expect(url).toContain("feature");
-  });
-
-  it("falls back to canonical issue URL when encoded body exceeds budget", () => {
-    const report: IssueReport = {
-      category: "bug",
-      severity: "blocking",
-      area: "execution-batch",
-      description: "x".repeat(2500),
-      telemetry: {
-        logs: Array.from({ length: 50 }, (_, i) => `log-line-${i}-${"y".repeat(80)}`).join("\n"),
-      },
-    };
-    const result = buildReport(report, {});
-    expect(result.urlExceededBudget).toBe(true);
-    expect(result.url).toBe("https://github.com/tonythethompson/Olive-Studio/issues/new");
-    expect(result.fullText).toContain(report.description);
-    expect(result.fullText).toContain("log-line-0");
-    expect(buildGitHubIssueUrl(report)).toBe(result.url);
-  });
-});
-
-// ── Full report ──────────────────────────────────────────────────────────────
-
-describe("buildReport", () => {
-  it("returns url, body, title, and fullText", () => {
-    const report: IssueReport = {
-      category: "bug",
-      severity: "blocking",
-      area: "execution-batch",
-      description: "Crash on quantization",
+      title: "Short bug",
+      description: "Short description",
       telemetry: { platform: "OS: Windows" },
     };
     const result = buildReport(report, {});
-    expect(result.url).toBeDefined();
-    expect(result.body).toBeDefined();
-    expect(result.title).toBeDefined();
-    expect(result.fullText).toContain("# ");
-    expect(result.fullText).toContain("Crash on quantization");
     expect(result.urlExceededBudget).toBe(false);
+    expect(result.chatLogOffloaded).toBe(false);
+    expect(result.logsOffloaded).toBe(false);
+    expect(result.url).toContain("https://github.com/tonythethompson/Olive-Studio/issues/new?");
+    expect(result.url).toContain("title=");
+    expect(result.url).toContain("body=");
+    expect(result.url).toContain("labels=user-report");
+    expect(buildGitHubIssueUrl(report)).toBe(result.url);
+  });
+
+  it("pre-fills GitHub issue URL with Title, Description, and Telemetry while offloading chat logs when chat logs cause URL to exceed budget", () => {
+    const report: IssueReport = {
+      category: "bug",
+      severity: "blocking",
+      area: "assistant-ai",
+      title: "Assistant provides incorrect pass configuration",
+      description: "When asking the assistant to optimize with QNN, it suggested unsupported passes.",
+      telemetry: {
+        platform: "OS: Windows | Arch: x64",
+        hardware: "CPU: Intel i9 | RAM: 32 GB",
+        "chat-logs": Array.from({ length: 30 }, (_, i) => `user: message ${i} with extra text to make it very long\nassistant: reply ${i} with extended explanation`).join("\n"),
+      },
+    };
+
+    const result = buildReport(report, {});
+    // The URL should NOT be abandoned to a blank form
+    expect(result.urlExceededBudget).toBe(false);
+    expect(result.chatLogOffloaded).toBe(true);
+    // URL contains title, category, description, and telemetry
+    expect(result.url).toContain("title=%5BBug+report%5D");
+    expect(result.url).toContain("Assistant+provides+incorrect+pass");
+    expect(result.url).toContain("When+asking+the+assistant");
+    // Chat log is copied to clipboard text
+    expect(result.offloadedClipboardText).toContain("user: message 0");
+    expect(result.fullText).toContain(report.description);
+  });
+
+  it("pre-fills GitHub issue URL and offloads execution logs when execution logs exceed budget without chat logs", () => {
+    const report: IssueReport = {
+      category: "bug",
+      severity: "blocking",
+      area: "execution-batch",
+      title: "Quantization crash during calibration",
+      description: "Olive crashed with an internal CUDA memory error.",
+      telemetry: {
+        platform: "OS: Windows | Arch: x64",
+        hardware: "GPU: RTX 4090",
+        logs: Array.from({ length: 40 }, (_, i) => `[ERROR] line ${i}: cudaMalloc failed in operator node ${i} with code 2`).join("\n"),
+      },
+    };
+
+    const result = buildReport(report, {});
+    expect(result.urlExceededBudget).toBe(false);
+    expect(result.logsOffloaded).toBe(true);
+    expect(result.url).toContain("title=%5BBug+report%5D");
+    expect(result.url).toContain("Quantization+crash");
+    expect(result.offloadedClipboardText).toContain("cudaMalloc failed");
+  });
+
+  it("truncates description for URL query when description itself is huge, keeping full report in clipboard", () => {
+    const longDesc = "This is a detailed bug description explaining the steps that led to an unexpected error in the model optimization pipeline. ".repeat(30);
+    const report: IssueReport = {
+      category: "bug",
+      severity: "blocking",
+      area: "other",
+      title: "Extremely long crash report",
+      description: longDesc,
+      telemetry: {},
+    };
+
+    const result = buildReport(report, {});
+    expect(result.url).toContain("title=");
+    expect(result.fullText).toContain(longDesc);
   });
 });

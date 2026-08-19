@@ -1,5 +1,16 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { X, ExternalLink, Copy, Check, ChevronDown, AlertTriangle, Repeat } from "lucide-react";
+import {
+  X,
+  ExternalLink,
+  Copy,
+  Check,
+  ChevronDown,
+  AlertTriangle,
+  Repeat,
+  ImageIcon,
+  UploadCloud,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
@@ -24,6 +35,12 @@ import {
   buildReport,
 } from "@/lib/issueReport";
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface ReportIssueModalProps {
   open: boolean;
   onClose: () => void;
@@ -34,6 +51,8 @@ interface ReportIssueModalProps {
   mcpDiagnostic?: unknown;
   /** Pre-fill the area dropdown (e.g., from execution context). */
   defaultArea?: ReportArea;
+  /** Pre-fill the title input (e.g., from error context). */
+  defaultTitle?: string;
   /** Pre-fill the description (e.g., from error context). */
   defaultDescription?: string;
   /** Error frequency info from the tracker */
@@ -49,24 +68,45 @@ export function ReportIssueModal({
   chatLog,
   mcpDiagnostic: _mcpDiagnostic,
   defaultArea,
+  defaultTitle,
   defaultDescription,
   frequencyInfo,
 }: ReportIssueModalProps) {
   const [category, setCategory] = useState<ReportCategory>("bug");
   const [severity, setSeverity] = useState<ReportSeverity>("annoying");
   const [area, setArea] = useState<ReportArea>(defaultArea ?? "other");
+  const [title, setTitle] = useState(defaultTitle ?? "");
   const [description, setDescription] = useState(defaultDescription ?? "");
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [selectedTelemetry, setSelectedTelemetry] = useState<Set<TelemetryOptionId>>(
     new Set<TelemetryOptionId>(["platform", "hardware"]),
   );
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [screenshotCopied, setScreenshotCopied] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Clean up object URL when screenshot changes or unmounts
+  useEffect(() => {
+    return () => {
+      if (screenshotPreview) {
+        URL.revokeObjectURL(screenshotPreview);
+      }
+    };
+  }, [screenshotPreview]);
+
+  const handleSetScreenshot = useCallback((file: File | null) => {
+    setScreenshotPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+    setScreenshotFile(file);
+  }, []);
 
   // Reset state only when the modal transitions from closed → open.
-  // Keeping defaultArea/defaultDescription out of the dep array prevents a
-  // second error (fired while the modal is already open) from wiping the text
-  // the user has already typed.
   const wasOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
@@ -75,19 +115,19 @@ export function ReportIssueModal({
       setCategory("bug");
       setSeverity("annoying");
       setArea(defaultArea ?? "other");
+      setTitle(defaultTitle ?? "");
       setDescription(defaultDescription ?? "");
+      handleSetScreenshot(null);
       setSelectedTelemetry(new Set<TelemetryOptionId>(["platform", "hardware"]));
       setShowPreview(false);
       setCopied(false);
+      setScreenshotCopied(false);
       setOpenError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only depend on open
   }, [open]);
 
-  // Lock severity to N/A whenever the category isn't "bug" — severity only
-  // describes bug impact and has no meaning for feature requests etc.
-  // Adjust during render (not an effect) so the next paint already has the
-  // matching severity.
+  // Lock severity to N/A whenever the category isn't "bug"
   if (!categoryHasSeverity(category) && severity !== "n-a") {
     setSeverity("n-a");
   } else if (categoryHasSeverity(category) && severity === "n-a") {
@@ -108,7 +148,9 @@ export function ReportIssueModal({
       category,
       severity,
       area,
+      title: title.trim() || undefined,
       description,
+      screenshotName: screenshotFile?.name ?? null,
       telemetry: collectTelemetry(Array.from(selectedTelemetry), {
         state,
         hardwareProbe,
@@ -124,10 +166,23 @@ export function ReportIssueModal({
         }
         : null,
     }),
-    [category, severity, area, description, selectedTelemetry, state, hardwareProbe, executionLogs, chatLog, frequencyInfo],
+    [
+      category,
+      severity,
+      area,
+      title,
+      description,
+      screenshotFile,
+      selectedTelemetry,
+      state,
+      hardwareProbe,
+      executionLogs,
+      chatLog,
+      frequencyInfo,
+    ],
   );
 
-  const { url, fullText, urlExceededBudget } = useMemo(
+  const { url, fullText, urlExceededBudget, chatLogOffloaded, logsOffloaded, offloadedClipboardText } = useMemo(
     () => buildReport(report, { state, hardwareProbe, executionLogs, chatLog }),
     [report, state, hardwareProbe, executionLogs, chatLog],
   );
@@ -151,22 +206,55 @@ export function ReportIssueModal({
     }
   }, [fullText]);
 
+  const handleCopyScreenshot = useCallback(async () => {
+    if (!screenshotFile) return;
+    try {
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ [screenshotFile.type]: screenshotFile }),
+        ]);
+        setScreenshotCopied(true);
+        setTimeout(() => setScreenshotCopied(false), 2000);
+      }
+    } catch {
+      // Fallback
+    }
+  }, [screenshotFile]);
+
   const handleOpenGithub = useCallback(async () => {
     setOpenError(null);
     try {
-      if (urlExceededBudget) {
-        // Full prefilled URL was too long: start opening URL before clipboard copy to preserve user activation
-        const openPromise = openExternal(url);
-        const copyPromise = copyFullText();
-        await Promise.all([openPromise, copyPromise]);
-      } else {
-        await openExternal(url);
+      // If chat log, execution logs, or other text was offloaded to clipboard, copy it to clipboard first
+      if (offloadedClipboardText) {
+        try {
+          await navigator.clipboard.writeText(offloadedClipboardText);
+        } catch {
+          const textarea = document.createElement("textarea");
+          textarea.value = offloadedClipboardText;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textarea);
+        }
+      } else if (urlExceededBudget) {
+        await copyFullText();
+      } else if (screenshotFile && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        // Attempt to copy screenshot image to clipboard so user can immediately Ctrl+V into GitHub
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ [screenshotFile.type]: screenshotFile }),
+          ]);
+        } catch {
+          /* ignore */
+        }
       }
+
+      await openExternal(url);
       onClose();
     } catch (err) {
       setOpenError(err instanceof Error ? err.message : "Could not open browser");
     }
-  }, [url, urlExceededBudget, copyFullText, onClose]);
+  }, [url, offloadedClipboardText, urlExceededBudget, copyFullText, screenshotFile, onClose]);
 
   const handleCopy = useCallback(() => {
     void copyFullText();
@@ -179,6 +267,61 @@ export function ReportIssueModal({
     [onClose],
   );
 
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith("image/")) {
+        handleSetScreenshot(file);
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith("image/")) {
+        handleSetScreenshot(file);
+      }
+    }
+  };
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleSetScreenshot(file);
+            break;
+          }
+        }
+      }
+    },
+    [handleSetScreenshot],
+  );
+
+  const isSubmitDisabled = !title.trim() && !description.trim();
+
   if (!open) return null;
 
   return (
@@ -190,6 +333,7 @@ export function ReportIssueModal({
       aria-labelledby="report-issue-title"
       tabIndex={-1}
       onClick={handleBackdropClick}
+      onPaste={handlePaste}
     >
       <Card className="w-full max-w-lg border-slate-800 bg-slate-900 shadow-2xl max-h-[90vh] flex flex-col">
         <CardHeader
@@ -208,51 +352,54 @@ export function ReportIssueModal({
             </Button>
           }
         />
-        <CardContent className="flex-1 overflow-y-auto space-y-5">
-          {/* Category dropdown */}
-          <div className="space-y-1.5">
-            <Label htmlFor="report-category" className="text-sm font-semibold text-slate-300">
-              Category
-            </Label>
-            <div className="relative">
-              <select
-                id="report-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as ReportCategory)}
-                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer"
-              >
-                {REPORT_CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+        <CardContent className="flex-1 overflow-y-auto space-y-4">
+          {/* Category & Area grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Category dropdown */}
+            <div className="space-y-1.5">
+              <Label htmlFor="report-category" className="text-sm font-semibold text-slate-300">
+                Category
+              </Label>
+              <div className="relative">
+                <select
+                  id="report-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as ReportCategory)}
+                  className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer"
+                >
+                  {REPORT_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+              </div>
             </div>
-          </div>
 
-          {/* Severity dropdown */}
-          <div className="space-y-1.5">
-            <Label htmlFor="report-severity" className="text-sm font-semibold text-slate-300">
-              Severity
-            </Label>
-            <div className="relative">
-              <select
-                id="report-severity"
-                value={severity}
-                disabled={!categoryHasSeverity(category)}
-                onChange={(e) => setSeverity(e.target.value as ReportSeverity)}
-                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {REPORT_SEVERITIES.filter((s) =>
-                  categoryHasSeverity(category) ? s.id !== "n-a" : s.id === "n-a",
-                ).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+            {/* Severity dropdown */}
+            <div className="space-y-1.5">
+              <Label htmlFor="report-severity" className="text-sm font-semibold text-slate-300">
+                Severity
+              </Label>
+              <div className="relative">
+                <select
+                  id="report-severity"
+                  value={severity}
+                  disabled={!categoryHasSeverity(category)}
+                  onChange={(e) => setSeverity(e.target.value as ReportSeverity)}
+                  className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-electric-blue cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {REPORT_SEVERITIES.filter((s) =>
+                    categoryHasSeverity(category) ? s.id !== "n-a" : s.id === "n-a",
+                  ).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
+              </div>
             </div>
           </div>
 
@@ -278,6 +425,21 @@ export function ReportIssueModal({
             </div>
           </div>
 
+          {/* Title input */}
+          <div className="space-y-1.5">
+            <Label htmlFor="report-title-input" className="text-sm font-semibold text-slate-300">
+              Title <span className="text-rose-400">*</span>
+            </Label>
+            <input
+              id="report-title-input"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Brief summary of the issue or feature request..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-electric-blue"
+            />
+          </div>
+
           {/* Description textarea */}
           <div className="space-y-1.5">
             <Label htmlFor="report-description" className="text-sm font-semibold text-slate-300">
@@ -291,6 +453,95 @@ export function ReportIssueModal({
               rows={4}
               className="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-electric-blue resize-none"
             />
+          </div>
+
+          {/* Screenshot upload area */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold text-slate-300 flex items-center justify-between">
+              <span>Screenshot</span>
+              <span className="text-xs text-slate-500 font-normal">Optional</span>
+            </Label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+              className="hidden"
+              onChange={handleFileInputChange}
+            />
+
+            {screenshotFile && screenshotPreview ? (
+              <div className="flex items-center gap-3 p-2.5 rounded-md border border-slate-800 bg-slate-950">
+                <img
+                  src={screenshotPreview}
+                  alt="Screenshot preview"
+                  className="h-12 w-16 object-cover rounded border border-slate-700 bg-slate-900 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-200 truncate">{screenshotFile.name}</p>
+                  <p className="text-xs text-slate-500">{formatFileSize(screenshotFile.size)}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleCopyScreenshot}
+                    title="Copy image to clipboard"
+                    className="h-8 px-2 text-xs text-slate-300 hover:text-slate-100 hover:bg-slate-800"
+                  >
+                    {screenshotCopied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-400 mr-1" /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => handleSetScreenshot(null)}
+                    title="Remove screenshot"
+                    className="h-8 w-8 p-0 text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={cn(
+                  "border border-dashed rounded-md p-3 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-1",
+                  isDragging
+                    ? "border-electric-blue bg-electric-blue/10"
+                    : "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-950",
+                )}
+              >
+                <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium">
+                  {isDragging ? (
+                    <UploadCloud className="h-4 w-4 text-electric-blue animate-bounce" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4 text-slate-500" />
+                  )}
+                  <span>Click to attach screenshot, drag & drop, or paste (Ctrl+V)</span>
+                </div>
+                <p className="text-[10px] text-slate-600">PNG, JPG, WebP up to 10MB</p>
+              </div>
+            )}
           </div>
 
           {/* Telemetry checkboxes */}
@@ -377,10 +628,30 @@ export function ReportIssueModal({
 
         {/* Footer with actions */}
         <div className="p-4 border-t border-slate-800 space-y-2">
+          {chatLogOffloaded && !logsOffloaded && !urlExceededBudget && (
+            <p className="text-[11px] text-electric-blue/90 leading-relaxed">
+              <span className="font-semibold">Note:</span> The assistant chat log will be copied to your clipboard when opening GitHub so you can paste (Ctrl+V) it into the issue.
+            </p>
+          )}
+          {logsOffloaded && !chatLogOffloaded && !urlExceededBudget && (
+            <p className="text-[11px] text-electric-blue/90 leading-relaxed">
+              <span className="font-semibold">Note:</span> Execution logs will be copied to your clipboard when opening GitHub so you can paste (Ctrl+V) them into the issue.
+            </p>
+          )}
+          {chatLogOffloaded && logsOffloaded && !urlExceededBudget && (
+            <p className="text-[11px] text-electric-blue/90 leading-relaxed">
+              <span className="font-semibold">Note:</span> Execution and chat logs will be copied to your clipboard when opening GitHub so you can paste (Ctrl+V) them into the issue.
+            </p>
+          )}
           {urlExceededBudget && (
             <p className="text-[11px] text-amber-400/90 leading-relaxed">
               Report is too large for a prefilled GitHub URL. Opening GitHub will copy the full report
               to your clipboard so you can paste it into the issue body.
+            </p>
+          )}
+          {screenshotFile && (
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              <span className="font-semibold text-slate-300">Screenshot attached:</span> Drag & drop or paste your image into GitHub&apos;s issue editor.
             </p>
           )}
           {openError && (
@@ -396,7 +667,7 @@ export function ReportIssueModal({
               <Button
                 variant="outline"
                 onClick={handleCopy}
-                disabled={!description.trim()}
+                disabled={isSubmitDisabled}
                 className="text-sm h-9 border-slate-700 text-slate-300 hover:border-slate-500"
               >
                 {copied ? (
@@ -411,8 +682,8 @@ export function ReportIssueModal({
               </Button>
               <Button
                 onClick={handleOpenGithub}
-                disabled={!description.trim()}
-                className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950"
+                disabled={isSubmitDisabled}
+                className="text-sm h-9 bg-electric-blue hover:bg-electric-blue/90 text-slate-950 font-medium"
               >
                 <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Open GitHub Issue
               </Button>

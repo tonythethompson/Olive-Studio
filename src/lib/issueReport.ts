@@ -131,7 +131,9 @@ export interface IssueReport {
   category: ReportCategory;
   severity: ReportSeverity;
   area: ReportArea;
+  title?: string;
   description: string;
+  screenshotName?: string | null;
   telemetry: Partial<Record<TelemetryOptionId, string>>;
   /** Error frequency info for repeated crashes */
   frequencyInfo?: {
@@ -217,7 +219,18 @@ function collectLogs(logs: string[] | undefined, maxLines = 50): string {
 
 function collectChatLog(chatLog: string[] | undefined, maxLines = 20): string {
   if (!chatLog || chatLog.length === 0) return "No chat history available";
-  return chatLog.slice(-maxLines).join("\n");
+  // Filter out any leading assistant greetings/boilerplate before the first user turn
+  const firstUserIdx = chatLog.findIndex((line) => line.trim().toLowerCase().startsWith("user:"));
+  const filtered =
+    firstUserIdx >= 0
+      ? chatLog.slice(firstUserIdx)
+      : chatLog.filter(
+        (line) =>
+          !line.toLowerCase().includes("olive studio assistant") &&
+          !line.toLowerCase().startsWith("assistant: hello"),
+      );
+  if (filtered.length === 0) return "No chat history available";
+  return filtered.slice(-maxLines).join("\n");
 }
 
 // ── Builder ──────────────────────────────────────────────────────────────────
@@ -257,10 +270,17 @@ export function collectTelemetry(
   return telemetry;
 }
 
+export interface BuildIssueBodyOptions {
+  chatLogOffloaded?: boolean;
+  logsOffloaded?: boolean;
+  hasScreenshot?: boolean;
+  screenshotName?: string | null;
+}
+
 /**
  * Builds the GitHub issue body from a report.
  */
-export function buildIssueBody(report: IssueReport): string {
+export function buildIssueBody(report: IssueReport, options?: BuildIssueBodyOptions): string {
   const lines: string[] = [];
   const hasSeverity = categoryHasSeverity(report.category);
   const severity = hasSeverity ? (report.severity === "n-a" ? "annoying" : report.severity) : "n-a";
@@ -293,6 +313,19 @@ export function buildIssueBody(report: IssueReport): string {
   lines.push(redactSecrets(report.description) || "_(no description provided)_");
   lines.push("");
 
+  // Screenshot section
+  const screenshot = options?.screenshotName ?? report.screenshotName;
+  if (options?.hasScreenshot || screenshot) {
+    lines.push("### Screenshots");
+    lines.push("");
+    if (screenshot) {
+      lines.push(`_Screenshot attached: \`${screenshot}\` — paste (Ctrl+V) or drag and drop image here._`);
+    } else {
+      lines.push("_Attach screenshots here by pasting (Ctrl+V) or dragging and dropping._");
+    }
+    lines.push("");
+  }
+
   // Telemetry
   const telemetryKeys = Object.keys(report.telemetry) as TelemetryOptionId[];
   if (telemetryKeys.length > 0) {
@@ -305,11 +338,41 @@ export function buildIssueBody(report: IssueReport): string {
     for (const key of telemetryKeys) {
       const label = TELEMETRY_OPTIONS.find((o) => o.id === key)?.label ?? key;
       lines.push(`[${label}]`);
-      lines.push(report.telemetry[key] ?? "N/A");
+      if (key === "chat-logs" && options?.chatLogOffloaded) {
+        lines.push("(Chat log copied to clipboard — paste into issue where indicated)");
+      } else if (key === "logs" && options?.logsOffloaded) {
+        lines.push("(Execution logs copied to clipboard — paste into issue where indicated)");
+      } else {
+        lines.push(report.telemetry[key] ?? "N/A");
+      }
       lines.push("");
     }
     lines.push("```");
     lines.push("</details>");
+    lines.push("");
+  }
+
+  // If execution logs was offloaded, add a clear paste anchor in the issue body
+  if (options?.logsOffloaded && report.telemetry["logs"]) {
+    lines.push("### Execution Logs");
+    lines.push("");
+    lines.push("> _Execution logs were copied to your clipboard (exceeded URL length limits). Paste (Ctrl+V) here:_");
+    lines.push("");
+    lines.push("```");
+    lines.push("<!-- Paste execution logs from clipboard here -->");
+    lines.push("```");
+    lines.push("");
+  }
+
+  // If chat log was offloaded, add a clear paste anchor in the issue body
+  if (options?.chatLogOffloaded && report.telemetry["chat-logs"]) {
+    lines.push("### Assistant Chat Log");
+    lines.push("");
+    lines.push("> _Chat log was copied to your clipboard (exceeded URL length limits). Paste (Ctrl+V) here:_");
+    lines.push("");
+    lines.push("```");
+    lines.push("<!-- Paste assistant chat log from clipboard here -->");
+    lines.push("```");
     lines.push("");
   }
 
@@ -326,8 +389,11 @@ export function buildIssueBody(report: IssueReport): string {
 export function buildIssueTitle(report: IssueReport): string {
   const categoryLabel = REPORT_CATEGORIES.find((c) => c.id === report.category)?.label ?? report.category;
   const areaLabel = REPORT_AREAS.find((a) => a.id === report.area)?.label ?? report.area;
-  const snippet = redactSecrets(report.description).slice(0, 60).replace(/\n/g, " ").trim();
-  return `[${categoryLabel}] ${areaLabel}: ${snippet || "Untitled report"}`;
+  const customTitle = report.title?.trim();
+  const summary = customTitle
+    ? redactSecrets(customTitle).replace(/\n/g, " ").trim()
+    : redactSecrets(report.description).slice(0, 60).replace(/\n/g, " ").trim();
+  return `[${categoryLabel}] ${areaLabel}: ${summary || "Untitled report"}`;
 }
 
 const REPO_URL = "https://github.com/tonythethompson/Olive-Studio";
@@ -335,33 +401,149 @@ const ISSUE_NEW_URL = `${REPO_URL}/issues/new`;
 /** Encoded URL budget for prefilled GitHub issue links (browsers and intermediaries truncate long URLs). */
 const MAX_GITHUB_ISSUE_URL_LENGTH = 2000;
 
+export interface GitHubIssueUrlDetails {
+  url: string;
+  body: string;
+  title: string;
+  exceededBudget: boolean;
+  chatLogOffloaded: boolean;
+  logsOffloaded: boolean;
+  offloadedClipboardText: string | null;
+}
+
+/**
+ * Generates pre-filled GitHub issue URL details with smart progressive offloading.
+ */
+export function buildGitHubIssueUrlDetails(report: IssueReport): GitHubIssueUrlDetails {
+  const title = buildIssueTitle(report);
+  const fullBody = buildIssueBody(report, { hasScreenshot: Boolean(report.screenshotName) });
+
+  const makeUrl = (bodyContent: string) => {
+    const params = new URLSearchParams();
+    params.set("title", title);
+    params.set("body", bodyContent);
+    params.set("labels", ["user-report", report.category].join(","));
+    return `${ISSUE_NEW_URL}?${params.toString()}`;
+  };
+
+  // Step 1: Try full issue body
+  let url = makeUrl(fullBody);
+  if (url.length <= MAX_GITHUB_ISSUE_URL_LENGTH) {
+    return {
+      url,
+      body: fullBody,
+      title,
+      exceededBudget: false,
+      chatLogOffloaded: false,
+      logsOffloaded: false,
+      offloadedClipboardText: null,
+    };
+  }
+
+  // Step 2: If chat-logs exists, offload chat-logs to clipboard
+  if (report.telemetry["chat-logs"]) {
+    const bodyWithOffloadedChat = buildIssueBody(report, {
+      chatLogOffloaded: true,
+      hasScreenshot: Boolean(report.screenshotName),
+    });
+    url = makeUrl(bodyWithOffloadedChat);
+    if (url.length <= MAX_GITHUB_ISSUE_URL_LENGTH) {
+      return {
+        url,
+        body: bodyWithOffloadedChat,
+        title,
+        exceededBudget: false,
+        chatLogOffloaded: true,
+        logsOffloaded: false,
+        offloadedClipboardText: report.telemetry["chat-logs"],
+      };
+    }
+  }
+
+  // Step 3: If logs exists (e.g. execution logs are large, even without chat logs), offload logs
+  if (report.telemetry["logs"]) {
+    const bodyWithOffloadedLogs = buildIssueBody(report, {
+      chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
+      logsOffloaded: true,
+      hasScreenshot: Boolean(report.screenshotName),
+    });
+    url = makeUrl(bodyWithOffloadedLogs);
+    if (url.length <= MAX_GITHUB_ISSUE_URL_LENGTH) {
+      const parts: string[] = [];
+      if (report.telemetry["logs"]) {
+        parts.push(`### Execution Logs\n\n\`\`\`\n${report.telemetry["logs"]}\n\`\`\``);
+      }
+      if (report.telemetry["chat-logs"]) {
+        parts.push(`### Assistant Chat Log\n\n\`\`\`\n${report.telemetry["chat-logs"]}\n\`\`\``);
+      }
+      return {
+        url,
+        body: bodyWithOffloadedLogs,
+        title,
+        exceededBudget: false,
+        chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
+        logsOffloaded: true,
+        offloadedClipboardText: parts.join("\n\n"),
+      };
+    }
+  }
+
+  // Step 4: If still too long (e.g. user description is very large), truncate description in URL query
+  if (report.description.length > 300) {
+    const truncatedReport: IssueReport = {
+      ...report,
+      description: `${report.description.slice(0, 300)}\n\n> [!NOTE]\n> _Description truncated for URL length; full text was copied to clipboard._`,
+    };
+    const bodyTruncated = buildIssueBody(truncatedReport, {
+      chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
+      logsOffloaded: Boolean(report.telemetry["logs"]),
+      hasScreenshot: Boolean(report.screenshotName),
+    });
+    url = makeUrl(bodyTruncated);
+    if (url.length <= MAX_GITHUB_ISSUE_URL_LENGTH) {
+      return {
+        url,
+        body: bodyTruncated,
+        title,
+        exceededBudget: false,
+        chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
+        logsOffloaded: Boolean(report.telemetry["logs"]),
+        offloadedClipboardText: `# ${title}\n\n${fullBody}`,
+      };
+    }
+  }
+
+  // Fallback to blank issue URL only if even title/minimal params fail
+  console.warn(
+    "[issueReport] Encoded GitHub issue URL exceeds budget; using blank issue form. Paste the full report from the clipboard.",
+  );
+  return {
+    url: ISSUE_NEW_URL,
+    body: fullBody,
+    title,
+    exceededBudget: true,
+    chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
+    logsOffloaded: Boolean(report.telemetry["logs"]),
+    offloadedClipboardText: `# ${title}\n\n${fullBody}`,
+  };
+}
+
 /**
  * Generates a pre-filled GitHub issue URL.
- * When the encoded URL exceeds the budget, returns the canonical blank issue form instead.
  */
 export function buildGitHubIssueUrl(report: IssueReport): string {
   return buildGitHubIssueUrlDetails(report).url;
 }
 
-function buildGitHubIssueUrlDetails(report: IssueReport): { url: string; exceededBudget: boolean } {
-  const title = buildIssueTitle(report);
-  const body = buildIssueBody(report);
-
-  const params = new URLSearchParams();
-  params.set("title", title);
-  params.set("body", body);
-  params.set("labels", ["user-report", report.category].join(","));
-
-  const url = `${ISSUE_NEW_URL}?${params.toString()}`;
-
-  if (url.length > MAX_GITHUB_ISSUE_URL_LENGTH) {
-    console.warn(
-      "[issueReport] Encoded GitHub issue URL exceeds budget; using blank issue form. Paste the full report from the clipboard.",
-    );
-    return { url: ISSUE_NEW_URL, exceededBudget: true };
-  }
-
-  return { url, exceededBudget: false };
+export interface BuildReportResult {
+  url: string;
+  body: string;
+  title: string;
+  fullText: string;
+  urlExceededBudget: boolean;
+  chatLogOffloaded: boolean;
+  logsOffloaded: boolean;
+  offloadedClipboardText: string | null;
 }
 
 /**
@@ -369,14 +551,21 @@ function buildGitHubIssueUrlDetails(report: IssueReport): { url: string; exceede
  */
 export function buildReport(
   report: IssueReport,
-  _buildOptions: BuildReportOptions,
-): { url: string; body: string; title: string; fullText: string; urlExceededBudget: boolean } {
-  const title = buildIssueTitle(report);
-  const body = buildIssueBody(report);
-  const { url, exceededBudget } = buildGitHubIssueUrlDetails(report);
-
+  _buildOptions?: BuildReportOptions,
+): BuildReportResult {
+  const details = buildGitHubIssueUrlDetails(report);
+  const fullBody = buildIssueBody(report, { hasScreenshot: Boolean(report.screenshotName) });
   // Full text for clipboard (includes title as header)
-  const fullText = `# ${title}\n\n${body}`;
+  const fullText = `# ${details.title}\n\n${fullBody}`;
 
-  return { url, body, title, fullText, urlExceededBudget: exceededBudget };
+  return {
+    url: details.url,
+    body: details.body,
+    title: details.title,
+    fullText,
+    urlExceededBudget: details.exceededBudget,
+    chatLogOffloaded: details.chatLogOffloaded,
+    logsOffloaded: details.logsOffloaded,
+    offloadedClipboardText: details.offloadedClipboardText,
+  };
 }
