@@ -1,0 +1,238 @@
+name: Run mini-swe-agent on New Issues or Comment Trigger
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  solve-issue:
+    name: Solve issue
+    if: |
+      (
+        github.event_name == 'issues' &&
+        contains(
+          fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+          github.event.issue.author_association
+        )
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        !github.event.issue.pull_request &&
+        github.event.comment.body == '/solve' &&
+        contains(
+          fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+          github.event.comment.author_association
+        )
+      )
+
+    runs-on: ubuntu-latest
+    concurrency:
+      group: solve-issue-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      # The default token only reads issue data; PR creation uses the guarded PAT.
+      contents: read
+      issues: read
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Fail fast instead of letting the agent run for minutes and then 403 at
+      # PR creation. This job has read-only permissions, so only a PAT can open
+      # the fix PR (and PAT-created PRs are what trigger the normal CI).
+      - name: Require AUTOPILOT_TOKEN
+        env:
+          AUTOPILOT_TOKEN: ${{ secrets.AUTOPILOT_TOKEN }}
+        if: env.AUTOPILOT_TOKEN == ''
+        run: |
+          set -euo pipefail
+          echo "::error::AUTOPILOT_TOKEN is required: the fix PR must be opened with a PAT so CI runs on it. The read-only job GITHUB_TOKEN cannot create a PR."
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install mini-swe-agent
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipx
+          pipx ensurepath
+          pipx install mini-swe-agent
+          # pipx ensurepath only edits shell rc files; make ~/.local/bin
+          # visible to the steps below so `mini` is on PATH.
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Pre-install the repo's dependencies on the host so the offline
+      # sandbox container can run the project's build/tests through the
+      # mounted workspace (node_modules is gitignored, so it never ends up
+      # in the generated PR).
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build sandbox toolchain image
+        run: |
+          set -euo pipefail
+          # Keep the sandbox pnpm in lockstep with package.json "packageManager"
+          # instead of hard-coding it here, so a future version bump can't
+          # silently desync the sandbox from CI.
+          PNPM_VERSION="$(
+            node -p "require('./package.json').packageManager.replace(/^pnpm@/, '').split('+')[0]"
+          )"
+          cat > "$RUNNER_TEMP/Dockerfile.sandbox" <<'DOCKERFILE'
+          FROM node:22-bookworm
+          ARG PNPM_VERSION
+          RUN apt-get update \
+              && apt-get install -y --no-install-recommends \
+                 python3 python3-pip python3-venv \
+              && rm -rf /var/lib/apt/lists/* \
+              && npm install -g "pnpm@${PNPM_VERSION}"
+          DOCKERFILE
+          mkdir -p "$RUNNER_TEMP/buildctx"
+          docker build --build-arg PNPM_VERSION="$PNPM_VERSION" \
+            -f "$RUNNER_TEMP/Dockerfile.sandbox" \
+            -t olive-studio-sandbox "$RUNNER_TEMP/buildctx"
+
+      # Fetch the underlying issue text if triggered by an issue_comment event
+      - name: Fetch Issue Data (for comment triggers)
+        if: github.event_name == 'issue_comment'
+        id: get-issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Fetch the issue because the comment payload has limited data.
+          ISSUE_DATA=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$REPOSITORY" --json title,body)
+          TITLE=$(jq -r '.title' <<<"$ISSUE_DATA")
+          BODY=$(jq -r '.body' <<<"$ISSUE_DATA")
+
+          # A random delimiter keeps issue text in a single environment value.
+          DELIM="EOF_$(openssl rand -hex 16)"
+          {
+            printf 'ISSUE_TITLE<<%s\n' "$DELIM"
+            printf '%s\n' "$TITLE"
+            printf '%s\n' "$DELIM"
+            printf 'ISSUE_BODY<<%s\n' "$DELIM"
+            printf '%s\n' "$BODY"
+            printf '%s\n' "$DELIM"
+          } >> "$GITHUB_ENV"
+
+      - name: Execute mini-swe-agent via Cloudflare
+        env:
+          CLOUDFLARE_API_KEY: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          TASK_TITLE: >-
+            ${{ github.event_name == 'issues'
+                && github.event.issue.title
+                || env.ISSUE_TITLE }}
+          TASK_BODY: >-
+            ${{ github.event_name == 'issues'
+                && github.event.issue.body
+                || env.ISSUE_BODY }}
+        run: |
+          set -euo pipefail
+          # Every agent action is interpreted through this wrapper inside the
+          # container. It is a deny guard, so recipe building, JSON export, and
+          # validation commands continue to work without relying on the prompt
+          # or on network isolation for policy enforcement.
+          GUARD_SCRIPT="$RUNNER_TEMP/olive-command-guard"
+          cat > "$GUARD_SCRIPT" <<'GUARD_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          if [[ "$#" -ne 2 || "$1" != "-lc" ]]; then
+            printf 'Olive Studio command guard requires bash -lc\n' >&2
+            exit 126
+          fi
+
+          command_text="$2"
+          normalized="$(printf '%s' "$command_text" | tr '[:upper:]' '[:lower:]')"
+          forbidden_patterns=(
+            '(^|[^[:alnum:]_])execute[[:space:]_-]*live([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])(olive[[:space:]]+run|/api/olive/(run|jobs/submit)|submit_optimization_job|execute_and_observe)([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])batch[[:space:]_-]*(run|execute|job)([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])olive_gpu_launcher([[:space:]]|\.py|$)'
+            '(^|[^[:alnum:]_])(python[0-9]*|pip[0-9]*|pipx|uv([[:space:]]+pip)?|poetry|conda|npm|pnpm|yarn)[[:space:]]+([^;&|]*[[:space:]])?(install|sync)([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])scripts/launch(-tauri)?(\.sh)?([^[:alnum:]_]|$)'
+          )
+
+          for pattern in "${forbidden_patterns[@]}"; do
+            if [[ "$normalized" =~ $pattern ]]; then
+              printf 'Blocked unsafe agent command by the Olive Studio CPU-only guard: %s\n' "$command_text" >&2
+              exit 126
+            fi
+          done
+
+          exec /bin/bash "$@"
+          GUARD_SCRIPT
+          chmod 755 "$GUARD_SCRIPT"
+
+          # Run generated commands in a non-root, isolated container with the
+          # project toolchain baked in. Dependencies were installed on the
+          # host and are visible via the mounted workspace, so the agent can
+          # build and test offline; --network none keeps the sandbox sealed.
+          DOCKER_RUN_ARGS="$(jq -cn \
+            --arg workspace "$GITHUB_WORKSPACE" \
+            --arg guard "$GUARD_SCRIPT" \
+            --arg user "$(id -u):$(id -g)" \
+            '[
+              "--rm",
+              "--network", "none",
+              "--cap-drop", "ALL",
+              "--security-opt", "no-new-privileges:true",
+              "--user", $user,
+              "--volume", ($workspace + ":/workspace"),
+              "--volume", ($guard + ":/opt/olive-studio/guarded-bash:ro")
+            ]')"
+          AGENT_ENV="$(jq -cn '{
+            HOME: "/tmp",
+            CLOUDFLARE_API_KEY: "",
+            CLOUDFLARE_API_TOKEN: "",
+            CLOUDFLARE_ACCOUNT_ID: "",
+            GITHUB_TOKEN: "",
+            GH_TOKEN: ""
+          }')"
+          mini \
+            -c mini.yaml \
+            -c "environment.image=olive-studio-sandbox" \
+            -c "environment.cwd=/workspace" \
+            -c "environment.run_args=$DOCKER_RUN_ARGS" \
+            -c "environment.env=$AGENT_ENV" \
+            -c 'environment.interpreter=["/opt/olive-studio/guarded-bash","-lc"]' \
+            --environment-class docker \
+            --task "$TASK_TITLE"$'\n\n'"$TASK_BODY" \
+            --model "cloudflare/@cf/zai-org/glm-5.2" \
+            --yolo
+
+      - name: Create Pull Request with Fix
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # A PAT is required (guarded above): PRs opened with the read-only job
+          # GITHUB_TOKEN cannot be created under this job's permissions, and only
+          # a PAT-created PR triggers the normal CI workflows.
+          token: ${{ secrets.AUTOPILOT_TOKEN }}
+          commit-message: >-
+            fix: automatically resolved by mini-swe-agent using GLM 5.2
+          title: "🤖 GLM 5.2 Fix for Issue #${{ github.event.issue.number }}"
+          body: >-
+            This PR was generated automatically by mini-swe-agent.
+          branch: "mini-swe/fix-issue-${{ github.event.issue.number }}"
+          delete-branch: true
