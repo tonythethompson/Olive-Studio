@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   redactSecrets,
   collectTelemetry,
@@ -321,7 +321,20 @@ describe("buildIssueTitle", () => {
       telemetry: {},
     };
     const title = buildIssueTitle(report);
-    expect(title.length).toBeLessThan(120);
+    expect(title).toBe(`[Feature request] Other: ${report.description.slice(0, 60)}`);
+    expect(title).not.toContain(report.description);
+  });
+
+  it("caps long custom titles after redaction and normalization", () => {
+    const report: IssueReport = {
+      category: "bug",
+      severity: "annoying",
+      area: "recipe-builder",
+      title: "X".repeat(100),
+      description: "Description",
+      telemetry: {},
+    };
+    expect(buildIssueTitle(report)).toBe(`[Bug report] Model source: ${"X".repeat(60)}`);
   });
 
   it("handles multiline descriptions", () => {
@@ -349,7 +362,7 @@ describe("buildGitHubIssueUrl & buildReport smart progressive offloading", () =>
       description: "Short description",
       telemetry: { platform: "OS: Windows" },
     };
-    const result = buildReport(report, {});
+    const result = buildReport(report);
     expect(result.urlExceededBudget).toBe(false);
     expect(result.chatLogOffloaded).toBe(false);
     expect(result.logsOffloaded).toBe(false);
@@ -374,7 +387,7 @@ describe("buildGitHubIssueUrl & buildReport smart progressive offloading", () =>
       },
     };
 
-    const result = buildReport(report, {});
+    const result = buildReport(report);
     // The URL should NOT be abandoned to a blank form
     expect(result.urlExceededBudget).toBe(false);
     expect(result.chatLogOffloaded).toBe(true);
@@ -384,6 +397,7 @@ describe("buildGitHubIssueUrl & buildReport smart progressive offloading", () =>
     expect(result.url).toContain("When+asking+the+assistant");
     // Chat log is copied to clipboard text
     expect(result.offloadedClipboardText).toContain("user: message 0");
+    expect(result.offloadedClipboardText).not.toContain("```");
     expect(result.fullText).toContain(report.description);
   });
 
@@ -401,12 +415,13 @@ describe("buildGitHubIssueUrl & buildReport smart progressive offloading", () =>
       },
     };
 
-    const result = buildReport(report, {});
+    const result = buildReport(report);
     expect(result.urlExceededBudget).toBe(false);
     expect(result.logsOffloaded).toBe(true);
     expect(result.url).toContain("title=%5BBug+report%5D");
     expect(result.url).toContain("Quantization+crash");
     expect(result.offloadedClipboardText).toContain("cudaMalloc failed");
+    expect(result.offloadedClipboardText).not.toContain("```");
   });
 
   it("truncates description for URL query when description itself is huge, keeping full report in clipboard", () => {
@@ -420,8 +435,33 @@ describe("buildGitHubIssueUrl & buildReport smart progressive offloading", () =>
       telemetry: {},
     };
 
-    const result = buildReport(report, {});
+    const result = buildReport(report);
     expect(result.url).toContain("title=");
+    expect(result.urlExceededBudget).toBe(false);
+    expect(result.body).toContain("Description truncated for URL length");
+    expect(result.body).not.toContain(longDesc);
     expect(result.fullText).toContain(longDesc);
+    expect(result.offloadedClipboardText).toContain(longDesc);
+  });
+
+  it("falls back to the blank issue form when non-offloadable telemetry exceeds the URL budget", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const report: IssueReport = {
+        category: "bug",
+        severity: "blocking",
+        area: "other",
+        title: "Short title",
+        description: "Short description",
+        telemetry: { recipe: "x".repeat(10_000) },
+      };
+
+      const result = buildReport(report);
+      expect(result.urlExceededBudget).toBe(true);
+      expect(result.url).toBe("https://github.com/tonythethompson/Olive-Studio/issues/new");
+      expect(result.offloadedClipboardText).toContain("x".repeat(10_000));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

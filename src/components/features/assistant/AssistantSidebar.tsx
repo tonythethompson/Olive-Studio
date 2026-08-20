@@ -133,26 +133,12 @@ export function AssistantSidebar({
   }, []);
 
   const chatLogForReport = useMemo(() => {
-    // Clip off any initial boilerplate assistant messages before the first user message
-    const firstUserIndex = chat.chatMessages.findIndex((m) => m.sender === "user");
-    const relevantMessages = firstUserIndex >= 0 ? chat.chatMessages.slice(firstUserIndex) : [];
-
-    return relevantMessages.map((m) => {
+    return chat.chatMessages.map((m) => {
       // Normalize message text to keep one "sender: text" line per turn
-      // 1. Replace newlines with spaces
-      // 2. Collapse multiple whitespace characters
-      // 3. Trim leading/trailing whitespace
-      // 4. Optionally truncate to a reasonable maximum length
       const maxLength = 500;
-      const normalized = m.text
-        .replace(/\s*\n\s*/g, " ") // replace newlines (and surrounding spaces) with a single space
-        .replace(/\s+/g, " ") // collapse multiple whitespace into a single space
-        .trim();
+      const normalized = m.text.replace(/\s+/g, " ").trim();
 
-      const text =
-        normalized.length > maxLength
-          ? `${normalized.slice(0, maxLength)}…`
-          : normalized;
+      const text = normalized.length > maxLength ? `${normalized.slice(0, maxLength)}…` : normalized;
 
       return `${m.sender}: ${text}`;
     });

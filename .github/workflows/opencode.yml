@@ -35,6 +35,11 @@ jobs:
       issues: write
       actions: write
     steps:
+      - name: Record job start time
+        id: job_start
+        shell: bash
+        run: printf 'epoch=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,6 +261,22 @@ jobs:
           chmod 755 "$HOME/.opencode/bin/opencode"
           rm -f "${TAR_FILE}"
 
+      - name: Snapshot PR comments before agent run
+        id: comment_snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
+        run: |
+          set -euo pipefail
+          BEFORE="$RUNNER_TEMP/opencode-comments-before"
+          : > "$BEFORE"
+          if [[ -n "$PR_NUM" ]]; then
+            gh api "repos/$REPOSITORY/issues/$PR_NUM/comments" --paginate --jq '.[].id' >> "$BEFORE"
+            gh api "repos/$REPOSITORY/pulls/$PR_NUM/comments" --paginate --jq '.[].id' >> "$BEFORE"
+            sort -n -o "$BEFORE" "$BEFORE"
+          fi
+
       - name: Run opencode
         id: run_opencode
         shell: bash
@@ -270,6 +291,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           MODEL: ${{ steps.probe.outputs.model }}
           VARIANT: ${{ steps.probe.outputs.variant }}
+          JOB_STARTED_AT: ${{ steps.job_start.outputs.epoch }}
         run: |
           set -u
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
@@ -279,11 +301,9 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Absolute wall-clock deadline for agent work, ~5 minutes before the
-          # 90-minute job timeout. `timeout` SIGTERMs opencode at the deadline so
-          # it can finish the current task and post, with a kill-after backstop so
-          # a stuck agent cannot eat into the remaining headroom. Both attempts
-          # share the same deadline, so the retry never overruns the job.
-          STEP_DEADLINE=$(( $(date +%s) + 5100 ))   # 85 minutes from now
+          # 90-minute job timeout. Anchor it to the first job step so checkout,
+          # model probing, and installation consume the same finite budget.
+          STEP_DEADLINE=$(( JOB_STARTED_AT + 5100 ))   # 85 minutes from job start
 
           run_opencode() {
             local budget=$(( STEP_DEADLINE - $(date +%s) ))
@@ -348,25 +368,46 @@ jobs:
       # Detection net for the leaked-`@path` failure mode. `opencode github run`
       # posts the agent's reply text verbatim, so if the reply referenced a temp
       # file (e.g. "@/tmp/opencode/summary.md") that token leaks into a public
-      # comment. Scan the comments this run posted and fail loudly on any bare
-      # "@/..." line instead of letting the leak pass unnoticed.
+      # comment. Compare comment IDs from before and after this invocation, then
+      # scan complete bodies for either forbidden token anywhere in the text.
       - name: Guard against leaked path tokens
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUM: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
         run: |
           set -euo pipefail
-          PR_NUM="${{ github.event.issue.number || github.event.pull_request.number || '' }}"
           [ -n "$PR_NUM" ] || exit 0
-          SINCE=$(( $(date +%s) - 5400 ))
-          LEAKED=$(
-            {
-              gh api "repos/${{ github.repository }}/issues/$PR_NUM/comments" --paginate \
-                --jq '.[] | select((.created_at | fromdateiso8601) > '"$SINCE"') | .body'
-              gh api "repos/${{ github.repository }}/pulls/$PR_NUM/comments" --paginate \
-                --jq '.[] | select((.created_at | fromdateiso8601) > '"$SINCE"') | .body'
-            } | grep -E '^\s*@/' || true
-          )
+
+          BEFORE="$RUNNER_TEMP/opencode-comments-before"
+          AFTER="$RUNNER_TEMP/opencode-comments-after"
+          NEW_IDS="$RUNNER_TEMP/opencode-comments-new"
+          ISSUE_JSON="$RUNNER_TEMP/opencode-issue-comments.json"
+          REVIEW_JSON="$RUNNER_TEMP/opencode-review-comments.json"
+          : > "$AFTER"
+          if [[ ! -f "$BEFORE" ]]; then
+            echo "::warning::Comment snapshot is unavailable; no agent invocation was verified."
+            exit 0
+          fi
+          gh api "repos/$REPOSITORY/issues/$PR_NUM/comments" --paginate --jq '.[].id' >> "$AFTER"
+          gh api "repos/$REPOSITORY/pulls/$PR_NUM/comments" --paginate --jq '.[].id' >> "$AFTER"
+          sort -n -o "$AFTER" "$AFTER"
+          comm -13 "$BEFORE" "$AFTER" > "$NEW_IDS"
+          if [[ ! -s "$NEW_IDS" ]]; then
+            echo "::notice::No new comments were posted by this invocation."
+            exit 0
+          fi
+
+          gh api "repos/$REPOSITORY/issues/$PR_NUM/comments" --paginate --slurp | jq 'add' > "$ISSUE_JSON"
+          gh api "repos/$REPOSITORY/pulls/$PR_NUM/comments" --paginate --slurp | jq 'add' > "$REVIEW_JSON"
+          NEW_IDS_JSON="$(jq -Rsc '[split("\n")[] | select(length > 0) | tonumber]' "$NEW_IDS")"
+          LEAKED="$({
+            jq -r --argjson ids "$NEW_IDS_JSON" \
+              '.[] | select(.id as $id | ($ids | index($id)) != null) | .body' "$ISSUE_JSON"
+            jq -r --argjson ids "$NEW_IDS_JSON" \
+              '.[] | select(.id as $id | ($ids | index($id)) != null) | .body' "$REVIEW_JSON"
+          } | grep -E '@/|/tmp/' || true)"
           if [ -n "$LEAKED" ]; then
             echo "::error::A comment posted by this run contains a leaked path token instead of content:"
             echo "$LEAKED"

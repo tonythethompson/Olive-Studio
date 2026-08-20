@@ -6,8 +6,11 @@ on:
   issue_comment:
     types: [created]
 
+permissions: {}
+
 jobs:
   solve-issue:
+    name: Solve issue
     if: |
       (
         github.event_name == 'issues' &&
@@ -27,7 +30,11 @@ jobs:
       )
 
     runs-on: ubuntu-latest
+    concurrency:
+      group: solve-issue-${{ github.event.issue.number }}
+      cancel-in-progress: true
     permissions:
+      # The default token only reads issue data; PR creation uses the guarded PAT.
       contents: read
       issues: read
 
@@ -42,7 +49,9 @@ jobs:
       # PR creation. This job has read-only permissions, so only a PAT can open
       # the fix PR (and PAT-created PRs are what trigger the normal CI).
       - name: Require AUTOPILOT_TOKEN
-        if: ${{ secrets.AUTOPILOT_TOKEN == '' }}
+        env:
+          AUTOPILOT_TOKEN: ${{ secrets.AUTOPILOT_TOKEN }}
+        if: env.AUTOPILOT_TOKEN == ''
         run: |
           set -euo pipefail
           echo "::error::AUTOPILOT_TOKEN is required: the fix PR must be opened with a PAT so CI runs on it. The read-only job GITHUB_TOKEN cannot create a PR."
@@ -105,11 +114,13 @@ jobs:
         id: get-issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
           # Fetch the issue because the comment payload has limited data.
-          ISSUE_DATA=$(gh issue view "${{ github.event.issue.number }}" \
-            --repo "${{ github.repository }}" --json title,body)
+          ISSUE_DATA=$(gh issue view "$ISSUE_NUMBER" \
+            --repo "$REPOSITORY" --json title,body)
           TITLE=$(jq -r '.title' <<<"$ISSUE_DATA")
           BODY=$(jq -r '.body' <<<"$ISSUE_DATA")
 
@@ -138,12 +149,49 @@ jobs:
                 || env.ISSUE_BODY }}
         run: |
           set -euo pipefail
+          # Every agent action is interpreted through this wrapper inside the
+          # container. It is a deny guard, so recipe building, JSON export, and
+          # validation commands continue to work without relying on the prompt
+          # or on network isolation for policy enforcement.
+          GUARD_SCRIPT="$RUNNER_TEMP/olive-command-guard"
+          cat > "$GUARD_SCRIPT" <<'GUARD_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          if [[ "$#" -ne 2 || "$1" != "-lc" ]]; then
+            printf 'Olive Studio command guard requires bash -lc\n' >&2
+            exit 126
+          fi
+
+          command_text="$2"
+          normalized="$(printf '%s' "$command_text" | tr '[:upper:]' '[:lower:]')"
+          forbidden_patterns=(
+            '(^|[^[:alnum:]_])execute[[:space:]_-]*live([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])(olive[[:space:]]+run|/api/olive/(run|jobs/submit)|submit_optimization_job|execute_and_observe)([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])batch[[:space:]_-]*(run|execute|job)([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])olive_gpu_launcher([[:space:]]|\.py|$)'
+            '(^|[^[:alnum:]_])(python[0-9]*|pip[0-9]*|pipx|uv([[:space:]]+pip)?|poetry|conda|npm|pnpm|yarn)[[:space:]]+([^;&|]*[[:space:]])?(install|sync)([^[:alnum:]_]|$)'
+            '(^|[^[:alnum:]_])scripts/launch(-tauri)?(\.sh)?([^[:alnum:]_]|$)'
+          )
+
+          for pattern in "${forbidden_patterns[@]}"; do
+            if [[ "$normalized" =~ $pattern ]]; then
+              printf 'Blocked unsafe agent command by the Olive Studio CPU-only guard: %s\n' "$command_text" >&2
+              exit 126
+            fi
+          done
+
+          exec /bin/bash "$@"
+          GUARD_SCRIPT
+          chmod 755 "$GUARD_SCRIPT"
+
           # Run generated commands in a non-root, isolated container with the
           # project toolchain baked in. Dependencies were installed on the
           # host and are visible via the mounted workspace, so the agent can
           # build and test offline; --network none keeps the sandbox sealed.
           DOCKER_RUN_ARGS="$(jq -cn \
             --arg workspace "$GITHUB_WORKSPACE" \
+            --arg guard "$GUARD_SCRIPT" \
             --arg user "$(id -u):$(id -g)" \
             '[
               "--rm",
@@ -151,7 +199,8 @@ jobs:
               "--cap-drop", "ALL",
               "--security-opt", "no-new-privileges:true",
               "--user", $user,
-              "--volume", ($workspace + ":/workspace")
+              "--volume", ($workspace + ":/workspace"),
+              "--volume", ($guard + ":/opt/olive-studio/guarded-bash:ro")
             ]')"
           AGENT_ENV="$(jq -cn '{
             HOME: "/tmp",
@@ -167,6 +216,7 @@ jobs:
             -c "environment.cwd=/workspace" \
             -c "environment.run_args=$DOCKER_RUN_ARGS" \
             -c "environment.env=$AGENT_ENV" \
+            -c 'environment.interpreter=["/opt/olive-studio/guarded-bash","-lc"]' \
             --environment-class docker \
             --task "$TASK_TITLE"$'\n\n'"$TASK_BODY" \
             --model "cloudflare/@cf/zai-org/glm-5.2" \

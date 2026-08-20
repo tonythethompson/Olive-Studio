@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from "react";
 import {
   X,
   ExternalLink,
@@ -40,6 +40,9 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_SCREENSHOT_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 interface ReportIssueModalProps {
   open: boolean;
@@ -86,6 +89,8 @@ export function ReportIssueModal({
   const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
   const [screenshotCopied, setScreenshotCopied] = useState(false);
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
+  const [screenshotCopyError, setScreenshotCopyError] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,10 +104,8 @@ export function ReportIssueModal({
   }, [screenshotPreview]);
 
   const handleSetScreenshot = useCallback((file: File | null) => {
-    setScreenshotPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return file ? URL.createObjectURL(file) : null;
-    });
+    const nextPreview = file ? URL.createObjectURL(file) : null;
+    setScreenshotPreview(nextPreview);
     setScreenshotFile(file);
   }, []);
 
@@ -122,6 +125,8 @@ export function ReportIssueModal({
       setShowPreview(false);
       setCopied(false);
       setScreenshotCopied(false);
+      setScreenshotError(null);
+      setScreenshotCopyError(null);
       setOpenError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only depend on open
@@ -143,13 +148,16 @@ export function ReportIssueModal({
     });
   }, []);
 
+  const deferredTitle = useDeferredValue(title);
+  const deferredDescription = useDeferredValue(description);
+
   const report: IssueReport = useMemo(
     () => ({
       category,
       severity,
       area,
-      title: title.trim() || undefined,
-      description,
+      title: deferredTitle.trim() || undefined,
+      description: deferredDescription,
       screenshotName: screenshotFile?.name ?? null,
       telemetry: collectTelemetry(Array.from(selectedTelemetry), {
         state,
@@ -170,8 +178,8 @@ export function ReportIssueModal({
       category,
       severity,
       area,
-      title,
-      description,
+      deferredTitle,
+      deferredDescription,
       screenshotFile,
       selectedTelemetry,
       state,
@@ -182,21 +190,24 @@ export function ReportIssueModal({
     ],
   );
 
-  const { url, fullText, urlExceededBudget, chatLogOffloaded, logsOffloaded, offloadedClipboardText } = useMemo(
-    () => buildReport(report, { state, hardwareProbe, executionLogs, chatLog }),
-    [report, state, hardwareProbe, executionLogs, chatLog],
+  const reportResult = useMemo(() => buildReport(report), [report]);
+  const { urlExceededBudget, chatLogOffloaded, logsOffloaded, offloadedClipboardText } = reportResult;
+  const getLiveReportResult = useCallback(
+    () => buildReport({ ...report, title: title.trim() || undefined, description }),
+    [report, title, description],
   );
 
   const { dialogRef, closeButtonRef } = useDialogFocusTrap(open, onClose);
 
   const copyFullText = useCallback(async () => {
+    const liveReport = getLiveReportResult();
     try {
-      await navigator.clipboard.writeText(fullText);
+      await navigator.clipboard.writeText(liveReport.fullText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       const textarea = document.createElement("textarea");
-      textarea.value = fullText;
+      textarea.value = liveReport.fullText;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand("copy");
@@ -204,57 +215,57 @@ export function ReportIssueModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [fullText]);
+  }, [getLiveReportResult]);
 
   const handleCopyScreenshot = useCallback(async () => {
     if (!screenshotFile) return;
+    setScreenshotCopyError(null);
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+      setScreenshotCopyError("Image clipboard is not available in this browser.");
+      return;
+    }
     try {
-      if (typeof ClipboardItem !== "undefined" && navigator.clipboard && navigator.clipboard.write) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ [screenshotFile.type]: screenshotFile }),
-        ]);
-        setScreenshotCopied(true);
-        setTimeout(() => setScreenshotCopied(false), 2000);
-      }
+      await navigator.clipboard.write([new ClipboardItem({ [screenshotFile.type]: screenshotFile })]);
+      setScreenshotCopied(true);
+      setTimeout(() => setScreenshotCopied(false), 2000);
     } catch {
-      // Fallback
+      setScreenshotCopyError("Could not copy the screenshot to the clipboard.");
     }
   }, [screenshotFile]);
 
   const handleOpenGithub = useCallback(async () => {
     setOpenError(null);
+    setScreenshotCopyError(null);
+    const liveReport = getLiveReportResult();
     try {
       // If chat log, execution logs, or other text was offloaded to clipboard, copy it to clipboard first
-      if (offloadedClipboardText) {
+      if (liveReport.offloadedClipboardText) {
         try {
-          await navigator.clipboard.writeText(offloadedClipboardText);
+          await navigator.clipboard.writeText(liveReport.offloadedClipboardText);
         } catch {
           const textarea = document.createElement("textarea");
-          textarea.value = offloadedClipboardText;
+          textarea.value = liveReport.offloadedClipboardText;
           document.body.appendChild(textarea);
           textarea.select();
           document.execCommand("copy");
           document.body.removeChild(textarea);
         }
-      } else if (urlExceededBudget) {
-        await copyFullText();
       } else if (screenshotFile && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
         // Attempt to copy screenshot image to clipboard so user can immediately Ctrl+V into GitHub
         try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ [screenshotFile.type]: screenshotFile }),
-          ]);
+          await navigator.clipboard.write([new ClipboardItem({ [screenshotFile.type]: screenshotFile })]);
+          setScreenshotCopied(true);
         } catch {
-          /* ignore */
+          setScreenshotCopyError("Could not copy the screenshot to the clipboard. Attach it manually in GitHub.");
         }
       }
 
-      await openExternal(url);
+      await openExternal(liveReport.url);
       onClose();
     } catch (err) {
       setOpenError(err instanceof Error ? err.message : "Could not open browser");
     }
-  }, [url, offloadedClipboardText, urlExceededBudget, copyFullText, screenshotFile, onClose]);
+  }, [getLiveReportResult, screenshotFile, onClose]);
 
   const handleCopy = useCallback(() => {
     void copyFullText();
@@ -267,14 +278,26 @@ export function ReportIssueModal({
     [onClose],
   );
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      if (file.type.startsWith("image/")) {
-        handleSetScreenshot(file);
+  const acceptScreenshot = useCallback(
+    (file: File | null | undefined) => {
+      if (!file) return;
+      if (!ALLOWED_SCREENSHOT_TYPES.has(file.type)) {
+        setScreenshotError("Unsupported image type. Use PNG, JPG, or WebP.");
+        return;
       }
-    }
+      if (file.size > MAX_SCREENSHOT_BYTES) {
+        setScreenshotError(`Image is ${formatFileSize(file.size)}. The limit is 10 MB.`);
+        return;
+      }
+      setScreenshotError(null);
+      setScreenshotCopyError(null);
+      handleSetScreenshot(file);
+    },
+    [handleSetScreenshot],
+  );
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    acceptScreenshot(e.target.files?.[0]);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -293,13 +316,7 @@ export function ReportIssueModal({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      if (file.type.startsWith("image/")) {
-        handleSetScreenshot(file);
-      }
-    }
+    acceptScreenshot(e.dataTransfer.files?.[0]);
   };
 
   const handlePaste = useCallback(
@@ -311,13 +328,13 @@ export function ReportIssueModal({
           const file = items[i].getAsFile();
           if (file) {
             e.preventDefault();
-            handleSetScreenshot(file);
+            acceptScreenshot(file);
             break;
           }
         }
       }
     },
-    [handleSetScreenshot],
+    [acceptScreenshot],
   );
 
   const isSubmitDisabled = !title.trim() && !description.trim();
@@ -465,7 +482,7 @@ export function ReportIssueModal({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={handleFileInputChange}
             />
@@ -541,6 +558,16 @@ export function ReportIssueModal({
                 </div>
                 <p className="text-[10px] text-slate-600">PNG, JPG, WebP up to 10MB</p>
               </div>
+            )}
+            {screenshotError && (
+              <p className="text-xs text-red-400" role="alert">
+                {screenshotError}
+              </p>
+            )}
+            {screenshotCopyError && (
+              <p className="text-xs text-amber-400" role="alert">
+                {screenshotCopyError}
+              </p>
             )}
           </div>
 
@@ -649,9 +676,14 @@ export function ReportIssueModal({
               to your clipboard so you can paste it into the issue body.
             </p>
           )}
-          {screenshotFile && (
+          {screenshotFile && offloadedClipboardText && (
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              <span className="font-semibold text-slate-300">Screenshot attached:</span> Drag & drop or paste your image into GitHub&apos;s issue editor.
+              <span className="font-semibold text-slate-300">Screenshot attached:</span> Report text uses the clipboard, so attach the image manually in GitHub&apos;s issue editor.
+            </p>
+          )}
+          {screenshotFile && !offloadedClipboardText && screenshotCopied && (
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              <span className="font-semibold text-slate-300">Screenshot copied:</span> Paste it into GitHub&apos;s issue editor.
             </p>
           )}
           {openError && (

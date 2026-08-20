@@ -391,7 +391,7 @@ export function buildIssueTitle(report: IssueReport): string {
   const areaLabel = REPORT_AREAS.find((a) => a.id === report.area)?.label ?? report.area;
   const customTitle = report.title?.trim();
   const summary = customTitle
-    ? redactSecrets(customTitle).replace(/\n/g, " ").trim()
+    ? redactSecrets(customTitle).replace(/\n/g, " ").trim().slice(0, 60)
     : redactSecrets(report.description).slice(0, 60).replace(/\n/g, " ").trim();
   return `[${categoryLabel}] ${areaLabel}: ${summary || "Untitled report"}`;
 }
@@ -404,6 +404,7 @@ const MAX_GITHUB_ISSUE_URL_LENGTH = 2000;
 export interface GitHubIssueUrlDetails {
   url: string;
   body: string;
+  fullBody: string;
   title: string;
   exceededBudget: boolean;
   chatLogOffloaded: boolean;
@@ -432,6 +433,7 @@ export function buildGitHubIssueUrlDetails(report: IssueReport): GitHubIssueUrlD
     return {
       url,
       body: fullBody,
+      fullBody,
       title,
       exceededBudget: false,
       chatLogOffloaded: false,
@@ -451,6 +453,7 @@ export function buildGitHubIssueUrlDetails(report: IssueReport): GitHubIssueUrlD
       return {
         url,
         body: bodyWithOffloadedChat,
+        fullBody,
         title,
         exceededBudget: false,
         chatLogOffloaded: true,
@@ -471,14 +474,15 @@ export function buildGitHubIssueUrlDetails(report: IssueReport): GitHubIssueUrlD
     if (url.length <= MAX_GITHUB_ISSUE_URL_LENGTH) {
       const parts: string[] = [];
       if (report.telemetry["logs"]) {
-        parts.push(`### Execution Logs\n\n\`\`\`\n${report.telemetry["logs"]}\n\`\`\``);
+        parts.push(report.telemetry["logs"]);
       }
       if (report.telemetry["chat-logs"]) {
-        parts.push(`### Assistant Chat Log\n\n\`\`\`\n${report.telemetry["chat-logs"]}\n\`\`\``);
+        parts.push(report.telemetry["chat-logs"]);
       }
       return {
         url,
         body: bodyWithOffloadedLogs,
+        fullBody,
         title,
         exceededBudget: false,
         chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
@@ -504,6 +508,7 @@ export function buildGitHubIssueUrlDetails(report: IssueReport): GitHubIssueUrlD
       return {
         url,
         body: bodyTruncated,
+        fullBody,
         title,
         exceededBudget: false,
         chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
@@ -520,6 +525,7 @@ export function buildGitHubIssueUrlDetails(report: IssueReport): GitHubIssueUrlD
   return {
     url: ISSUE_NEW_URL,
     body: fullBody,
+    fullBody,
     title,
     exceededBudget: true,
     chatLogOffloaded: Boolean(report.telemetry["chat-logs"]),
@@ -549,14 +555,10 @@ export interface BuildReportResult {
 /**
  * Builds the full report and generates the GitHub issue URL.
  */
-export function buildReport(
-  report: IssueReport,
-  _buildOptions?: BuildReportOptions,
-): BuildReportResult {
+export function buildReport(report: IssueReport): BuildReportResult {
   const details = buildGitHubIssueUrlDetails(report);
-  const fullBody = buildIssueBody(report, { hasScreenshot: Boolean(report.screenshotName) });
   // Full text for clipboard (includes title as header)
-  const fullText = `# ${details.title}\n\n${fullBody}`;
+  const fullText = `# ${details.title}\n\n${details.fullBody}`;
 
   return {
     url: details.url,
