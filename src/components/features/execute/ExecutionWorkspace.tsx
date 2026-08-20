@@ -28,7 +28,7 @@ import { ExportRecipeOverlay } from "./ExportRecipeOverlay";
 import { ExecutionLogPanel } from "./ExecutionLogPanel";
 import { ManualExecutionControls } from "./ManualExecutionControls";
 
-import { buildRecipeFromState } from "@/lib/recipePipeline";
+import { buildRecipeFromState, buildRecipeJsonFromState } from "@/lib/recipePipeline";
 import { useHardwareProbe } from "@/lib/hooks/useHardwareProbe";
 import { prepareProviderChange } from "@/lib/pipelineValidation";
 
@@ -275,8 +275,11 @@ export function ExecutionWorkspace({
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
   const handleStartAgent = useCallback(() => {
-    startAgent();
-  }, [startAgent]);
+    void startAgent({
+      recipeJson: buildRecipeJsonFromState(state),
+      cudaVersion: state.cudaVersion ?? "auto",
+    });
+  }, [startAgent, state]);
 
   // SSE stream for agent activity
   const handleAgentStreamEntry = useCallback(
@@ -396,7 +399,7 @@ export function ExecutionWorkspace({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isHistoryOpen, agentOutcome, executionStatus]);
 
   return (
     <div

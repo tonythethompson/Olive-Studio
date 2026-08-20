@@ -428,7 +428,7 @@ export function ReportIssueModal({
           {/* Title input */}
           <div className="space-y-1.5">
             <Label htmlFor="report-title-input" className="text-sm font-semibold text-slate-300">
-              Title <span className="text-rose-400">*</span>
+              Title
             </Label>
             <input
               id="report-title-input"
@@ -443,7 +443,7 @@ export function ReportIssueModal({
           {/* Description textarea */}
           <div className="space-y-1.5">
             <Label htmlFor="report-description" className="text-sm font-semibold text-slate-300">
-              Description <span className="text-rose-400">*</span>
+              Description
             </Label>
             <textarea
               id="report-description"
