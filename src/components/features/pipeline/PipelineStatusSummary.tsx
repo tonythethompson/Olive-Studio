@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import type { UIState } from "@/types";
 import type { PipelineValidationResult } from "@/lib/pipelineValidation";
+import { getEffectiveModelSource } from "@/lib/vramEstimate";
 
 type StatusTone = "error" | "warning" | "success";
 
@@ -51,11 +52,17 @@ function truncateLabel(label: string, maxLength = 48): string {
 
 function getModelLabel(state: UIState, modelSelected: boolean): string {
   if (!modelSelected) return "No model selected";
-  if (state.modelSource === "huggingface") return truncateLabel(state.hfModelId);
-  if (state.modelSource === "azure") return truncateLabel(state.azureModelPath);
-  if (state.localFiles.length === 1) return truncateLabel(state.localFiles[0].name);
-  if (state.localFiles.length > 1) {
-    return truncateLabel(`${state.localFiles[0].name} +${state.localFiles.length - 1} more`);
+  // Resolve the model from whichever source actually has one configured,
+  // preferring the active tab but falling back to a model loaded from a
+  // different source (e.g. a recipe) while the user browses a new tab.
+  const source = getEffectiveModelSource(state);
+  if (source === "huggingface") return truncateLabel(state.hfModelId);
+  if (source === "azure") return truncateLabel(state.azureModelPath);
+  if (source === "local") {
+    if (state.localFiles.length === 1) return truncateLabel(state.localFiles[0].name);
+    if (state.localFiles.length > 1) {
+      return truncateLabel(`${state.localFiles[0].name} +${state.localFiles.length - 1} more`);
+    }
   }
   return "No model selected";
 }

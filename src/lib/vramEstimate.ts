@@ -67,17 +67,45 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
   return { paramsB: 7, confidence: "low" };
 }
 
+export type EffectiveModelSource = "huggingface" | "local" | "azure";
+
+/**
+ * Resolves which model source actually has a model configured, preferring
+ * the active `modelSource` tab but falling back to any other source that
+ * already has a model. This keeps the loaded model "active" while the user
+ * browses a different source tab without yet providing input — e.g. switching
+ * to "Local" right after loading a Hugging Face recipe should not discard
+ * the loaded model from the VRAM panel or lock downstream pipeline sections.
+ *
+ * Returns `null` when no source has any model configured at all.
+ */
+export function getEffectiveModelSource(state: UIState): EffectiveModelSource | null {
+  // Defensive against partial / loosely-typed states (some callers pass a
+  // minimal snapshot): coerce missing fields to their empty equivalents so
+  // the checks never throw on `undefined`.
+  const hfModelId = state.hfModelId ?? "";
+  const azureModelPath = state.azureModelPath ?? "";
+  const localFiles = state.localFiles ?? [];
+
+  const active = state.modelSource;
+  if (active === "huggingface" && hfModelId.trim() !== "") return active;
+  if (active === "local" && localFiles.length > 0) return active;
+  if (active === "azure" && azureModelPath.trim() !== "") return active;
+
+  // Active tab has no model yet — fall back to any source that does, so the
+  // previously loaded model stays in effect until the user provides new input.
+  if (hfModelId.trim() !== "") return "huggingface";
+  if (localFiles.length > 0) return "local";
+  if (azureModelPath.trim() !== "") return "azure";
+  return null;
+}
+
 /** Short label for VRAM UI — full HF id or local filename. */
 export function getVramModelLabel(state: UIState): string {
-  if (state.modelSource === "huggingface" && state.hfModelId.trim()) {
-    return state.hfModelId.trim();
-  }
-  if (state.modelSource === "azure" && state.azureModelPath.trim()) {
-    return state.azureModelPath.trim();
-  }
-  if (state.modelSource === "local" && state.localFiles.length > 0) {
-    return state.localFiles[0].name;
-  }
+  const source = getEffectiveModelSource(state);
+  if (source === "huggingface") return (state.hfModelId ?? "").trim();
+  if (source === "azure") return (state.azureModelPath ?? "").trim();
+  if (source === "local") return state.localFiles[0].name;
   return "No model selected";
 }
 
@@ -96,7 +124,9 @@ function resolveSourceWeightGb(state: UIState): {
   confidence: VramConfidence;
   notes: string[];
 } {
-  if (state.modelSource === "local" && state.localFiles.length > 0) {
+  const source = getEffectiveModelSource(state);
+
+  if (source === "local") {
     const totalBytes = state.localFiles.reduce((sum, file) => sum + file.size, 0);
     return {
       weightGb: totalBytes / 1024 ** 3,
@@ -107,9 +137,9 @@ function resolveSourceWeightGb(state: UIState): {
   }
 
   const identifier =
-    state.modelSource === "huggingface"
+    source === "huggingface"
       ? state.hfModelId
-      : state.modelSource === "azure"
+      : source === "azure"
         ? state.azureModelPath
         : "";
 
