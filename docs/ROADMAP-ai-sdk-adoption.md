@@ -20,7 +20,7 @@ import { generateText } from 'ai';
 
 // Inside the gemini plugin's call() handler:
 const result = await generateText({
-  model: google('gemini-2.5-flash', { apiKey: cfg.apiKey }),
+  model: google('gemini-3.7-flash', { apiKey: cfg.apiKey }),
   system,
   messages: messages.map(m => ({ role: m.role, content: m.content })),
 });

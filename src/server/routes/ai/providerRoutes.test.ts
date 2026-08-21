@@ -101,7 +101,7 @@ describe("POST /api/ai/provider keyless activation", () => {
     const res = await fetch(`${baseUrl}/api/ai/provider`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider: "gemini", model: "gemini-2.5-flash" }),
+      body: JSON.stringify({ provider: "gemini", model: "gemini-3.7-flash" }),
     });
     expect(res.status).toBe(400);
   });
