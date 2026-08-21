@@ -91,6 +91,15 @@ def _params_from_whisper(model_id: str) -> tuple[float, str] | None:
 # Ordered family defaults: more-specific needles must appear before broader ones
 # (e.g. phi-3.5 before phi-3, llama-3.2 before llama-3, qwen2 before qwen).
 _FAMILY_DEFAULTS: tuple[tuple[tuple[str, ...], float, str], ...] = (
+    # GPT-2 variants — order matters: most specific first, generic gpt2 last.
+    # sshleifer/tiny-gpt2 is a ~5M-param model; without these rows the fallback
+    # reports 7B (~26 GB FP32) for models ranging from 5M to 1.5B params.
+    (("tiny-gpt2", "tiny_gpt2"), 0.005, "medium"),
+    (("distilgpt2",), 0.082, "low"),
+    (("gpt2-xl", "gpt2_xl"), 1.5, "low"),
+    (("gpt2-large", "gpt2_large"), 0.774, "low"),
+    (("gpt2-medium", "gpt2_medium"), 0.355, "low"),
+    (("gpt2",), 0.124, "low"),
     (("phi-3.5", "phi3.5"), 3.8, "low"),
     (("phi-3", "phi3"), 3.8, "low"),
     (("phi-2",), 2.7, "low"),
@@ -129,6 +138,9 @@ def _infer_param_billions(identifier: str) -> tuple[float, str]:
         (params_b, confidence) where confidence is "medium" or "low".
     """
     model_id = identifier.lower()
+    # Match the TS port: collapse gpt-2 / gpt_2 spellings so the family
+    # needles above also match hyphenated ids like gpt-2-medium.
+    model_id = model_id.replace("gpt-2", "gpt2").replace("gpt_2", "gpt2")
     for resolver in (
         _params_from_size_token,
         _params_from_whisper,
