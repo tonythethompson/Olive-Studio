@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { PROVIDER_CATALOG } from "@/lib/providerCatalog";
 import type { UIState } from "@/types";
 import type { PipelineValidationResult } from "@/lib/pipelineValidation";
-import { getEffectiveModelSource } from "@/lib/vramEstimate";
+import { getEffectiveModelSource } from "@/lib/modelSource";
 
 type StatusTone = "error" | "warning" | "success";
 
@@ -50,12 +50,9 @@ function truncateLabel(label: string, maxLength = 48): string {
   return `${label.slice(0, maxLength - 3)}...`;
 }
 
-function getModelLabel(state: UIState, modelSelected: boolean): string {
-  if (!modelSelected) return "No model selected";
-  // Resolve the model from whichever source actually has one configured,
-  // preferring the active tab but falling back to a model loaded from a
-  // different source (e.g. a recipe) while the user browses a new tab.
+function getModelLabel(state: UIState): string {
   const source = getEffectiveModelSource(state);
+  if (source === null) return "No model selected";
   if (source === "huggingface") return truncateLabel(state.hfModelId);
   if (source === "azure") return truncateLabel(state.azureModelPath);
   if (source === "local") {
@@ -85,7 +82,7 @@ function getPrimaryAction(
   validation: PipelineValidationResult,
   onSelectModel: () => void,
   onResolveIssues: () => void,
-  onReviewRun: () => void
+  onReviewRun: () => void,
 ): PrimaryAction {
   if (!modelSelected) {
     return { label: "Select a model", handler: onSelectModel };
@@ -108,7 +105,9 @@ export function PipelineStatusSummary({
   onResolveIssues,
   onReviewRun,
 }: PipelineStatusSummaryProps) {
-  const modelLabel = getModelLabel(state, modelSelected);
+  const effectiveModelSource = getEffectiveModelSource(state);
+  const effectiveModelSelected = effectiveModelSource !== null;
+  const modelLabel = getModelLabel(state);
   const providerLabel = getProviderName(state.ihvProvider);
   const statusTone = getStatusTone(validation);
   const StatusIcon = STATUS_ICON[statusTone];
@@ -117,7 +116,7 @@ export function PipelineStatusSummary({
     validation,
     onSelectModel,
     onResolveIssues,
-    onReviewRun
+    onReviewRun,
   );
 
   return (
@@ -126,26 +125,31 @@ export function PipelineStatusSummary({
         <div
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-            STATUS_BADGE_CLASS[statusTone]
+            STATUS_BADGE_CLASS[statusTone],
           )}
         >
           <StatusIcon className={cn("h-4 w-4", STATUS_ICON_COLOR[statusTone])} />
         </div>
         <div className="min-w-0">
           <p className="text-xs text-slate-500 truncate max-w-[18rem] sm:max-w-[28rem] lg:max-w-[40rem]">
-            {modelSelected ? "Model" : "Task summary"}:{" "}
-            <span className={cn("font-medium", modelSelected ? "text-slate-200" : "text-rose-400")}>
+            {effectiveModelSelected ? "Model" : "Task summary"}:{" "}
+            <span className={cn("font-medium", effectiveModelSelected ? "text-slate-200" : "text-rose-400")}>
               {modelLabel}
             </span>
           </p>
-          {modelSelected && (
+          {effectiveModelSelected && (
             <p className="text-[11px] text-slate-500 truncate max-w-[18rem] sm:max-w-[28rem] lg:max-w-[40rem]">
               Target: <span className="font-medium text-slate-300">{providerLabel}</span>
               {validation.statusLabel && (
                 <>
                   {" · "}
                   {statusTone === "success" ? (
-                    <span className={cn("ml-1 inline-flex items-center gap-1 font-medium", STATUS_LABEL_CLASS.success)}>
+                    <span
+                      className={cn(
+                        "ml-1 inline-flex items-center gap-1 font-medium",
+                        STATUS_LABEL_CLASS.success,
+                      )}
+                    >
                       {validation.statusLabel}
                     </span>
                   ) : (
@@ -154,9 +158,11 @@ export function PipelineStatusSummary({
                       onClick={statusTone === "error" ? onResolveIssues : actionHandler}
                       className={cn(
                         "ml-1 inline-flex items-center gap-1 font-medium hover:underline",
-                        STATUS_LABEL_CLASS[statusTone]
+                        STATUS_LABEL_CLASS[statusTone],
                       )}
-                      aria-label={statusTone === "error" ? "Jump to blocking issues" : "Review validation warnings"}
+                      aria-label={
+                        statusTone === "error" ? "Jump to blocking issues" : "Review validation warnings"
+                      }
                     >
                       {validation.statusLabel}
                     </button>

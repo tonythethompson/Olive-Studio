@@ -1,12 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { UIState, IHVProvider } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
-import {
-  getEffectiveModelSource,
-  getVramModelLabel,
-  getVramModelShortName,
-  estimateVramRequirement,
-} from "@/lib/vramEstimate";
+import { getVramModelLabel, getVramModelShortName, estimateVramRequirement } from "@/lib/vramEstimate";
 
 function baseState(overrides?: Partial<UIState>): UIState {
   return {
@@ -27,63 +22,6 @@ function baseState(overrides?: Partial<UIState>): UIState {
     passes: { ...DEFAULT_PASSES, ...overrides?.passes },
   } as UIState;
 }
-
-describe("getEffectiveModelSource", () => {
-  it("prefers the active tab when it has a model", () => {
-    const state = baseState({
-      modelSource: "local",
-      localFiles: [{ name: "model.bin", size: 1024 }],
-      hfModelId: "microsoft/phi-3",
-    });
-    expect(getEffectiveModelSource(state)).toBe("local");
-  });
-
-  it("falls back to a Hugging Face model when the active Local tab is empty", () => {
-    const state = baseState({
-      modelSource: "local",
-      localFiles: [],
-      hfModelId: "microsoft/Phi-3.5-mini-instruct",
-    });
-    expect(getEffectiveModelSource(state)).toBe("huggingface");
-  });
-
-  it("falls back to an Azure path when the active Local tab is empty", () => {
-    const state = baseState({
-      modelSource: "local",
-      localFiles: [],
-      azureModelPath: "azureml://models/m/versions/1",
-    });
-    expect(getEffectiveModelSource(state)).toBe("azure");
-  });
-
-  it("falls back to Azure when the active Hugging Face tab has no model", () => {
-    const state = baseState({
-      modelSource: "huggingface",
-      hfModelId: "   ",
-      azureModelPath: "azureml://models/m/versions/1",
-    });
-    expect(getEffectiveModelSource(state)).toBe("azure");
-  });
-
-  it("falls back to Local when the active Hugging Face tab has no model", () => {
-    const state = baseState({
-      modelSource: "huggingface",
-      hfModelId: "",
-      localFiles: [{ name: "model.safetensors", size: 1024 }],
-    });
-    expect(getEffectiveModelSource(state)).toBe("local");
-  });
-
-  it("returns null when no source has any model", () => {
-    const state = baseState({ modelSource: "local", localFiles: [] });
-    expect(getEffectiveModelSource(state)).toBeNull();
-  });
-
-  it("is defensive against partial states (missing fields)", () => {
-    const partial = { ihvProvider: "cuda", passes: [] } as unknown as UIState;
-    expect(getEffectiveModelSource(partial)).toBeNull();
-  });
-});
 
 describe("VRAM panel regression: switch to Local after loading a HF recipe", () => {
   const hfModel = "microsoft/Phi-3.5-mini-instruct";
@@ -131,7 +69,6 @@ describe("VRAM panel regression: switch to Local after loading a HF recipe", () 
       localFiles: [{ name: "model.safetensors", size: 1 * 1024 ** 3 }],
       hfModelId: hfModel,
     });
-    expect(getEffectiveModelSource(uploaded)).toBe("local");
     const est = estimateVramRequirement(uploaded);
     expect(est.sourceWeightGb).toBeCloseTo(1, 5);
   });

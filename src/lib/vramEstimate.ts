@@ -1,5 +1,6 @@
-import { IHVProvider, ModelSource, UIState } from "@/types";
+import { IHVProvider, UIState } from "@/types";
 import type { HardwareProbeResult } from "@/lib/hardwareProbe";
+import { getEffectiveModelSource } from "@/lib/modelSource";
 
 export type VramConfidence = "high" | "medium" | "low";
 export type VramFit = "fits" | "tight" | "insufficient" | "unknown";
@@ -67,39 +68,6 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
   return { paramsB: 7, confidence: "low" };
 }
 
-export type EffectiveModelSource = ModelSource;
-
-/**
- * Resolves which model source actually has a model configured, preferring
- * the active `modelSource` tab but falling back to any other source that
- * already has a model. This keeps the loaded model "active" while the user
- * browses a different source tab without yet providing input — e.g. switching
- * to "Local" right after loading a Hugging Face recipe should not discard
- * the loaded model from the VRAM panel or lock downstream pipeline sections.
- *
- * Returns `null` when no source has any model configured at all.
- */
-export function getEffectiveModelSource(state: UIState): EffectiveModelSource | null {
-  // Defensive against partial / loosely-typed states (some callers pass a
-  // minimal snapshot): coerce missing fields to their empty equivalents so
-  // the checks never throw on `undefined`.
-  const hfModelId = state.hfModelId ?? "";
-  const azureModelPath = state.azureModelPath ?? "";
-  const localFiles = state.localFiles ?? [];
-
-  const active = state.modelSource;
-  if (active === "huggingface" && hfModelId.trim() !== "") return active;
-  if (active === "local" && localFiles.length > 0) return active;
-  if (active === "azure" && azureModelPath.trim() !== "") return active;
-
-  // Active tab has no model yet — fall back to any source that does, so the
-  // previously loaded model stays in effect until the user provides new input.
-  if (hfModelId.trim() !== "") return "huggingface";
-  if (localFiles.length > 0) return "local";
-  if (azureModelPath.trim() !== "") return "azure";
-  return null;
-}
-
 /** Short label for VRAM UI — full HF id or local filename. */
 export function getVramModelLabel(state: UIState): string {
   const source = getEffectiveModelSource(state);
@@ -137,11 +105,7 @@ function resolveSourceWeightGb(state: UIState): {
   }
 
   const identifier =
-    source === "huggingface"
-      ? state.hfModelId
-      : source === "azure"
-        ? state.azureModelPath
-        : "";
+    source === "huggingface" ? state.hfModelId : source === "azure" ? state.azureModelPath : "";
 
   if (!identifier.trim()) {
     const weightGb = paramsToGb(7, 2);
@@ -323,12 +287,12 @@ export function getSelectedGpuVramGb(
     provider === "ROCMExecutionProvider"
       ? (probe.rocm?.gpus ?? [])
       : provider === "CUDAExecutionProvider" ||
-        provider === "NvTensorRTRTXExecutionProvider" ||
-        provider === "TensorrtExecutionProvider"
+          provider === "NvTensorRTRTXExecutionProvider" ||
+          provider === "TensorrtExecutionProvider"
         ? (probe.nvidia?.gpus ?? [])
         : provider === "DmlExecutionProvider" || provider === "WebGpuExecutionProvider"
-        ? [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
-        : [];
+          ? [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
+          : [];
 
   const vramMb = gpus.map((gpu) => gpu.vramMb).filter((value): value is number => value != null && value > 0);
 
