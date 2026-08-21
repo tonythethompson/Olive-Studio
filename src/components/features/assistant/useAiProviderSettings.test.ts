@@ -317,4 +317,72 @@ describe("useAiProviderSettings", () => {
     );
     expect(onProviderActivated).toHaveBeenCalledTimes(1);
   });
+
+  describe("persisted provider/model preference", () => {
+    const STORAGE_KEY = "olive-studio:ai-model-pref";
+    const seedPref = (provider: string, model: string) =>
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ provider, model }));
+
+    const renderSettings = () =>
+      renderHook(() =>
+        useAiProviderSettings({
+          isOpen: false,
+          activeTab: "settings",
+          onProviderActivated: vi.fn(),
+          onProviderCleared: vi.fn(),
+          onProviderMissing: vi.fn(),
+        }),
+      );
+
+    it("defaults to Gemini when no preference is stored", () => {
+      const { result } = renderSettings();
+      expect(result.current.settingsProvider).toBe("gemini");
+      expect(result.current.settingsModel).toBe("gemini-3.7-flash");
+    });
+
+    it("restores a previously persisted provider/model on initial render", () => {
+      seedPref("anthropic", "claude-sonnet-4-6");
+      const { result } = renderSettings();
+      expect(result.current.settingsProvider).toBe("anthropic");
+      expect(result.current.settingsModel).toBe("claude-sonnet-4-6");
+    });
+
+    it("falls back to the provider default when the persisted model was removed from the catalog", () => {
+      seedPref("gemini", "gemini-2.5-flash");
+      const { result } = renderSettings();
+      expect(result.current.settingsProvider).toBe("gemini");
+      expect(result.current.settingsModel).toBe("gemini-3.7-flash");
+    });
+
+    it("rejects a persisted model that does not belong to the persisted provider", () => {
+      seedPref("openai", "gemini-3.7-flash");
+      const { result } = renderSettings();
+      expect(result.current.settingsProvider).toBe("openai");
+      expect(result.current.settingsModel).toBe("gpt-4o");
+    });
+
+    it("accepts a freehand model for providers with an empty static catalog", () => {
+      seedPref("openai-compat", "my-fine-tuned-model");
+      const { result } = renderSettings();
+      expect(result.current.settingsProvider).toBe("openai-compat");
+      expect(result.current.settingsModel).toBe("my-fine-tuned-model");
+    });
+
+    it("persists the current selection back to localStorage when it changes", async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(() => Promise.resolve(jsonResponse({ models: [], source: "fallback" })));
+
+      const { result } = renderSettings();
+      await act(async () => {
+        result.current.selectProvider("openai");
+      });
+
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}")).toEqual({
+        provider: "openai",
+        model: "gpt-4o",
+      });
+    });
+  });
 });

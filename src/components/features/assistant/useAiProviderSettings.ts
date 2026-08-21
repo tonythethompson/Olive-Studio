@@ -11,6 +11,11 @@ interface PersistedModelPref {
   model: string;
 }
 
+/** True when a browser localStorage is available (guards SSR / non-browser envs). */
+function canUseLocalStorage(): boolean {
+  return typeof window !== "undefined" && typeof localStorage !== "undefined";
+}
+
 /**
  * Read the last-used AI provider/model from localStorage so the assistant
  * remembers the user's choice across sessions instead of always defaulting
@@ -18,6 +23,7 @@ interface PersistedModelPref {
  * unavailable.
  */
 function readPersistedModelPref(): PersistedModelPref | null {
+  if (!canUseLocalStorage()) return null;
   try {
     const raw = localStorage.getItem(AI_MODEL_PREF_STORAGE_KEY);
     if (!raw) return null;
@@ -36,6 +42,7 @@ function readPersistedModelPref(): PersistedModelPref | null {
  * mode, quota, etc.).
  */
 function writePersistedModelPref(provider: string, model: string): void {
+  if (!canUseLocalStorage()) return;
   try {
     localStorage.setItem(
       AI_MODEL_PREF_STORAGE_KEY,
@@ -158,18 +165,28 @@ export function useAiProviderSettings({
   // Restore the last-used provider/model from localStorage so the assistant
   // remembers the user's choice across sessions instead of always defaulting
   // to Gemini.  The server-side preference (readAiPreference) still takes
-  // priority once fetchProviderStatus completes.
+  // priority once fetchProviderStatus completes.  Read the preference once so
+  // both initial values derive from the same storage read.
+  const [persistedPref] = useState<PersistedModelPref | null>(() => readPersistedModelPref());
   const [settingsProvider, setSettingsProvider] = useState<ProviderId>(() => {
-    const pref = readPersistedModelPref();
-    if (pref) {
-      const uiId = normalizeUiProviderId(pref.provider);
+    if (persistedPref) {
+      const uiId = normalizeUiProviderId(persistedPref.provider);
       if (uiId) return uiId;
     }
     return "gemini";
   });
   const [settingsModel, setSettingsModel] = useState(() => {
-    const pref = readPersistedModelPref();
-    return pref?.model ?? "gemini-3.7-flash";
+    if (!persistedPref) return "gemini-3.7-flash";
+    const providerId = normalizeUiProviderId(persistedPref.provider) ?? "gemini";
+    const providerOption = PROVIDER_OPTIONS.find((p) => p.id === providerId) ?? PROVIDER_OPTIONS[0]!;
+    // Validate against the static catalog: a stale/removed model (e.g.
+    // gemini-2.5-flash) must not be restored, so fall back to the provider's
+    // first listed model. Providers with an empty static catalog
+    // (openai-compat freehand) accept any persisted model.
+    if (providerOption.models.length > 0 && !providerOption.models.includes(persistedPref.model)) {
+      return providerOption.models[0]!;
+    }
+    return persistedPref.model;
   });
   const [settingsApiKey, setSettingsApiKey] = useState("");
   const [settingsBaseUrl, setSettingsBaseUrl] = useState("");
