@@ -50,6 +50,17 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
     return { paramsB: 1.5, confidence: "medium" };
   }
 
+  // GPT-2 variants — order matters: tiny before generic gpt2.
+  // sshleifer/tiny-gpt2 is a ~5M-param model used by the tour demo and catalog.
+  // Without this, unknown models fall through to the 7B default and show
+  // wildly inflated memory (e.g. 26 GB for a 5 MB model at FP32).
+  if (id.includes("tiny-gpt2") || id.includes("tiny_gpt2")) return { paramsB: 0.005, confidence: "medium" };
+  if (id.includes("distilgpt2")) return { paramsB: 0.082, confidence: "low" };
+  if (id.includes("gpt2-xl") || id.includes("gpt2_xl")) return { paramsB: 1.5, confidence: "low" };
+  if (id.includes("gpt2-large") || id.includes("gpt2_large")) return { paramsB: 0.774, confidence: "low" };
+  if (id.includes("gpt2-medium") || id.includes("gpt2_medium")) return { paramsB: 0.355, confidence: "low" };
+  if (id.includes("gpt2")) return { paramsB: 0.124, confidence: "low" };
+
   if (id.includes("phi-3.5") || id.includes("phi3.5")) return { paramsB: 3.8, confidence: "low" };
   if (id.includes("phi-3") || id.includes("phi3")) return { paramsB: 3.8, confidence: "low" };
   if (id.includes("phi-2")) return { paramsB: 2.7, confidence: "low" };
