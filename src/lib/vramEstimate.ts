@@ -67,7 +67,7 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
   return { paramsB: 7, confidence: "low" };
 }
 
-export type EffectiveModelSource = "huggingface" | "local" | "azure";
+export type EffectiveModelSource = ModelSource;
 
 /**
  * Resolves which model source actually has a model configured, preferring
