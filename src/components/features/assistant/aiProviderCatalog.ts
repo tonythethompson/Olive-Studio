@@ -29,7 +29,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "gemini",
     name: "Google Gemini",
-    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+    models: ["gemini-3.7-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
     keyEnvVar: "GEMINI_API_KEY or GOOGLE_API_KEY",
     docsUrl: "aistudio.google.com",
     category: "direct",
@@ -84,7 +84,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
     models: [
       "openai/gpt-4o",
       "anthropic/claude-sonnet-4-6",
-      "google/gemini-2.5-flash",
+      "google/gemini-3.7-flash",
       "meta-llama/llama-4-scout",
       "deepseek/deepseek-r1",
       "qwen/qwen3-235b-a22b",
@@ -190,7 +190,7 @@ export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   {
     id: "kilocode",
     name: "Kilo Gateway",
-    models: ["anthropic/claude-sonnet-4", "openai/gpt-4o", "google/gemini-2.5-flash", "deepseek/deepseek-r1"],
+    models: ["anthropic/claude-sonnet-4", "openai/gpt-4o", "google/gemini-3.7-flash", "deepseek/deepseek-r1"],
     keyEnvVar: "KILO_API_KEY or KILOCODE_API_KEY",
     docsUrl: "kilo.ai/docs/gateway",
     baseUrl: "https://api.kilo.ai/api/gateway",

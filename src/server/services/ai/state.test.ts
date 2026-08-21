@@ -53,7 +53,7 @@ describe("restoreProviderFromPreference", () => {
   });
 
   it("still rejects key-required providers without env credentials", () => {
-    const pref: AiPreference = { provider: "gemini", model: "gemini-2.5-flash" };
+    const pref: AiPreference = { provider: "gemini", model: "gemini-3.7-flash" };
     expect(restoreProviderFromPreference(pref)).toBeNull();
   });
 });
