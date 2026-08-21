@@ -1,5 +1,5 @@
-import { CLOUDFLARE_FALLBACK_MODELS } from "@/lib/cloudflare/client.ts";
-import { DEVIN_FALLBACK_MODELS } from "@/lib/devin/client.ts";
+import { CLOUDFLARE_FALLBACK_MODELS } from "@/lib/cloudflare/fallbackModels.ts";
+import { DEVIN_FALLBACK_MODELS } from "@/lib/devin/fallbackModels.ts";
 
 export interface ProviderOption {
   readonly id: string;

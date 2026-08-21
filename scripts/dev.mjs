@@ -18,12 +18,12 @@ const nodeOptions = `${cleanedOptions} ${memoryOption}`.trim();
 
 const isWin = process.platform === "win32";
 const child = spawn(
-  isWin ? "pnpm.cmd" : "pnpm",
+  "pnpm",
   ["exec", "tsx", serverScript, ...process.argv.slice(2)],
   {
     cwd: root,
     stdio: "inherit",
-    shell: false,
+    shell: isWin,
     env: {
       ...process.env,
       NODE_OPTIONS: nodeOptions,
