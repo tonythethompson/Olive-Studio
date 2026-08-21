@@ -40,7 +40,7 @@ jobs:
 
     steps:
       - name: Checkout repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -58,7 +58,7 @@ jobs:
           exit 1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -139,6 +139,8 @@ jobs:
         env:
           CLOUDFLARE_API_KEY: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
           CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          MSWEA_CONFIGURED: "true"
+          MSWEA_MODEL_NAME: "cloudflare/@cf/zai-org/glm-5.2"
           TASK_TITLE: >-
             ${{ github.event_name == 'issues'
                 && github.event.issue.title
