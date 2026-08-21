@@ -131,9 +131,9 @@ function Dashboard() {
   // Header center cluster (KB sync / runtime) must never wrap
   // onto a second line. Measure the actual gap between the fixed left and
   // right header columns and collapse the cluster to icon-only once the
-  // full-label layout wouldn't fit — driven by real available space rather
-  // than a viewport breakpoint, since the sidebar and header columns already
-  // resize independently at their own breakpoints.
+  // full-label layout wouldn't fit. Below the wide-shell breakpoint the
+  // cluster is always compact so it collapses in lockstep with the sidebar
+  // and the Assistant button label (both driven by the CSS `wide` breakpoint).
   const headerLeftRef = useRef<HTMLDivElement>(null);
   const headerRightRef = useRef<HTMLDivElement>(null);
   const [headerCompact, setHeaderCompact] = useState(() => {
@@ -162,7 +162,12 @@ function Dashboard() {
 
     const measure = () => {
       const available = rightEl.getBoundingClientRect().left - leftEl.getBoundingClientRect().right;
-      setHeaderCompact(available < HEADER_CLUSTER_FULL_WIDTH);
+      // Stay compact below the wide-shell breakpoint so the header collapses
+      // to icons-only in lockstep with the sidebar and Assistant button label
+      // (which are driven by the CSS `wide` breakpoint).  Above the breakpoint
+      // the available-space heuristic still kicks in for very narrow content
+      // areas.
+      setHeaderCompact(available < HEADER_CLUSTER_FULL_WIDTH || window.innerWidth < WIDE_SHELL_MIN_WIDTH_PX);
     };
 
     measure();
