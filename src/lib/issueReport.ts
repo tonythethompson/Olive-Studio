@@ -319,7 +319,7 @@ export function buildIssueBody(report: IssueReport, options?: BuildIssueBodyOpti
     lines.push("### Screenshots");
     lines.push("");
     if (screenshot) {
-      lines.push(`_Screenshot attached: \`${screenshot}\` — paste (Ctrl+V) or drag and drop image here._`);
+      lines.push(`_A screenshot named \`${screenshot}\` was selected. Prefilled issue links cannot include images, so paste (Ctrl+V) or drag and drop it here after the form opens._`);
     } else {
       lines.push("_Attach screenshots here by pasting (Ctrl+V) or dragging and dropping._");
     }
