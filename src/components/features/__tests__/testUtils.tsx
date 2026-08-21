@@ -94,6 +94,7 @@ export function useFetchRoutesMock(routes: Record<string, unknown> = {}) {
     spy = mockFetchRoutes(routes);
   });
   afterEach(() => {
+    localStorage.clear();
     spy.mockRestore();
     vi.clearAllMocks();
   });

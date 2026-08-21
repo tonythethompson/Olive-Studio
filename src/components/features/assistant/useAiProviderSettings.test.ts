@@ -12,6 +12,7 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 
 describe("useAiProviderSettings", () => {
   afterEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
