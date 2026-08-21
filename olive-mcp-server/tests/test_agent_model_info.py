@@ -318,6 +318,52 @@ class TestMixtralMoeHeuristic:
         _assert_json_roundtrip(result)
 
 
+# ---------------------------------------------------------------------------
+# Test: GPT-2 heuristic (synced with inferParamBillions in vramEstimate.ts)
+# ---------------------------------------------------------------------------
+
+
+class TestGpt2Heuristic:
+    """GPT-2 identifiers get realistic param counts, not the 7B fallback."""
+
+    @pytest.mark.parametrize(
+        "model_id, expected_params",
+        [
+            ("sshleifer/tiny-gpt2", 0.005),
+            ("sshleifer/tiny_gpt2", 0.005),
+            ("distilgpt2/distilgpt2", 0.082),
+            ("openai-community/gpt2", 0.124),
+            ("openai-community/gpt2-medium", 0.355),
+            ("openai-community/gpt2-large", 0.774),
+            ("openai-community/gpt2-xl", 1.5),
+            # Hyphenated spellings are normalized to the same gpt2 token.
+            ("openai-community/gpt-2", 0.124),
+            ("flax-community/gpt-2-medium", 0.355),
+            ("flax-community/gpt_2_large", 0.774),
+        ],
+    )
+    def test_gpt2_variants_not_7b(self, monkeypatch: pytest.MonkeyPatch, model_id: str, expected_params: float):
+        """Heuristic fallback maps GPT-2 ids to real sizes, not the 7B default."""
+        _patch_hf(monkeypatch, None)
+        result = agent_model_info.get_model_info(model_id)
+        assert "error" not in result
+        assert result["source"] == "heuristic"
+        assert result["params_b"] == pytest.approx(expected_params)
+        assert result["estimated_vram_gb"] == pytest.approx(expected_params * 2.0)
+        assert result["recommended_quant"] == "int8"
+
+    def test_gpt2_confidence_and_unknown_fallback(self, monkeypatch: pytest.MonkeyPatch):
+        """tiny-gpt2 carries medium confidence; unknown ids keep the 7B fallback."""
+        _patch_hf(monkeypatch, None)
+        tiny = agent_model_info.get_model_info("sshleifer/tiny-gpt2")
+        assert tiny["confidence"] == "medium"
+        base = agent_model_info.get_model_info("openai-community/gpt2")
+        assert base["confidence"] == "low"
+        unknown = agent_model_info.get_model_info("some-org/some-unknown-model")
+        assert unknown["params_b"] == 7.0
+        assert unknown["confidence"] == "low"
+
+
 class TestArchitectureBasedModelType:
     """Opaque model IDs should classify from their HF architecture field."""
 
