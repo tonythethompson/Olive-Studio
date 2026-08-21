@@ -14,8 +14,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent $PSScriptRoot
-Set-Location $Root
+$Root = Split-Path -Parent (Resolve-Path $PSScriptRoot).Path
+Push-Location $Root
+try {
 
 if ($RemainingArgs -contains "--build" -or $RemainingArgs -contains "-Build") {
   $Build = $true
@@ -151,3 +152,7 @@ Write-Host "  Web backend: http://127.0.0.1:3000 (auto via beforeDevCommand)" -F
 Write-Host "  Ctrl+C to stop both the window and the web server." -ForegroundColor DarkGray
 pnpm tauri:dev
 exit $LASTEXITCODE
+
+} finally {
+  Pop-Location
+}
