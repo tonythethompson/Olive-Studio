@@ -435,7 +435,12 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
         {useNative && nativeModel && (
           <div className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/20 p-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-200 truncate">{nativeModel.displayPath}</p>
+              <p
+                className="text-sm font-medium text-slate-200 truncate"
+                title={`${nativeModel.rootLabel}/${nativeModel.displayPath}`}
+              >
+                {nativeModel.rootLabel}/{nativeModel.displayPath}
+              </p>
               <p className="text-xs text-slate-500">{(nativeModel.sizeBytes / 1024).toFixed(1)} KB</p>
             </div>
             <Button variant="ghost" className="h-8 w-8 p-0 shrink-0" onClick={clearModel}>
