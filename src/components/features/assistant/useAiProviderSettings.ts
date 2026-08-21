@@ -4,6 +4,55 @@ import { openExternal } from "@/lib/openExternal";
 import { PROVIDER_OPTIONS, normalizeUiProviderId, type ProviderId } from "./aiProviderCatalog";
 import type { ProviderStatus, SidebarTab } from "./types";
 
+const AI_MODEL_PREF_STORAGE_KEY = "olive-studio:ai-model-pref";
+
+interface PersistedModelPref {
+  provider: string;
+  model: string;
+}
+
+/** True when a browser localStorage is available (guards SSR / non-browser envs). */
+function canUseLocalStorage(): boolean {
+  return typeof window !== "undefined" && typeof localStorage !== "undefined";
+}
+
+/**
+ * Read the last-used AI provider/model from localStorage so the assistant
+ * remembers the user's choice across sessions instead of always defaulting
+ * to Gemini.  Returns null when no preference has been stored or storage is
+ * unavailable.
+ */
+function readPersistedModelPref(): PersistedModelPref | null {
+  if (!canUseLocalStorage()) return null;
+  try {
+    const raw = localStorage.getItem(AI_MODEL_PREF_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedModelPref>;
+    if (typeof parsed.provider !== "string" || typeof parsed.model !== "string") return null;
+    if (!parsed.provider || !parsed.model) return null;
+    return { provider: parsed.provider, model: parsed.model };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist the current provider/model selection to localStorage so it survives
+ * page reloads and app restarts.  Failures are silently ignored (private
+ * mode, quota, etc.).
+ */
+function writePersistedModelPref(provider: string, model: string): void {
+  if (!canUseLocalStorage()) return;
+  try {
+    localStorage.setItem(
+      AI_MODEL_PREF_STORAGE_KEY,
+      JSON.stringify({ provider, model }),
+    );
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.)
+  }
+}
+
 interface UseAiProviderSettingsOptions {
   isOpen: boolean;
   activeTab: SidebarTab;
@@ -113,8 +162,32 @@ export function useAiProviderSettings({
   onProviderMissing,
 }: UseAiProviderSettingsOptions) {
   const [providerStatus, setProviderStatus] = useState<ProviderStatus>({ source: "none" });
-  const [settingsProvider, setSettingsProvider] = useState<ProviderId>("gemini");
-  const [settingsModel, setSettingsModel] = useState("gemini-2.5-flash");
+  // Restore the last-used provider/model from localStorage so the assistant
+  // remembers the user's choice across sessions instead of always defaulting
+  // to Gemini.  The server-side preference (readAiPreference) still takes
+  // priority once fetchProviderStatus completes.  Read the preference once so
+  // both initial values derive from the same storage read.
+  const [persistedPref] = useState<PersistedModelPref | null>(() => readPersistedModelPref());
+  const [settingsProvider, setSettingsProvider] = useState<ProviderId>(() => {
+    if (persistedPref) {
+      const uiId = normalizeUiProviderId(persistedPref.provider);
+      if (uiId) return uiId;
+    }
+    return "gemini";
+  });
+  const [settingsModel, setSettingsModel] = useState(() => {
+    if (!persistedPref) return "gemini-3.7-flash";
+    const providerId = normalizeUiProviderId(persistedPref.provider) ?? "gemini";
+    const providerOption = PROVIDER_OPTIONS.find((p) => p.id === providerId) ?? PROVIDER_OPTIONS.find((p) => p.id === "gemini")!;
+    // Validate against the static catalog: a stale/removed model (e.g.
+    // gemini-2.5-flash) must not be restored, so fall back to the provider's
+    // first listed model. Providers with an empty static catalog
+    // (openai-compat freehand) accept any persisted model.
+    if (providerOption.models.length > 0 && !providerOption.models.includes(persistedPref.model)) {
+      return providerOption.models[0]!;
+    }
+    return persistedPref.model;
+  });
   const [settingsApiKey, setSettingsApiKey] = useState("");
   const [settingsBaseUrl, setSettingsBaseUrl] = useState("");
   const [settingsCloudflareAccountId, setSettingsCloudflareAccountId] = useState("");
@@ -325,6 +398,11 @@ export function useAiProviderSettings({
       return null;
     }
   };
+
+  // Persist the current provider/model selection so it survives app restarts.
+  useEffect(() => {
+    writePersistedModelPref(settingsProvider, settingsModel);
+  }, [settingsProvider, settingsModel]);
 
   useEffect(() => {
     if (!isOpen) return;

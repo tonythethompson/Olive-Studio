@@ -17,6 +17,7 @@ import { ensureMcpSetupInBackground } from "./src/server/services/mcp/ensureMcpS
 import { mountEnvRoutes } from "./src/server/routes/env.ts";
 import { mountOliveRoutes } from "./src/server/routes/olive.ts";
 import { mountArenaRoutes } from "./src/server/routes/arena.ts";
+import { mountPlaygroundRoutes } from "./src/server/routes/playground.ts";
 import { mountS3Routes } from "./src/server/routes/s3.ts";
 import { probeTensorRtLoadable } from "./src/server/services/olive/tensorrt.ts";
 import { probeTensorRtRtxLoadable } from "./src/server/services/olive/tensorrt-rtx.ts";
@@ -126,6 +127,10 @@ app.use("/api", systemRouter);
 const arenaRouter = Router();
 mountArenaRoutes(arenaRouter);
 app.use("/api", arenaRouter);
+
+const playgroundRouter = Router();
+mountPlaygroundRoutes(playgroundRouter);
+app.use("/api", playgroundRouter);
 
 const s3Router = Router();
 mountS3Routes(s3Router);
