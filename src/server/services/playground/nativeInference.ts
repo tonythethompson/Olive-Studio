@@ -6,7 +6,8 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { getVenvPython } from "../venv/paths.ts";
-import type { VenvFamily } from "../../../lib/venvFamily.ts";
+import { type VenvFamily, VENV_FAMILIES } from "../../../lib/venvFamily.ts";
+import { getFamilyRoot } from "../venv/spec.ts";
 import {
   resolveOliveOutputForDownload,
   listOliveOutputs,
@@ -73,8 +74,25 @@ function sidecarEnv(dylibPath: string): NodeJS.ProcessEnv {
   return env;
 }
 
+function isSafeVenvPython(pythonPath: string, family: VenvFamily): boolean {
+  // Validate the family against an allowlist so untrusted input can never
+  // influence the executable path passed to spawnSync.
+  if (!VENV_FAMILIES.includes(family)) return false;
+  const root = path.resolve(getFamilyRoot(family));
+  const resolved = path.resolve(pythonPath);
+  // Ensure the resolved python path is inside the expected venv root.
+  const rel = path.relative(root, resolved);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return false;
+  // Only allow paths to the expected python binary name.
+  const basename = path.basename(resolved);
+  const expected = process.platform === "win32" ? "python.exe" : "python";
+  if (basename !== expected) return false;
+  return true;
+}
+
 function findOrtDylibInVenv(venvFamily: VenvFamily = "default"): string | undefined {
   const python = getVenvPython(venvFamily);
+  if (!isSafeVenvPython(python, venvFamily)) return undefined;
   if (!fs.existsSync(python)) return undefined;
 
   const script = `
