@@ -250,18 +250,32 @@ export function ReportIssueModal({
           document.execCommand("copy");
           document.body.removeChild(textarea);
         }
-      } else if (screenshotFile && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-        // Attempt to copy screenshot image to clipboard so user can immediately Ctrl+V into GitHub
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ [screenshotFile.type]: screenshotFile })]);
-          setScreenshotCopied(true);
-        } catch {
-          setScreenshotCopyError("Could not copy the screenshot to the clipboard. Attach it manually in GitHub.");
+      }
+
+      if (screenshotFile && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        // The clipboard can only hold one item. If offloaded text was copied, the
+        // screenshot must be added manually from the app so the user does not lose it.
+        if (liveReport.offloadedClipboardText) {
+          setScreenshotCopyError(
+            "A screenshot is selected but the clipboard is being used for the offloaded issue text. " +
+              "Paste the text into GitHub, then click the Copy screenshot button below to add the image.",
+          );
+        } else {
+          // Attempt to copy screenshot image to clipboard so user can immediately Ctrl+V into GitHub
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ [screenshotFile.type]: screenshotFile })]);
+            setScreenshotCopied(true);
+          } catch {
+            setScreenshotCopyError("Could not copy the screenshot to the clipboard. Attach it manually in GitHub.");
+          }
         }
       }
 
       await openExternal(liveReport.url);
-      onClose();
+      // Keep the modal open when a screenshot was selected but could not be copied, so the user sees the error.
+      if (!screenshotFile || !liveReport.offloadedClipboardText) {
+        onClose();
+      }
     } catch (err) {
       setOpenError(err instanceof Error ? err.message : "Could not open browser");
     }

@@ -9,26 +9,39 @@ on:
 permissions: {}
 
 jobs:
+  prepare:
+    name: Check trigger
+    runs-on: ubuntu-latest
+    outputs:
+      triggered: ${{ steps.check.outputs.triggered }}
+    steps:
+      - id: check
+        run: |
+          set -euo pipefail
+          allowed='OWNER MEMBER COLLABORATOR'
+          triggered=false
+          if [ "$GITHUB_EVENT_NAME" = "issues" ]; then
+            author="$(jq -r '.issue.author_association' "$GITHUB_EVENT_PATH")"
+            if [[ " $allowed " == *" $author "* ]]; then
+              triggered=true
+            fi
+          elif [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+            is_pr="$(jq -r 'if .issue.pull_request then "true" else "" end' "$GITHUB_EVENT_PATH")"
+            author="$(jq -r '.comment.author_association' "$GITHUB_EVENT_PATH")"
+            body="$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")"
+            if [ -z "$is_pr" ] && [[ " $allowed " == *" $author "* ]]; then
+              trimmed="$(printf '%s' "$body" | awk '{$1=$1;print}')"
+              if [ "$trimmed" = "/solve" ]; then
+                triggered=true
+              fi
+            fi
+          fi
+          echo "triggered=$triggered" >> "$GITHUB_OUTPUT"
+
   solve-issue:
     name: Solve issue
-    if: |
-      (
-        github.event_name == 'issues' &&
-        contains(
-          fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
-          github.event.issue.author_association
-        )
-      ) ||
-      (
-        github.event_name == 'issue_comment' &&
-        !github.event.issue.pull_request &&
-        github.event.comment.body == '/solve' &&
-        contains(
-          fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
-          github.event.comment.author_association
-        )
-      )
-
+    needs: prepare
+    if: needs.prepare.outputs.triggered == 'true'
     runs-on: ubuntu-latest
     concurrency:
       group: solve-issue-${{ github.event.issue.number }}
