@@ -23,7 +23,7 @@ import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import type { SidebarTab } from "./types";
-import { usePreferencesStore, type AssistantSidebarTab } from "@/lib/stores/preferencesStore";
+import { usePreferencesStore } from "@/lib/stores/preferencesStore";
 import { useAiChat } from "./useAiChat";
 import { useAiProviderSettings } from "./useAiProviderSettings";
 import { useLocalEngineSetup } from "./useLocalEngineSetup";
@@ -78,7 +78,10 @@ export function AssistantSidebar({
   const setState = propSetState ?? storeState.setState;
   const persistedActiveTab = usePreferencesStore((s) => s.assistantActiveTab);
   const setPersistedActiveTab = usePreferencesStore((s) => s.setAssistantActiveTab);
-  const activeTab: SidebarTab = persistedActiveTab;
+  const activeTab: SidebarTab = useMemo(
+    () => (TABS.some((tab) => tab.id === persistedActiveTab) ? persistedActiveTab : "assistant"),
+    [persistedActiveTab],
+  );
   const setActiveTab = useCallback((tab: SidebarTab) => {
     setPersistedActiveTab(tab);
   }, [setPersistedActiveTab]);
@@ -205,7 +208,6 @@ export function AssistantSidebar({
 
   useEffect(() => {
     if (!openToAudit) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
     requestReviewRefresh({ resetFirst: true });
     onAuditOpened?.();
@@ -213,7 +215,6 @@ export function AssistantSidebar({
 
   useEffect(() => {
     if (!pendingChatQuery) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
     void chat.sendChat(pendingChatQuery.query);
     onChatQueryConsumed?.();
