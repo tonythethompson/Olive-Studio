@@ -821,7 +821,18 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
  */
 /** True once the user has actually picked a model in Model source (step 01). */
 export function hasSelectedModel(state: UIState): boolean {
-  return getEffectiveModelSource(state) !== null;
+export function hasSelectedModel(state: UIState): boolean {
+  // Keep the validation gate aligned with buildOliveRecipe: the active tab
+  // must itself have a model. The effective-source fallback is used for
+  // display/VRAM only (see getVramModelLabel / resolveSourceWeightGb), not
+  // for run/export gating, so a stale cross-tab model never unblocks a
+  // recipe whose active tab has no model to build from.
+  return (
+    (state.modelSource === "huggingface" && state.hfModelId.trim() !== "") ||
+    (state.modelSource === "local" && state.localFiles.length > 0) ||
+    (state.modelSource === "azure" && state.azureModelPath.trim() !== "")
+  );
+}
 }
 
 function getRecipeRuntimeIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
