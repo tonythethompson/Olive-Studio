@@ -143,7 +143,8 @@ function Dashboard() {
   const HEADER_CLUSTER_FULL_WIDTH = 520;
 
   const [isOliveRunning, setIsOliveRunning] = useState(false);
-  const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
+  const isAiSidebarOpen = usePreferencesStore((s) => s.assistantSidebarOpen);
+  const setAssistantSidebarOpen = usePreferencesStore((s) => s.setAssistantSidebarOpen);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);

@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 export type ThemePreference = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
 export type McpRetrievalMode = "auto" | "keyword" | "semantic";
+export type AssistantSidebarTab = "assistant" | "settings" | "agent";
 
 interface PreferencesState {
   themePreference: ThemePreference;
@@ -11,6 +12,10 @@ interface PreferencesState {
   tourSeen: boolean;
   mcpRetrievalMode: McpRetrievalMode;
   mcpPreloadEmbeddings: boolean;
+  /** Persisted Assistant sidebar open state so it survives page reloads / app restarts. */
+  assistantSidebarOpen: boolean;
+  /** Persisted active tab in the Assistant sidebar so users return to the panel they left. */
+  assistantActiveTab: AssistantSidebarTab;
 }
 
 interface PreferencesActions {
@@ -18,6 +23,8 @@ interface PreferencesActions {
   markTourSeen: () => void;
   setMcpRetrievalMode: (mode: McpRetrievalMode) => void;
   setMcpPreloadEmbeddings: (enabled: boolean) => void;
+  setAssistantSidebarOpen: (open: boolean) => void;
+  setAssistantActiveTab: (tab: AssistantSidebarTab) => void;
 }
 
 type PreferencesStore = PreferencesState & PreferencesActions;
@@ -31,10 +38,14 @@ export const usePreferencesStore = create<PreferencesStore>()(
       tourSeen: false,
       mcpRetrievalMode: "auto",
       mcpPreloadEmbeddings: false,
+      assistantSidebarOpen: false,
+      assistantActiveTab: "assistant",
       setThemePreference: (pref) => set({ themePreference: pref }),
       markTourSeen: () => set({ tourSeen: true }),
       setMcpRetrievalMode: (mode) => set({ mcpRetrievalMode: mode }),
       setMcpPreloadEmbeddings: (enabled) => set({ mcpPreloadEmbeddings: enabled }),
+      setAssistantSidebarOpen: (open) => set({ assistantSidebarOpen: open }),
+      setAssistantActiveTab: (tab) => set({ assistantActiveTab: tab }),
     }),
     { name: STORAGE_KEY },
   ),
