@@ -178,7 +178,7 @@ export function useAiProviderSettings({
   const [settingsModel, setSettingsModel] = useState(() => {
     if (!persistedPref) return "gemini-3.7-flash";
     const providerId = normalizeUiProviderId(persistedPref.provider) ?? "gemini";
-    const providerOption = PROVIDER_OPTIONS.find((p) => p.id === providerId) ?? PROVIDER_OPTIONS[0]!;
+    const providerOption = PROVIDER_OPTIONS.find((p) => p.id === providerId) ?? PROVIDER_OPTIONS.find((p) => p.id === "gemini")!;
     // Validate against the static catalog: a stale/removed model (e.g.
     // gemini-2.5-flash) must not be restored, so fall back to the provider's
     // first listed model. Providers with an empty static catalog
