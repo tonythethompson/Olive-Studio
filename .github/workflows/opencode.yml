@@ -289,6 +289,7 @@ jobs:
           OPENCODE_CONFIG_CONTENT: ${{ steps.probe.outputs.config }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           MODEL: ${{ steps.probe.outputs.model }}
           VARIANT: ${{ steps.probe.outputs.variant }}
           JOB_STARTED_AT: ${{ steps.job_start.outputs.epoch }}
