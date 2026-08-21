@@ -342,9 +342,7 @@ class TestGpt2Heuristic:
             ("flax-community/gpt_2_large", 0.774),
         ],
     )
-    def test_gpt2_variants_not_7b(
-        self, monkeypatch: pytest.MonkeyPatch, model_id: str, expected_params: float
-    ):
+    def test_gpt2_variants_not_7b(self, monkeypatch: pytest.MonkeyPatch, model_id: str, expected_params: float):
         """Heuristic fallback maps GPT-2 ids to real sizes, not the 7B default."""
         _patch_hf(monkeypatch, None)
         result = agent_model_info.get_model_info(model_id)
