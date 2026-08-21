@@ -19,6 +19,9 @@ import {
   X,
   FileCode,
 } from "lucide-react";
+import { FromOliveOutputs } from "./ArenaConvenience";
+import { nativeInfer } from "@/lib/nativePlayground";
+import type { OliveOutputEntry } from "@/lib/arenaOliveOutputs";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -75,6 +78,9 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
   const [logOutput, setLogOutput] = useState<string[]>([]);
   const [sessionInfo, setSessionInfo] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
+  const [useNative, setUseNative] = useState(false);
+  const [nativeModel, setNativeModel] = useState<OliveOutputEntry | null>(null);
+  const [nativeProvider, setNativeProvider] = useState("CPU");
 
   // Check WebGPU + ORT on mount
   useEffect(() => {
@@ -163,6 +169,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
 
   const clearModel = useCallback(() => {
     setSelectedFile(null);
+    setNativeModel(null);
     setMetrics(null);
     setErrorMessage("");
     setSessionInfo("");
@@ -263,6 +270,63 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
     }
   }, [selectedFile, batchSize, seqLen, appendLog]);
 
+  const runNative = useCallback(async () => {
+    if (!nativeModel) return;
+    setErrorMessage("");
+    setMetrics(null);
+    setRunStatus("loading-model");
+
+    try {
+      appendLog(`Native sidecar: loading ${nativeModel.displayPath}...`);
+      const totalElements = batchSize * seqLen;
+      const data: number[] = [];
+      for (let i = 0; i < totalElements; i++) {
+        data.push(Math.random() * 2 - 1);
+      }
+      const defaultInput = { dtype: "float32", dims: [batchSize, seqLen], data };
+
+      const result = await nativeInfer({
+        model_id: nativeModel.id,
+        default_input: defaultInput,
+        execution_provider: nativeProvider,
+        iterations: 1,
+        batch_size: batchSize,
+      });
+
+      if (!result.ok) {
+        throw new Error(result.error || "Native sidecar returned an error");
+      }
+
+      setMetrics({
+        sessionCreateMs: result.session_create_ms ?? 0,
+        inferenceMs: result.avg_ms ?? 0,
+        outputShapes: result.output_shapes ?? [],
+        inputNames: [],
+        outputNames: result.output_shapes?.map((s) => s.split(":")[0] ?? s) ?? [],
+        epUsed: result.ep_used ?? nativeProvider,
+      });
+      setSessionInfo(
+        `Provider: ${result.ep_used ?? nativeProvider} | Outputs: ${result.output_shapes?.length ?? 0}`,
+      );
+      appendLog(`Native inference complete in ${formatMs(result.avg_ms ?? 0)}`);
+      result.output_shapes?.forEach((shape) => appendLog(shape));
+      setRunStatus("done");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg);
+      appendLog(`ERROR: ${msg}`);
+      setRunStatus("error");
+    }
+  }, [nativeModel, nativeProvider, batchSize, seqLen, appendLog]);
+
+  const onRunClick = useCallback(() => {
+    if (useNative) {
+      void runNative();
+    } else {
+      void runInference();
+    }
+  }, [useNative, runNative, runInference]);
+
   return (
     <div className="flex flex-col gap-5 select-text">
       {/* Status badges */}
@@ -301,7 +365,7 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
           {ortStatus === "available" ? "Loaded" : ortStatus === "unavailable" ? "Not loaded" : "Loading..."}
         </div>
 
-        {modelFormat === "ort" && (
+        {modelFormat === "ort" && !useNative && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-mono border border-blue-500/30 bg-blue-500/10 text-blue-400">
             <FileCode className="h-3 w-3" />
             ORT Flatbuffer
@@ -309,9 +373,82 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
         )}
       </div>
 
+      {/* Execution mode */}
+      <div className="rounded-lg border border-slate-800 bg-slate-900/20 p-3 space-y-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setUseNative(false)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors cursor-pointer",
+              !useNative
+                ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30"
+                : "text-slate-400 hover:bg-slate-800/50 border border-transparent",
+            )}
+          >
+            <Globe className="h-3 w-3" />
+            Browser (WebGPU / WASM)
+          </button>
+          <button
+            type="button"
+            onClick={() => setUseNative(true)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors cursor-pointer",
+              useNative
+                ? "bg-electric-blue/20 text-electric-blue border border-electric-blue/30"
+                : "text-slate-400 hover:bg-slate-800/50 border border-transparent",
+            )}
+          >
+            <HardDrive className="h-3 w-3" />
+            Native (sidecar)
+          </button>
+          {useNative && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <Label htmlFor="native-ep" className="text-xs text-slate-400">
+                EP
+              </Label>
+              <select
+                id="native-ep"
+                value={nativeProvider}
+                onChange={(e) => setNativeProvider(e.target.value)}
+                className="h-8 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-200 font-mono outline-none focus:border-electric-blue"
+              >
+                <option value="CPU">CPU</option>
+                <option value="CUDA">CUDA</option>
+                <option value="DirectML">DirectML</option>
+                <option value="OpenVINO">OpenVINO</option>
+                <option value="TensorRT">TensorRT</option>
+                <option value="OneDNN">OneDNN</option>
+                <option value="CoreML">CoreML</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {useNative && !nativeModel && (
+          <FromOliveOutputs
+            slotLabel="Browser Test"
+            onSelect={setNativeModel}
+          />
+        )}
+
+        {useNative && nativeModel && (
+          <div className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/20 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-200 truncate">{nativeModel.displayPath}</p>
+              <p className="text-xs text-slate-500">{(nativeModel.sizeBytes / 1024).toFixed(1)} KB</p>
+            </div>
+            <Button variant="ghost" className="h-8 w-8 p-0 shrink-0" onClick={clearModel}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
       {/* Model file upload */}
-      {!selectedFile ? (
-        <div
+      {!useNative && (
+        !selectedFile ? (
+          <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -361,10 +498,10 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             <X className="h-4 w-4" />
           </Button>
         </div>
-      )}
+      ))}
 
       {/* Config + Controls row */}
-      {selectedFile && (
+      {(selectedFile || (useNative && nativeModel)) && (
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
           <div className="sm:col-span-4 space-y-3 rounded-lg border border-slate-800 bg-slate-900/20 p-4">
             <Label className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
@@ -408,9 +545,10 @@ export function InBrowserValidation({ recipeJson }: { recipeJson?: string }) {
             <div className="flex items-center gap-3">
               <Button
                 variant={runStatus === "done" ? "success" : "default"}
-                onClick={runInference}
+                onClick={onRunClick}
                 disabled={
-                  runStatus === "loading-ort" || runStatus === "loading-model" || runStatus === "running"
+                  runStatus === "loading-ort" || runStatus === "loading-model" || runStatus === "running" ||
+                  (useNative ? !nativeModel : !selectedFile)
                 }
                 className="h-10 px-5 text-sm"
               >

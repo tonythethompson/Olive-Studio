@@ -25,6 +25,8 @@ struct Request {
     execution_provider: Option<String>,
     #[serde(default)]
     inputs: HashMap<String, InputTensor>,
+    #[serde(default)]
+    default_input: Option<InputTensor>,
     #[serde(default = "default_warmup")]
     warmup_iterations: usize,
     #[serde(default = "default_iterations")]
@@ -171,7 +173,7 @@ fn handle_request(req: Request) -> Result<Response> {
 
     // Warmup.
     for _ in 0..req.warmup_iterations {
-        let inputs = build_input_values(&session, &req.inputs)?;
+        let inputs = build_input_values(&session, &req.inputs, req.default_input.as_ref())?;
         let _ = session.run(inputs)?;
     }
 
@@ -179,7 +181,7 @@ fn handle_request(req: Request) -> Result<Response> {
     let mut latencies = Vec::with_capacity(req.iterations);
 
     for _ in 0..req.iterations {
-        let inputs = build_input_values(&session, &req.inputs)?;
+        let inputs = build_input_values(&session, &req.inputs, req.default_input.as_ref())?;
         let start = Instant::now();
         let outputs = session.run(inputs)?;
         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
@@ -189,7 +191,7 @@ fn handle_request(req: Request) -> Result<Response> {
 
     // One final untimed run to capture output shapes and a preview.
     let (output_shapes, output_preview) = {
-        let inputs = build_input_values(&session, &req.inputs)?;
+        let inputs = build_input_values(&session, &req.inputs, req.default_input.as_ref())?;
         let outputs = session.run(inputs)?;
         let description = describe_outputs(&outputs, req.include_outputs)?;
         drop(outputs);
@@ -222,12 +224,13 @@ fn handle_request(req: Request) -> Result<Response> {
 fn build_input_values(
     session: &Session,
     inputs: &HashMap<String, InputTensor>,
+    default_input: Option<&InputTensor>,
 ) -> Result<HashMap<String, DynValue>> {
     let mut result = HashMap::with_capacity(session.inputs.len());
     for input in &session.inputs {
-        let tensor = inputs
-            .get(&input.name)
-            .with_context(|| format!("missing input tensor: {}", input.name))?;
+        let tensor = inputs.get(&input.name).or(default_input).with_context(|| {
+            format!("missing input tensor: {}", input.name)
+        })?;
         let value = build_tensor(tensor)?;
         result.insert(input.name.clone(), value);
     }

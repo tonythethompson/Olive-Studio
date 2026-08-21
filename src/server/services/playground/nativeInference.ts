@@ -22,7 +22,8 @@ export type NativeTensor = {
 export type NativeRequest = {
   model_path: string;
   execution_provider?: string;
-  inputs: Record<string, NativeTensor>;
+  inputs?: Record<string, NativeTensor>;
+  default_input?: NativeTensor;
   warmup_iterations?: number;
   iterations?: number;
   batch_size?: number;
@@ -207,6 +208,7 @@ export function buildNativeRequest(
   inputs: Record<string, NativeTensor>,
   opts: {
     executionProvider?: string;
+    defaultInput?: NativeTensor;
     warmupIterations?: number;
     iterations?: number;
     batchSize?: number;
@@ -217,6 +219,7 @@ export function buildNativeRequest(
     model_path: modelPath,
     execution_provider: opts.executionProvider,
     inputs,
+    default_input: opts.defaultInput,
     warmup_iterations: opts.warmupIterations ?? 0,
     iterations: opts.iterations ?? 1,
     batch_size: opts.batchSize ?? 1,

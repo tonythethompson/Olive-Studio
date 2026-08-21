@@ -32,7 +32,8 @@ export function mountPlaygroundRoutes(router: Router): void {
 
 type NativeRunBody = {
   model_id: string;
-  inputs: Record<string, unknown>;
+  inputs?: Record<string, unknown>;
+  default_input?: Record<string, unknown>;
   execution_provider?: string;
   warmup_iterations?: number;
   iterations?: number;
@@ -43,7 +44,8 @@ type NativeRunBody = {
 
 const nativeRunBodySpec = {
   model_id: { type: "string" as const },
-  inputs: { type: "object" as const },
+  inputs: { type: "object" as const, required: false },
+  default_input: { type: "object" as const, required: false },
   execution_provider: { type: "string" as const, required: false },
   warmup_iterations: { type: "number" as const, required: false },
   iterations: { type: "number" as const, required: false },
@@ -51,6 +53,23 @@ const nativeRunBodySpec = {
   include_outputs: { type: "boolean" as const, required: false },
   venv_family: { type: "string" as const, required: false },
 };
+
+function coerceTensor(obj: Record<string, unknown>): { dtype: string; dims: number[]; data: number[] } {
+  if (typeof obj.dtype !== "string") {
+    throw new Error("tensor must have a string \"dtype\"");
+  }
+  if (!Array.isArray(obj.dims) || !obj.dims.every((d) => typeof d === "number")) {
+    throw new Error("tensor must have a numeric array \"dims\"");
+  }
+  if (!Array.isArray(obj.data) || !obj.data.every((d) => typeof d === "number")) {
+    throw new Error("tensor must have a numeric array \"data\"");
+  }
+  return {
+    dtype: obj.dtype,
+    dims: obj.dims as number[],
+    data: obj.data as number[],
+  };
+}
 
 function coerceInputs(
   raw: Record<string, unknown>,
@@ -60,21 +79,7 @@ function coerceInputs(
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new Error(`input "${name}" must be an object`);
     }
-    const obj = value as Record<string, unknown>;
-    if (typeof obj.dtype !== "string") {
-      throw new Error(`input "${name}" must have a string "dtype"`);
-    }
-    if (!Array.isArray(obj.dims) || !obj.dims.every((d) => typeof d === "number")) {
-      throw new Error(`input "${name}" must have a numeric array "dims"`);
-    }
-    if (!Array.isArray(obj.data) || !obj.data.every((d) => typeof d === "number")) {
-      throw new Error(`input "${name}" must have a numeric array "data"`);
-    }
-    inputs[name] = {
-      dtype: obj.dtype,
-      dims: obj.dims as number[],
-      data: obj.data as number[],
-    };
+    inputs[name] = coerceTensor(value as Record<string, unknown>);
   }
   return inputs;
 }
@@ -97,11 +102,17 @@ async function handleNativeRun(req: Request, res: Response): Promise<void> {
   }
 
   const body = parsed.parsed;
-  let inputs: Record<string, { dtype: string; dims: number[]; data: number[] }>;
+  let inputs: Record<string, { dtype: string; dims: number[]; data: number[] }> | undefined;
+  let defaultInput: { dtype: string; dims: number[]; data: number[] } | undefined;
   try {
-    inputs = coerceInputs(body.inputs);
+    if (body.inputs) inputs = coerceInputs(body.inputs);
+    if (body.default_input) defaultInput = coerceTensor(body.default_input);
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : "Invalid inputs" });
+    return;
+  }
+  if (!inputs && !defaultInput) {
+    res.status(400).json({ error: "inputs or default_input is required" });
     return;
   }
 
@@ -116,7 +127,8 @@ async function handleNativeRun(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const request = buildNativeRequest(resolved.absolutePath, inputs, {
+  const request = buildNativeRequest(resolved.absolutePath, inputs ?? {}, {
+    defaultInput,
     executionProvider: body.execution_provider,
     warmupIterations: body.warmup_iterations,
     iterations: body.iterations,

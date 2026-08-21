@@ -6,7 +6,8 @@ export type NativeTensorInput = {
 
 export type NativeInferenceOptions = {
   model_id: string;
-  inputs: Record<string, NativeTensorInput>;
+  inputs?: Record<string, NativeTensorInput>;
+  default_input?: NativeTensorInput;
   execution_provider?: string;
   warmup_iterations?: number;
   iterations?: number;
