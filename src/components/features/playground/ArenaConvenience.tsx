@@ -124,7 +124,12 @@ export function FromOliveOutputs({ slotLabel, onFile, onSelect }: FromOliveOutpu
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-300 hover:bg-slate-900/60 cursor-pointer"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            if (v) setPayload(null);
+            return !v;
+          });
+        }}
         aria-expanded={open}
         aria-controls={`olive-outputs-${slotLabel.replace(" ", "-").toLowerCase()}`}
       >
