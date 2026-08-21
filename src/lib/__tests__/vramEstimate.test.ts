@@ -37,7 +37,15 @@ const DEFAULT_PASSES = {
   qatCalibrateSteps: 1000,
   quantPreset: "weighted",
   trustRemoteCode: false,
-} as unknown as UIState["passes"];
+import { describe, it, expect } from "vitest";
+import type { UIState, IHVProvider } from "@/types";
+import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import {
+  getEffectiveModelSource,
+  getVramModelLabel,
+  getVramModelShortName,
+  estimateVramRequirement,
+} from "@/lib/vramEstimate";
 
 function baseState(overrides?: Partial<UIState>): UIState {
   return {
