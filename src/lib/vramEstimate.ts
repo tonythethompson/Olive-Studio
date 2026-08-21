@@ -23,6 +23,23 @@ const WHISPER_PARAMS_B: Record<string, number> = {
   "large-v3": 1.55,
 };
 
+// GPT-2 variants — order matters: most specific needles first, generic "gpt2" last.
+// sshleifer/tiny-gpt2 is a ~5M-param model used by the tour demo and catalog.
+// Without these, unknown models fall through to the 7B default and show wildly
+// inflated memory (e.g. 26 GB for a 5 MB model at FP32).
+const GPT2_VARIANTS: ReadonlyArray<{
+  needles: readonly string[];
+  paramsB: number;
+  confidence: VramConfidence;
+}> = [
+  { needles: ["tiny-gpt2", "tiny_gpt2"], paramsB: 0.005, confidence: "medium" },
+  { needles: ["distilgpt2"], paramsB: 0.082, confidence: "low" },
+  { needles: ["gpt2-xl", "gpt2_xl"], paramsB: 1.5, confidence: "low" },
+  { needles: ["gpt2-large", "gpt2_large"], paramsB: 0.774, confidence: "low" },
+  { needles: ["gpt2-medium", "gpt2_medium"], paramsB: 0.355, confidence: "low" },
+  { needles: ["gpt2"], paramsB: 0.124, confidence: "low" },
+];
+
 function inferParamBillions(identifier: string): { paramsB: number; confidence: VramConfidence } {
   const id = identifier.toLowerCase();
 
@@ -50,16 +67,14 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
     return { paramsB: 1.5, confidence: "medium" };
   }
 
-  // GPT-2 variants — order matters: tiny before generic gpt2.
-  // sshleifer/tiny-gpt2 is a ~5M-param model used by the tour demo and catalog.
-  // Without this, unknown models fall through to the 7B default and show
-  // wildly inflated memory (e.g. 26 GB for a 5 MB model at FP32).
-  if (id.includes("tiny-gpt2") || id.includes("tiny_gpt2")) return { paramsB: 0.005, confidence: "medium" };
-  if (id.includes("distilgpt2")) return { paramsB: 0.082, confidence: "low" };
-  if (id.includes("gpt2-xl") || id.includes("gpt2_xl")) return { paramsB: 1.5, confidence: "low" };
-  if (id.includes("gpt2-large") || id.includes("gpt2_large")) return { paramsB: 0.774, confidence: "low" };
-  if (id.includes("gpt2-medium") || id.includes("gpt2_medium")) return { paramsB: 0.355, confidence: "low" };
-  if (id.includes("gpt2")) return { paramsB: 0.124, confidence: "low" };
+  // GPT-2 variants — collapse gpt-2 / gpt_2 spellings so the needles above
+  // (which use "gpt2") also match hyphenated ids like gpt-2-medium.
+  const gpt2Id = id.replace(/gpt[-_]2/g, "gpt2");
+  for (const variant of GPT2_VARIANTS) {
+    if (variant.needles.some((needle) => gpt2Id.includes(needle))) {
+      return { paramsB: variant.paramsB, confidence: variant.confidence };
+    }
+  }
 
   if (id.includes("phi-3.5") || id.includes("phi3.5")) return { paramsB: 3.8, confidence: "low" };
   if (id.includes("phi-3") || id.includes("phi3")) return { paramsB: 3.8, confidence: "low" };
