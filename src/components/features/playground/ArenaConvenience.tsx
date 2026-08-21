@@ -24,17 +24,19 @@ function entryBasename(displayPath: string): string {
 }
 
 export interface FromOliveOutputsProps {
-  slotLabel: "Slot A" | "Slot B";
-  onFile: (file: File) => void;
+  slotLabel: string;
+  onFile?: (file: File) => void;
+  onSelect?: (entry: OliveOutputEntry) => void;
 }
 
 /**
  * Renders a local-mode panel for selecting Olive-generated model files.
  *
  * @param slotLabel - Label used to associate the panel with its model slot
- * @param onFile - Callback invoked with the selected model file
+ * @param onFile - Callback invoked with the selected model file (download mode)
+ * @param onSelect - Callback invoked with the selected output entry (no download)
  */
-export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
+export function FromOliveOutputs({ slotLabel, onFile, onSelect }: FromOliveOutputsProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetchingId, setFetchingId] = useState<string | null>(null);
@@ -77,6 +79,12 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
 
   const selectEntry = useCallback(
     async (entry: OliveOutputEntry) => {
+      if (onSelect) {
+        onSelect(entry);
+        setOpen(false);
+        return;
+      }
+      if (!onFile) return;
       // Serialize downloads: concurrent clicks would race onFile (last response wins).
       if (fetchingRef.current) return;
       fetchingRef.current = true;
@@ -104,7 +112,7 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
         setFetchingId(null);
       }
     },
-    [onFile],
+    [onFile, onSelect],
   );
 
   const recent = payload?.recent ?? [];
@@ -116,7 +124,12 @@ export function FromOliveOutputs({ slotLabel, onFile }: FromOliveOutputsProps) {
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-300 hover:bg-slate-900/60 cursor-pointer"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            if (v) setPayload(null);
+            return !v;
+          });
+        }}
         aria-expanded={open}
         aria-controls={`olive-outputs-${slotLabel.replace(" ", "-").toLowerCase()}`}
       >

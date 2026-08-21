@@ -75,7 +75,7 @@ describe("AI provider empty-response validation", () => {
   it("Gemini throws on empty or whitespace text", async () => {
     mockedFetch.mockResolvedValue(jsonResponse({ candidates: [{ content: { parts: [{ text: "" }] } }] }));
     await expect(
-      callProvider({ provider: "gemini", apiKey: "k", model: "gemini-2.5-flash" }, "sys", [], false),
+      callProvider({ provider: "gemini", apiKey: "k", model: "gemini-3.7-flash" }, "sys", [], false),
     ).rejects.toThrow("Gemini returned an empty response.");
   });
 
@@ -84,7 +84,7 @@ describe("AI provider empty-response validation", () => {
       jsonResponse({ candidates: [{ content: { parts: [{ text: "hello" }] } }] }),
     );
     await callProvider(
-      { provider: "gemini", apiKey: "secret-key", model: "gemini-2.5-flash" },
+      { provider: "gemini", apiKey: "secret-key", model: "gemini-3.7-flash" },
       "sys",
       [],
       false,
@@ -92,7 +92,7 @@ describe("AI provider empty-response validation", () => {
 
     const [url, init] = mockedFetch.mock.calls[0] ?? [];
     expect(String(url)).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent",
     );
     expect(String(url)).not.toContain("secret-key");
     expect(String(url)).not.toContain("key=");

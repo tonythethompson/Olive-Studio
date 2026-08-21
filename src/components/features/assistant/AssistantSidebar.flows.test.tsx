@@ -26,6 +26,7 @@ describe("AssistantSidebar flows", () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
   });
   it("audits on open, chats, and renders provider settings", async () => {
@@ -33,7 +34,7 @@ describe("AssistantSidebar flows", () => {
       "ai/provider": {
         source: "runtime",
         provider: "gemini",
-        model: "gemini-2.5-flash",
+        model: "gemini-3.7-flash",
         baseUrl: null,
         envCredentials: {
           gemini: { present: true, envVar: "GEMINI_API_KEY", usable: true },
@@ -59,7 +60,7 @@ describe("AssistantSidebar flows", () => {
     renderWithProviders(<AssistantSidebar isOpen onClose={vi.fn()} />);
 
     // Header reflects the active provider and the assistant auto-runs analysis
-    await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-2.5-flash/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Google Gemini \/ gemini-3.7-flash/)).toBeTruthy());
     expect(screen.getByTestId("pipeline-review")).toBeTruthy();
 
     // Chat tab: preset query round-trips through /api/ai/chat
