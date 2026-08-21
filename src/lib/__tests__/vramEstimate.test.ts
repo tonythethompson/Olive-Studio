@@ -67,7 +67,28 @@ function baseState(overrides?: Partial<UIState>): UIState {
   } as UIState;
 }
 
-describe("getEffectiveModelSource", () => {
+  it("returns null when no source has any model", () => {
+    const state = baseState({ modelSource: "local", localFiles: [] });
+    expect(getEffectiveModelSource(state)).toBeNull();
+  });
+
+  it("falls back to Azure when the active Hugging Face tab has no model", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "   ",
+      azureModelPath: "azureml://models/m/versions/1",
+    });
+    expect(getEffectiveModelSource(state)).toBe("azure");
+  });
+
+  it("falls back to Local when the active Hugging Face tab has no model", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "",
+      localFiles: [{ name: "model.safetensors", size: 1024 }],
+    });
+    expect(getEffectiveModelSource(state)).toBe("local");
+  });
   it("prefers the active tab when it has a model", () => {
     const state = baseState({
       modelSource: "local",
