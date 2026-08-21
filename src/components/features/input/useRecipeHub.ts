@@ -112,6 +112,26 @@ export function useRecipeHub({ setState, hardwareProbe }: UseRecipeHubOpts) {
   const handleApplyCuratedRecipeAnyway = (item: RecipeCatalogItem) =>
     applyCuratedRecipe(item, { allowIncompatible: true });
 
+  /**
+   * Clears the applied-recipe lock-in so the user can start over from the
+   * catalog or a custom model source. An applied recipe sets `appliedRecipeLabel`
+   * and collapses the rail with no way to dismiss it; clearing the model fields
+   * alone leaves the "Applied recipe" banner stuck on the old model (e.g. the
+   * tiny-gpt2 sample from issue #387). This resets both.
+   */
+  const handleClearRecipe = () => {
+    setState({ hfModelId: "", hfDataset: "", hfTask: "", localFiles: [], azureModelPath: "" });
+    setAppliedRecipeLabel(null);
+    setRecipeRailExpanded(true);
+    setSourceConfigExpanded(true);
+    setImportJson("");
+    setImportError(null);
+    setSyncStatus("idle");
+    setSyncError("");
+    setRecipeSuccessMsg("Recipe cleared — choose a preset above or configure a custom model.");
+    setTimeout(() => setRecipeSuccessMsg(null), 5000);
+  };
+
   const handleFetchRemote = async (overrides?: { url?: string; branch?: string; path?: string }) => {
     const url = (overrides?.url ?? repoUrl).trim();
     const branch = (overrides?.branch ?? repoBranch).trim() || "main";
@@ -174,11 +194,12 @@ export function useRecipeHub({ setState, hardwareProbe }: UseRecipeHubOpts) {
     repoUrl, setRepoUrl, repoBranch, setRepoBranch, repoPath, setRepoPath,
     importJson, setImportJson, importError, setImportError,
     activeRecipeTab, setActiveRecipeTab, visitedRecipeTabs,
-    recipeSuccessMsg, applyingRecipePath, appliedRecipeLabel,
+    recipeSuccessMsg, setRecipeSuccessMsg, applyingRecipePath, appliedRecipeLabel,
     recipeRailExpanded, setRecipeRailExpanded,
     sourceConfigExpanded, setSourceConfigExpanded,
     recipeRailCollapsed,
     handleApplyCuratedRecipe, handleApplyCuratedRecipeAnyway,
+    handleClearRecipe,
     handleFetchRemote, handleImport,
   };
 }

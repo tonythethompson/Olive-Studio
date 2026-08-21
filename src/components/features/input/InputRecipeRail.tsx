@@ -56,6 +56,8 @@ export interface InputRecipeRailProps {
   handleFetchRemote: (opts?: { url: string; branch: string; path: string }) => Promise<void>;
   handleApplyCuratedRecipe: (item: RecipeCatalogItem) => void;
   handleApplyCuratedRecipeAnyway: (item: RecipeCatalogItem) => void;
+  /** Surfaces a transient message in the recipes card (e.g. sample-apply result). */
+  notifyRecipeMessage: (msg: string) => void;
 }
 
 export function InputRecipeRail(props: InputRecipeRailProps) {
@@ -106,6 +108,7 @@ export function InputRecipeRail(props: InputRecipeRailProps) {
     handleFetchRemote,
     handleApplyCuratedRecipe,
     handleApplyCuratedRecipeAnyway,
+    notifyRecipeMessage,
   } = props;
 
   return (
@@ -135,7 +138,12 @@ export function InputRecipeRail(props: InputRecipeRailProps) {
             className="shrink-0 inline-flex items-center justify-center rounded-md bg-electric-blue px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-electric-blue-dark cursor-pointer"
             onClick={() => {
               void import("@/lib/tour").then(({ ensureTourDemoModel }) => {
-                ensureTourDemoModel();
+                const result = ensureTourDemoModel();
+                notifyRecipeMessage(
+                  result.applied
+                    ? "Sample recipe applied: sshleifer/tiny-gpt2. Pick a preset to switch, or edit the model below."
+                    : "A model is already selected — pick a preset above to switch, or edit the model below.",
+                );
               });
             }}
           >
