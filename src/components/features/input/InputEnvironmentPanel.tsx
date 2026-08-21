@@ -58,11 +58,12 @@ export function InputEnvironmentPanel({
     repoUrl, setRepoUrl, repoBranch, setRepoBranch, repoPath, setRepoPath,
     importJson, setImportJson, importError, setImportError,
     activeRecipeTab, setActiveRecipeTab, visitedRecipeTabs,
-    recipeSuccessMsg, applyingRecipePath, appliedRecipeLabel,
+    recipeSuccessMsg, setRecipeSuccessMsg, applyingRecipePath, appliedRecipeLabel,
     setRecipeRailExpanded,
     sourceConfigExpanded, setSourceConfigExpanded,
     recipeRailCollapsed,
     handleApplyCuratedRecipe, handleApplyCuratedRecipeAnyway,
+    handleClearRecipe,
     handleFetchRemote, handleImport,
   } = useRecipeHub({ setState, hardwareProbe });
 
@@ -137,6 +138,14 @@ export function InputEnvironmentPanel({
               >
                 Change recipe
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 shrink-0 self-start px-3 text-xs border-slate-700 text-slate-300 hover:text-rose-300 hover:border-rose-500/40 sm:self-center"
+                onClick={handleClearRecipe}
+              >
+                Clear recipe
+              </Button>
             </div>
           )}
 
@@ -189,6 +198,7 @@ export function InputEnvironmentPanel({
                 handleFetchRemote={handleFetchRemote}
                 handleApplyCuratedRecipe={handleApplyCuratedRecipe}
                 handleApplyCuratedRecipeAnyway={handleApplyCuratedRecipeAnyway}
+                notifyRecipeMessage={setRecipeSuccessMsg}
               />
             )}
 
