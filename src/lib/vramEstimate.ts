@@ -1,5 +1,6 @@
 import { IHVProvider, UIState } from "@/types";
 import type { HardwareProbeResult } from "@/lib/hardwareProbe";
+import { getEffectiveModelSource } from "@/lib/modelSource";
 
 export type VramConfidence = "high" | "medium" | "low";
 export type VramFit = "fits" | "tight" | "insufficient" | "unknown";
@@ -69,15 +70,10 @@ function inferParamBillions(identifier: string): { paramsB: number; confidence: 
 
 /** Short label for VRAM UI — full HF id or local filename. */
 export function getVramModelLabel(state: UIState): string {
-  if (state.modelSource === "huggingface" && state.hfModelId.trim()) {
-    return state.hfModelId.trim();
-  }
-  if (state.modelSource === "azure" && state.azureModelPath.trim()) {
-    return state.azureModelPath.trim();
-  }
-  if (state.modelSource === "local" && state.localFiles.length > 0) {
-    return state.localFiles[0].name;
-  }
+  const source = getEffectiveModelSource(state);
+  if (source === "huggingface") return (state.hfModelId ?? "").trim();
+  if (source === "azure") return (state.azureModelPath ?? "").trim();
+  if (source === "local") return state.localFiles[0].name;
   return "No model selected";
 }
 
@@ -96,7 +92,9 @@ function resolveSourceWeightGb(state: UIState): {
   confidence: VramConfidence;
   notes: string[];
 } {
-  if (state.modelSource === "local" && state.localFiles.length > 0) {
+  const source = getEffectiveModelSource(state);
+
+  if (source === "local") {
     const totalBytes = state.localFiles.reduce((sum, file) => sum + file.size, 0);
     return {
       weightGb: totalBytes / 1024 ** 3,
@@ -107,11 +105,7 @@ function resolveSourceWeightGb(state: UIState): {
   }
 
   const identifier =
-    state.modelSource === "huggingface"
-      ? state.hfModelId
-      : state.modelSource === "azure"
-        ? state.azureModelPath
-        : "";
+    source === "huggingface" ? state.hfModelId : source === "azure" ? state.azureModelPath : "";
 
   if (!identifier.trim()) {
     const weightGb = paramsToGb(7, 2);
@@ -293,12 +287,12 @@ export function getSelectedGpuVramGb(
     provider === "ROCMExecutionProvider"
       ? (probe.rocm?.gpus ?? [])
       : provider === "CUDAExecutionProvider" ||
-        provider === "NvTensorRTRTXExecutionProvider" ||
-        provider === "TensorrtExecutionProvider"
+          provider === "NvTensorRTRTXExecutionProvider" ||
+          provider === "TensorrtExecutionProvider"
         ? (probe.nvidia?.gpus ?? [])
         : provider === "DmlExecutionProvider" || provider === "WebGpuExecutionProvider"
-        ? [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
-        : [];
+          ? [...(probe.nvidia?.gpus ?? []), ...(probe.rocm?.gpus ?? [])]
+          : [];
 
   const vramMb = gpus.map((gpu) => gpu.vramMb).filter((value): value is number => value != null && value > 0);
 
