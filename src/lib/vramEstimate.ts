@@ -1,4 +1,4 @@
-import { IHVProvider, UIState } from "@/types";
+import { IHVProvider, ModelSource, UIState } from "@/types";
 import type { HardwareProbeResult } from "@/lib/hardwareProbe";
 
 export type VramConfidence = "high" | "medium" | "low";

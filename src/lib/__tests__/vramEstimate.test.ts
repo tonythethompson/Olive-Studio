@@ -1,44 +1,5 @@
 import { describe, it, expect } from "vitest";
 import type { UIState, IHVProvider } from "@/types";
-import {
-  getEffectiveModelSource,
-  getVramModelLabel,
-  getVramModelShortName,
-  estimateVramRequirement,
-} from "@/lib/vramEstimate";
-
-const DEFAULT_PASSES = {
-  quantization: false,
-  quantMethod: "awq",
-  quantPrecision: "int4",
-  conversion: false,
-  conversionFormat: "onnx",
-  conversionSourceFormat: "pytorch",
-  conversionOpset: 17,
-  conversionInputTargetTypes: "fp32",
-  pruning: false,
-  pruningType: "structured",
-  pruningMethod: "omc",
-  pruningCriteria: "snip_magnitude",
-  pruningSparsity: 0.3,
-  peft: false,
-  peftMethod: "lora",
-  diffusionLora: false,
-  splitting: false,
-  onnxTransforms: false,
-  gptqBlockSize: 128,
-  gptqGroupSize: 128,
-  gptqDescAct: false,
-  awqGroupSize: 128,
-  awqDampPercent: 0.45,
-  awqSym: true,
-  qatQuantPrecision: "int8",
-  qatCalibrateMethod: "entropy",
-  qatCalibrateSteps: 1000,
-  quantPreset: "weighted",
-  trustRemoteCode: false,
-import { describe, it, expect } from "vitest";
-import type { UIState, IHVProvider } from "@/types";
 import { DEFAULT_PASSES } from "@/lib/defaultPasses";
 import {
   getEffectiveModelSource,
@@ -67,28 +28,7 @@ function baseState(overrides?: Partial<UIState>): UIState {
   } as UIState;
 }
 
-  it("returns null when no source has any model", () => {
-    const state = baseState({ modelSource: "local", localFiles: [] });
-    expect(getEffectiveModelSource(state)).toBeNull();
-  });
-
-  it("falls back to Azure when the active Hugging Face tab has no model", () => {
-    const state = baseState({
-      modelSource: "huggingface",
-      hfModelId: "   ",
-      azureModelPath: "azureml://models/m/versions/1",
-    });
-    expect(getEffectiveModelSource(state)).toBe("azure");
-  });
-
-  it("falls back to Local when the active Hugging Face tab has no model", () => {
-    const state = baseState({
-      modelSource: "huggingface",
-      hfModelId: "",
-      localFiles: [{ name: "model.safetensors", size: 1024 }],
-    });
-    expect(getEffectiveModelSource(state)).toBe("local");
-  });
+describe("getEffectiveModelSource", () => {
   it("prefers the active tab when it has a model", () => {
     const state = baseState({
       modelSource: "local",
@@ -116,6 +56,24 @@ function baseState(overrides?: Partial<UIState>): UIState {
     expect(getEffectiveModelSource(state)).toBe("azure");
   });
 
+  it("falls back to Azure when the active Hugging Face tab has no model", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "   ",
+      azureModelPath: "azureml://models/m/versions/1",
+    });
+    expect(getEffectiveModelSource(state)).toBe("azure");
+  });
+
+  it("falls back to Local when the active Hugging Face tab has no model", () => {
+    const state = baseState({
+      modelSource: "huggingface",
+      hfModelId: "",
+      localFiles: [{ name: "model.safetensors", size: 1024 }],
+    });
+    expect(getEffectiveModelSource(state)).toBe("local");
+  });
+
   it("returns null when no source has any model", () => {
     const state = baseState({ modelSource: "local", localFiles: [] });
     expect(getEffectiveModelSource(state)).toBeNull();
@@ -129,12 +87,19 @@ function baseState(overrides?: Partial<UIState>): UIState {
 
 describe("VRAM panel regression: switch to Local after loading a HF recipe", () => {
   const hfModel = "microsoft/Phi-3.5-mini-instruct";
-  const loaded = baseState({ modelSource: "huggingface", hfModelId: hfModel });
+  // Pin the estimate to FP16 so the comparison against the ~7B FP16
+  // placeholder is apples-to-apples (the real DEFAULT_PASSES default is float32).
+  const loaded = baseState({
+    modelSource: "huggingface",
+    hfModelId: hfModel,
+    passes: { ...DEFAULT_PASSES, conversionInputTargetTypes: "float16" },
+  });
   // Switch the source tab to Local without uploading any files.
   const switched = baseState({
     modelSource: "local",
     localFiles: [],
     hfModelId: hfModel,
+    passes: { ...DEFAULT_PASSES, conversionInputTargetTypes: "float16" },
   });
 
   it("keeps showing the loaded model label", () => {
@@ -150,7 +115,13 @@ describe("VRAM panel regression: switch to Local after loading a HF recipe", () 
 
     // The 7B placeholder (used when truly nothing is selected) is larger than
     // the real ~3.8B Phi-3.5 model at FP16 — the bug inflated to this value.
-    const none = estimateVramRequirement(baseState({ modelSource: "huggingface", hfModelId: "" }));
+    const none = estimateVramRequirement(
+      baseState({
+        modelSource: "huggingface",
+        hfModelId: "",
+        passes: { ...DEFAULT_PASSES, conversionInputTargetTypes: "float16" },
+      }),
+    );
     expect(after.sourceWeightGb).toBeLessThan(none.sourceWeightGb);
   });
 

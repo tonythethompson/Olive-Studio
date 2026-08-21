@@ -989,23 +989,12 @@ describe("0.13.0 validation rules", () => {
       expect(hasSelectedModel(state)).toBe(true);
     });
 
-    it("returns false for empty local files when no other source has a model", () => {
+    it("returns false for empty local files", () => {
       const state = baseState({
         modelSource: "local",
         localFiles: [],
-        hfModelId: "",
-        azureModelPath: "",
       });
       expect(hasSelectedModel(state)).toBe(false);
-    });
-
-    it("returns true for empty local files when a Hugging Face model is still loaded", () => {
-      const state = baseState({
-        modelSource: "local",
-        localFiles: [],
-        hfModelId: "microsoft/Phi-3.5-mini-instruct",
-      });
-      expect(hasSelectedModel(state)).toBe(true);
     });
 
     it("returns true for non-empty azure path", () => {
@@ -1016,31 +1005,18 @@ describe("0.13.0 validation rules", () => {
       expect(hasSelectedModel(state)).toBe(true);
     });
 
-    it("returns false for empty azure path when no other source has a model", () => {
+    it("returns false for empty azure path", () => {
       const state = baseState({
         modelSource: "azure",
         azureModelPath: "",
-        hfModelId: "",
-        localFiles: [],
       });
       expect(hasSelectedModel(state)).toBe(false);
     });
 
-    it("returns true for empty azure path when a Hugging Face model is still loaded", () => {
-      const state = baseState({
-        modelSource: "azure",
-        azureModelPath: "",
-        hfModelId: "microsoft/Phi-3.5-mini-instruct",
-      });
-      expect(hasSelectedModel(state)).toBe(true);
-    });
-
-    it("returns false for whitespace-only azure path when no other source has a model", () => {
+    it("returns false for whitespace-only azure path", () => {
       const state = baseState({
         modelSource: "azure",
         azureModelPath: "  \t  ",
-        hfModelId: "",
-        localFiles: [],
       });
       expect(hasSelectedModel(state)).toBe(false);
     });

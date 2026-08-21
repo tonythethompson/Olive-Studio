@@ -1,6 +1,5 @@
 import { IHVProvider, ModelSource, UIState, OliveRecipe } from "@/types";
 import { isMemoryOffloadAvailable } from "@/lib/memoryOffload";
-import { getEffectiveModelSource } from "@/lib/vramEstimate";
 import { getProviderAvailabilityBlock, type HardwareProbeResult, type GpuInfo } from "@/lib/hardwareProbe";
 import { buildOliveRecipe, isPyTorchNativeQuantMethod, hasOnnxGraphProducer } from "@/lib/oliveRecipeBuilder";
 import { isReplacementExportPipeline } from "@/lib/replacementExportPipeline";
@@ -821,7 +820,6 @@ function getAdvisoryIssues(state: UIState): PipelineIssue[] {
  */
 /** True once the user has actually picked a model in Model source (step 01). */
 export function hasSelectedModel(state: UIState): boolean {
-export function hasSelectedModel(state: UIState): boolean {
   // Keep the validation gate aligned with buildOliveRecipe: the active tab
   // must itself have a model. The effective-source fallback is used for
   // display/VRAM only (see getVramModelLabel / resolveSourceWeightGb), not
@@ -832,7 +830,6 @@ export function hasSelectedModel(state: UIState): boolean {
     (state.modelSource === "local" && state.localFiles.length > 0) ||
     (state.modelSource === "azure" && state.azureModelPath.trim() !== "")
   );
-}
 }
 
 function getRecipeRuntimeIssues(state: UIState, recipe: OliveRecipe): PipelineIssue[] {
