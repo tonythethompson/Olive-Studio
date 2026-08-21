@@ -62,7 +62,7 @@ describe("Provider registration", () => {
     defaultModel: string;
     hasEnvVars: boolean; // falsy = runtime-override-only
   }> = [
-    { name: "gemini", label: "Google Gemini", defaultModel: "gemini-2.5-flash", hasEnvVars: true },
+    { name: "gemini", label: "Google Gemini", defaultModel: "gemini-3.7-flash", hasEnvVars: true },
     { name: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini", hasEnvVars: true },
     {
       name: "chatgpt-sub",
@@ -422,7 +422,7 @@ describe("Edge cases", () => {
     vi.mocked(readEnvApiKey).mockReturnValue("sk-test");
     const result = detectEnvProvider();
     expect(result?.provider).toBe("gemini");
-    expect(result?.model).toBe("gemini-2.5-flash");
+    expect(result?.model).toBe("gemini-3.7-flash");
     expect(result?.apiKey).toBe("sk-test");
   });
 

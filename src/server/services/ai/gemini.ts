@@ -47,8 +47,8 @@ async function call(
 registerProvider({
   name: "gemini",
   label: "Google Gemini",
-  defaultModel: "gemini-2.5-flash",
+  defaultModel: "gemini-3.7-flash",
   envVarNames: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY"],
-  buildConfig: (apiKey) => ({ provider: "gemini", apiKey, model: "gemini-2.5-flash" }),
+  buildConfig: (apiKey) => ({ provider: "gemini", apiKey, model: "gemini-3.7-flash" }),
   call,
 });
