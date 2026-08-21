@@ -14,7 +14,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Root = $PSScriptRoot
+$Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
 if ($RemainingArgs -contains "--build" -or $RemainingArgs -contains "-Build") {
