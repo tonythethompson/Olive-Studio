@@ -74,7 +74,7 @@ function sidecarEnv(dylibPath: string): NodeJS.ProcessEnv {
   return env;
 }
 
-function isSafeVenvPython(pythonPath: string, family: VenvFamily): boolean {
+export function isSafeVenvPython(pythonPath: string, family: VenvFamily): boolean {
   // Validate the family against an allowlist so untrusted input can never
   // influence the executable path passed to spawnSync.
   if (!VENV_FAMILIES.includes(family)) return false;
