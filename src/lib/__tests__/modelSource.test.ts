@@ -1,28 +1,7 @@
 import { describe, it, expect } from "vitest";
-import type { UIState, IHVProvider } from "@/types";
-import { DEFAULT_PASSES } from "@/lib/defaultPasses";
+import type { UIState } from "@/types";
 import { getEffectiveModelSource } from "@/lib/modelSource";
-
-function baseState(overrides?: Partial<UIState>): UIState {
-  return {
-    modelSource: "huggingface",
-    localFiles: [],
-    azureModelPath: "",
-    hfModelId: "",
-    hfDataset: "",
-    ihvProvider: "CPUExecutionProvider" as IHVProvider,
-    openvinoTargetDevice: "CPU",
-    memoryOffload: "gpu_only",
-    cudaVersion: "auto",
-    cacheDir: "",
-    azureStr: "",
-    distributedCaching: false,
-    activeJobId: null,
-    ...overrides,
-    passes: { ...DEFAULT_PASSES, ...overrides?.passes },
-  } as UIState;
-}
-
+import { baseState } from "@/lib/__tests__/testState";
 describe("getEffectiveModelSource", () => {
   it("prefers the active tab when it has a model", () => {
     const state = baseState({
