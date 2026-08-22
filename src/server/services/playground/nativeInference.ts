@@ -6,6 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { getVenvPython } from "../venv/paths.ts";
+import { PYTHON_BASENAME_RE } from "../venv/pythonGuard.ts";
 import { type VenvFamily, VENV_FAMILIES } from "../../../lib/venvFamily.ts";
 import { getFamilyRoot } from "../venv/spec.ts";
 import {
@@ -81,18 +82,28 @@ export function isSafeVenvPython(pythonPath: string, family: VenvFamily): boolea
   const root = path.resolve(getFamilyRoot(family));
   const resolved = path.resolve(pythonPath);
   // Ensure the resolved python path is inside the expected venv root.
+  // This is a string-level containment check (path.resolve does not follow
+  // symlinks) and is defense-in-depth: the family is a closed enum and the
+  // python path is derived by getVenvPython, so it guards against path
+  // tampering, not a hostile actor with venv write access.
   const rel = path.relative(root, resolved);
+  // Windows can yield an absolute relative for cross-drive paths; reject both
+  // escape shapes (same reasoning as venv/pythonGuard.ts).
   if (rel.startsWith("..") || path.isAbsolute(rel)) return false;
-  // Only allow paths to the expected python binary name.
+  // Only allow paths to a Python interpreter binary.
   const basename = path.basename(resolved);
-  const expected = process.platform === "win32" ? "python.exe" : "python";
-  if (basename !== expected) return false;
+  if (!PYTHON_BASENAME_RE.test(basename)) return false;
   return true;
 }
 
 function findOrtDylibInVenv(venvFamily: VenvFamily = "default"): string | undefined {
   const python = getVenvPython(venvFamily);
-  if (!isSafeVenvPython(python, venvFamily)) return undefined;
+  if (!isSafeVenvPython(python, venvFamily)) {
+    console.warn(
+      `[native-playground] Rejected unsafe python path for venv family "${venvFamily}": ${python}`,
+    );
+    return undefined;
+  }
   if (!fs.existsSync(python)) return undefined;
 
   const script = `
