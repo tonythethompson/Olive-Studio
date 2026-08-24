@@ -107,7 +107,7 @@
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
     "@vitejs/plugin-react": "6.0.5",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "@webgpu/types": "^0.1.71",
     "autoprefixer": "^10.5.4",
     "esbuild": "^0.28.2",
@@ -127,6 +127,6 @@
     "unplugin-typegpu": "^0.12.1",
     "vite": "^8.2.1",
     "vite-plugin-compression": "^0.5.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
