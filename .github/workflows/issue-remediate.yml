@@ -239,7 +239,7 @@ jobs:
             --exit-immediately
 
       - name: Create Pull Request with Fix
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           # A PAT is required (guarded above): PRs opened with the read-only job
           # GITHUB_TOKEN cannot be created under this job's permissions, and only
