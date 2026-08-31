@@ -23,6 +23,7 @@ import { PROVIDER_OPTIONS, normalizeUiProviderId } from "./aiProviderCatalog";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import type { SidebarTab } from "./types";
+import { usePreferencesStore } from "@/lib/stores/preferencesStore";
 import { useAiChat } from "./useAiChat";
 import { useAiProviderSettings } from "./useAiProviderSettings";
 import { useLocalEngineSetup } from "./useLocalEngineSetup";
@@ -75,7 +76,15 @@ export function AssistantSidebar({
   const storeState = usePipelineState();
   const state = propState ?? storeState.state;
   const setState = propSetState ?? storeState.setState;
-  const [activeTab, setActiveTab] = useState<SidebarTab>("assistant");
+  const persistedActiveTab = usePreferencesStore((s) => s.assistantActiveTab);
+  const setPersistedActiveTab = usePreferencesStore((s) => s.setAssistantActiveTab);
+  const activeTab: SidebarTab = useMemo(
+    () => (TABS.some((tab) => tab.id === persistedActiveTab) ? persistedActiveTab : "assistant"),
+    [persistedActiveTab],
+  );
+  const setActiveTab = useCallback((tab: SidebarTab) => {
+    setPersistedActiveTab(tab);
+  }, [setPersistedActiveTab]);
   const [, startTabTransition] = useTransition();
   const { data: hardwareProbe = null } = useHardwareProbe({ enabled: isOpen });
 
@@ -199,7 +208,6 @@ export function AssistantSidebar({
 
   useEffect(() => {
     if (!openToAudit) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
     requestReviewRefresh({ resetFirst: true });
     onAuditOpened?.();
@@ -207,7 +215,6 @@ export function AssistantSidebar({
 
   useEffect(() => {
     if (!pendingChatQuery) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: respond to prop change
     setActiveTab("assistant");
     void chat.sendChat(pendingChatQuery.query);
     onChatQueryConsumed?.();
@@ -377,7 +384,7 @@ export function AssistantSidebar({
                 activeTab === "agent" ? "block" : "hidden",
               )}
             >
-              <AgentAccessControls variant="panel" />
+              <AgentAccessControls variant="panel" isOpen={isOpen} />
             </div>
           </div>
 
