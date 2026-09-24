@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
-const PYTHON_BASENAME_RE = /^python(\d+(\.\d+)*)?(\.exe)?$/i;
+export const PYTHON_BASENAME_RE = /^python(\d+(\.\d+)*)?(\.exe)?$/i;
 
 /** Fixed PATH command names we will ever pass to execFile as the executable. */
 export const PATH_PYTHON_COMMANDS = ["python3", "python"] as const;
