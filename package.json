@@ -59,7 +59,7 @@
     "@aws-sdk/credential-providers": "^3.1110.0",
     "@aws-sdk/lib-storage": "^3.1110.0",
     "@huggingface/transformers": "^4.2.0",
-    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.2.0",
     "@radix-ui/react-accordion": "^1.2.20",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slider": "^1.3.6",
