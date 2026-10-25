@@ -75,11 +75,14 @@ function formatAgentAccessError(status: number, serverError: string | undefined)
 interface AgentAccessControlsProps {
   compact?: boolean;
   variant?: "control" | "panel";
+  /** When true (sidebar open), re-fetches the policy to reflect latest server-side state. */
+  isOpen?: boolean;
 }
 
 export const AgentAccessControls = memo(function AgentAccessControls({
   compact = false,
   variant = "control",
+  isOpen = true,
 }: AgentAccessControlsProps) {
   const isPanel = variant === "panel";
 
@@ -146,8 +149,9 @@ export const AgentAccessControls = memo(function AgentAccessControls({
   }, [clearBusyTimer]);
 
   useEffect(() => {
+    if (!isOpen) return;
     void refresh();
-  }, [refresh]);
+  }, [refresh, isOpen]);
 
   const updateMenuPos = useCallback(() => {
     if (!rootRef.current) return;

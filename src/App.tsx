@@ -143,7 +143,8 @@ function Dashboard() {
   const HEADER_CLUSTER_FULL_WIDTH = 520;
 
   const [isOliveRunning, setIsOliveRunning] = useState(false);
-  const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(false);
+  const isAiSidebarOpen = usePreferencesStore((s) => s.assistantSidebarOpen);
+  const setAssistantSidebarOpen = usePreferencesStore((s) => s.setAssistantSidebarOpen);
   const [triggerAiAudit, setTriggerAiAudit] = useState(false);
   const [pendingChatQuery, setPendingChatQuery] = useState<AskAiChatDetail | null>(null);
   const [licenseOpen, setLicenseOpen] = useState(false);
@@ -214,7 +215,7 @@ function Dashboard() {
   const scrollingToRef = useRef<ActiveView | null>(null);
 
   const handleOpenAiAudit = () => {
-    setIsAiSidebarOpen(true);
+    setAssistantSidebarOpen(true);
     setTriggerAiAudit(true);
   };
 
@@ -374,12 +375,12 @@ function Dashboard() {
     const onAskAiChat = (event: Event) => {
       const detail = (event as CustomEvent<AskAiChatDetail>).detail;
       if (!detail?.query) return;
-      setIsAiSidebarOpen(true);
+      setAssistantSidebarOpen(true);
       setPendingChatQuery(detail);
     };
     window.addEventListener(OLIVE_ASK_AI_CHAT, onAskAiChat);
     return () => window.removeEventListener(OLIVE_ASK_AI_CHAT, onAskAiChat);
-  }, []);
+  }, [setAssistantSidebarOpen]);
 
   useEffect(() => {
     const main = mainRef.current;
@@ -546,7 +547,7 @@ function Dashboard() {
                   <button
                     type="button"
                     data-tour="assistant"
-                    onClick={() => setIsAiSidebarOpen((open) => !open)}
+                    onClick={() => setAssistantSidebarOpen(!isAiSidebarOpen)}
                     aria-label={isAiSidebarOpen ? "Close Assistant" : "Open Assistant"}
                     aria-expanded={isAiSidebarOpen}
                     aria-controls="assistant-panel"
@@ -661,7 +662,7 @@ function Dashboard() {
               <Suspense fallback={<SidebarFallback />}>
                 <AssistantSidebar
                   isOpen={isAiSidebarOpen}
-                  onClose={() => setIsAiSidebarOpen(false)}
+                  onClose={() => setAssistantSidebarOpen(false)}
                   openToAudit={triggerAiAudit}
                   onAuditOpened={() => setTriggerAiAudit(false)}
                   pendingChatQuery={pendingChatQuery}
